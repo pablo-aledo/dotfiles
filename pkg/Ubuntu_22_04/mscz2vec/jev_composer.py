@@ -2,7 +2,8 @@
 r"""
 jev_composer.py — Jev Composer: composición guiada por Jev (TypeSafe) a partir
 de una descripción en texto, con semillas de chord_table.py y motif_table.py
-(versión 1.0).
+(versión 4.0: subcomando train; detección de acordes sin fusionar
+los de 1 pulso o menos; cache con todos los datos de cada consulta).
 
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
@@ -54,6 +55,35 @@ mismo que usa el prototipo jev_classifier.zsh):
   indicaciones sobre el mismo compás se acumulan. En un fichero, las líneas
   vacías y las que empiezan por # se ignoran.
 
+  MODO TRAIN (train DIR): analiza los MIDIs de un directorio y reconstruye en
+  la cache las consultas que se le habrían hecho a Jev para componerlos, con
+  la probabilidad 1.0 en el valor real leído del MIDI y 0.0 en el resto. No
+  llama a la API. El formato de la cache es idéntico al de componer: las
+  entradas se reutilizan con --cache / --cache-only siempre que la consulta
+  (modelo, estado, pregunta y opciones) coincida exactamente.
+    · Cada X.mid puede ir acompañado de X.txt (mismo nombre), con la
+      descripción de la obra y las indicaciones por compás:
+          descripción: Nana melancólica para una noche de lluvia
+          tonalidad: Am            (opcional; si no, se infiere del MIDI)
+          modo: dorian             (opcional; si no, se infiere del MIDI)
+          compás 29: intensidad creciente, densidad creciente
+          compases 30-32: mood calma
+      Sin 'descripción:' se usa --desc, o el nombre del fichero.
+    · Se separan melodía y armonía: la melodía es la pista (o canal) más
+      aguda y monofónica; si no hay ninguna (p. ej. piano en una pista), se
+      toma la nota más aguda de cada ataque. Lo demás es la armonía, de la
+      que chord_table.py detecta los acordes.
+    · Se recorren acordes y melodía con la misma ventana deslizante y las
+      mismas preguntas que componer: modo, tónica, semilla de acordes y de
+      motivo (la entrada de las tablas que mejor coincide con el arranque
+      del MIDI), y después cada acorde y cada nota. El estilo 'fixed'
+      genera además las entradas del modo --chords-midi.
+    · No se puede registrar una respuesta que no estaba entre las opciones
+      (acorde no diatónico, nota cromática o a más de --leap semitonos de la
+      anterior): esa consulta se omite y se cuenta en el resumen.
+    · La melodía se cuantiza a --quant pulsos (default 0.25) y las notas no
+      cruzan cambios de acorde, igual que al componer.
+
   Todas las consultas pueden guardarse en una cache local (--cache): una
   consulta idéntica (mismo modelo, estado, pregunta y opciones) no vuelve a
   gastar créditos. Con --rng fijo, una composición repetida se resuelve
@@ -66,11 +96,34 @@ INTEGRACIÓN CON EL ECOSISTEMA:
   voice_leader.py  → <base>.chords.txt es un string --chords compatible
 
 ────────────────────────────────────────────────────────────────────────────
+Formato de la cache (JSONL, una consulta por línea)
+────────────────────────────────────────────────────────────────────────────
+  Cada registro contiene todo lo necesario para reconstruir la pregunta y su
+  distribución de salida (p. ej. para entrenar un modelo local):
+    key           hash sha256 de (model, state, instructions, criteria)
+    kind          modo | tonica | semilla_acordes | semilla_motivo | acorde | nota
+    model         modelo de Jev que respondió
+    source        api (respuesta de Jev) | train (valor real de un MIDI, 1.0/0.0)
+    instructions  pregunta completa
+    state         documento completo que vio Jev (descripción, semillas, ventana)
+    criteria      {opción: descripción} en el orden enviado (las opciones)
+    extra         (opcional) indicaciones por compás aplicadas, legible
+    answer        {choice, probabilities}: probabilidad de cada opción; las que
+                  faltan en 'probabilities' valen 0. Objetivo de entrenamiento:
+                  la distribución normalizada sobre las claves de 'criteria'
+  La clave se puede recalcular a partir de model, state, instructions y
+  criteria. El fichero solo se amplía: si una clave aparece varias veces, vale
+  la última línea. Las entradas antiguas (solo hash) se completan al
+  reutilizarlas con --cache (no con --cache-only). 'cache' muestra cuántas
+  están completas.
+
+────────────────────────────────────────────────────────────────────────────
 Subcomandos
 ────────────────────────────────────────────────────────────────────────────
   tonalidad DESC     Elegir modo y tónica de la obra
   semillas  DESC     Elegir progresión y motivo semilla (adaptados al modo)
   componer  DESC     Pipeline completo: tonalidad + semillas + ventana
+  train     DIR      Reconstruir la cache a partir de MIDIs (ver MODO TRAIN)
   cache              Estadísticas de la cache (--clear para vaciarla)
 
   DESC es la descripción de la obra entre comillas, o bien --file FICHERO.
@@ -111,6 +164,21 @@ Opciones de semillas / componer:
   --motif-table FILE  Ruta de motif_table.py (default: junto a este script)
   --export-json FILE  (semillas) Exportar las semillas elegidas a JSON
 
+Opciones de train (además de --model, --cache-file, --key, --mode,
+--bass-only, --min-dur, --chord-table, --motif-table, --leap):
+  DIR                 Directorio con los .mid/.midi (y los .txt)
+  --depth N[,N...]    Profundidades de ventana a reconstruir (default: 4);
+                      cada una produce estados distintos
+  --octave N          Octava base (default: automática por obra, centrando
+                      la melodía; fijarla si luego se compone con --octave)
+  --beats N           Pulsos por compás (default: el del MIDI, o 4)
+  --quant BEATS       Rejilla de cuantización de la melodía (default: 0.25)
+  --melody-track N    Forzar la pista (0-based) que contiene la melodía
+  --style S           generate | fixed | both (default: both)
+  --desc TEXTO        Descripción para los MIDIs sin 'descripción:' en su .txt
+  --overwrite         Reescribir entradas ya existentes (por defecto se
+                      respetan, p. ej. las obtenidas de Jev de verdad)
+
 Opciones de componer:
   --bars N            Compases a generar (default: 16; con --chords-midi, los
                       que dure el MIDI; si pides más se recorta a su duración)
@@ -130,7 +198,9 @@ Opciones de componer:
   --chords-midi FILE  Usar los acordes de este MIDI en vez de generarlos
   --bass-only         (con --chords-midi) detectar acordes solo con las notas
                       graves (≤ C4), como chord_table.py
-  --min-dur BEATS     (con --chords-midi) ignorar acordes más cortos que esto
+  --min-dur BEATS     (con --chords-midi) los segmentos de acorde más cortos que
+                      esto se funden con el anterior (default: 0.5; subirlo si
+                      el MIDI es una interpretación humana con solapes)
 
 ────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
@@ -166,6 +236,10 @@ Ejemplos de uso
       --notes "compás 30: mood calma; compás 31: explosión súbita" \
       --notes-file indicaciones.txt
 
+  # Reconstruir la cache a partir de MIDIs (X.mid + X.txt) en un directorio
+  python jev_composer.py train ./corpus --depth 2,4 --octave 5 \
+      --cache-file ~/.cache/jev_composer/queries.jsonl
+
   # Estado de la cache
   python jev_composer.py cache
   python jev_composer.py cache --clear
@@ -187,6 +261,12 @@ import random
 import hashlib
 import argparse
 import re
+import io
+import types
+import copy
+import bisect
+import statistics
+import contextlib
 import tempfile
 import importlib.util
 import subprocess
@@ -339,7 +419,7 @@ class Jev:
         self.use_cache  = args.cache or args.cache_only
         self.path       = os.path.expanduser(args.cache_file)
         self.verbose    = args.verbose
-        self.cache      = load_cache(self.path) if self.use_cache else {}
+        self.cache, self.full = (load_cache(self.path) if self.use_cache else ({}, set()))
         self.stats      = Counter()
         self.log        = []
 
@@ -351,15 +431,17 @@ class Jev:
             only = next(iter(criteria))
             return only, {only: 1.0}
 
-        ckey = hashlib.sha256(json.dumps(
-            {'model': self.model, 'state': state, 'instructions': instructions,
-             'criteria': criteria}, sort_keys=True, ensure_ascii=False
-        ).encode('utf-8')).hexdigest()
+        ckey = self.cache_key(state, instructions, criteria)
 
         ans = self.cache.get(ckey) if self.use_cache else None
         cached = ans is not None
         if cached:
             self.stats['cache'] += 1
+            if not self.cache_only and ckey not in self.full:
+                # entrada antigua (solo hash): se completa con todos los datos
+                self._store(ckey, kind, instructions, ans, state, criteria,
+                            source=infer_source(ans))
+                self.stats['completadas'] += 1
         else:
             if self.cache_only:
                 fail(f"--cache-only: consulta '{kind}' no encontrada en {self.path}. "
@@ -368,17 +450,24 @@ class Jev:
             ans = self._request(state, instructions, criteria)
             self.stats['api'] += 1
             if self.use_cache:
-                self._store(ckey, kind, instructions, ans)
+                self._store(ckey, kind, instructions, ans, state, criteria)
 
         choice = ans['choice']
         if choice not in criteria:
             fail(f"Jev devolvió una opción que no estaba en la lista: {choice!r}")
         probs = _normalize_probs(ans, criteria)
-        if len(probs) == 1:
+        if not ans.get('probabilities'):
             self.stats['sin_probs'] += 1
         self.log.append({'kind': kind, 'choice': choice,
                          'p': round(probs.get(choice, 1.0), 4), 'cached': cached})
         return choice, probs
+
+    def cache_key(self, state: str, instructions: str, criteria: dict) -> str:
+        """Hash de (modelo, estado, instrucciones, opciones): la clave de cache."""
+        return hashlib.sha256(json.dumps(
+            {'model': self.model, 'state': state, 'instructions': instructions,
+             'criteria': criteria}, sort_keys=True, ensure_ascii=False
+        ).encode('utf-8')).hexdigest()
 
     def _request(self, state, instructions, criteria):
         if not self.api_key:
@@ -392,7 +481,7 @@ class Jev:
         req = urllib.request.Request(self.url, data=body, method='POST', headers={
             'Authorization': 'Bearer ' + self.api_key,
             'Content-Type': 'application/json',
-            'User-Agent': 'jev-composer/1.0',
+            'User-Agent': 'jev-composer/4.0',
         })
         # Reintentos solo para errores transitorios (límite de peticiones, 5xx, red)
         last = None
@@ -420,12 +509,22 @@ class Jev:
             fail(f"respuesta inesperada de Jev: {json.dumps(resp)[:300]}")
         return {'choice': ans['choice'], 'probabilities': ans.get('probabilities') or {}}
 
-    def _store(self, ckey, kind, instructions, ans):
+    def _store(self, ckey, kind, instructions, ans, state='', criteria=None,
+               source='api'):
+        """Añade un registro a la cache. Lleva todo lo necesario para reconstruir
+        la pregunta y su distribución de salida (p. ej. para entrenar un modelo):
+        estado, instrucciones y opciones completos; ver FORMATO DE LA CACHE."""
         self.cache[ckey] = ans
+        rec = {'key': ckey, 'kind': kind, 'model': self.model, 'source': source,
+               'instructions': instructions, 'state': state, 'criteria': criteria}
+        marker = 'EXTRA INFORMATION FOR THIS POSITION:\n'
+        if marker in state:      # indicaciones por compás: texto visible (solo informativo)
+            rec['extra'] = state.split(marker, 1)[1].strip().replace('\n', ' | ')
+        rec['answer'] = ans
+        if state and criteria:
+            self.full.add(ckey)
         with open(_ensure_parent(self.path), 'a', encoding='utf-8') as f:
-            f.write(json.dumps({'key': ckey, 'kind': kind, 'model': self.model,
-                                'instructions': instructions[:160], 'answer': ans},
-                               ensure_ascii=False) + '\n')
+            f.write(json.dumps(rec, ensure_ascii=False) + '\n')
 
     def summary(self) -> str:
         api, hit = self.stats['api'], self.stats['cache']
@@ -436,10 +535,19 @@ class Jev:
         return s
 
 
-def load_cache(path: str) -> dict:
-    cache = {}
+def infer_source(ans: dict) -> str:
+    """Origen de una respuesta antigua sin campo 'source': one-hot (1.0 en una
+    opción y 0.0 en el resto) → reconstruida por train; si no, de la API."""
+    vals = list((ans.get('probabilities') or {}).values())
+    return 'train' if len(vals) > 1 and sorted(set(vals)) == [0.0, 1.0] \
+        and vals.count(1.0) == 1 else 'api'
+
+
+def load_cache(path: str) -> tuple:
+    """(cache {clave: respuesta}, claves con registro completo)."""
+    cache, full = {}, set()
     if not os.path.isfile(path):
-        return cache
+        return cache, full
     with open(path, encoding='utf-8') as f:
         for n, line in enumerate(f, 1):
             line = line.strip()
@@ -448,9 +556,11 @@ def load_cache(path: str) -> dict:
             try:
                 rec = json.loads(line)
                 cache[rec['key']] = rec['answer']
+                if rec.get('state') and rec.get('criteria'):
+                    full.add(rec['key'])
             except (ValueError, KeyError):
                 warn(f"{path}:{n}: línea de cache ilegible, se ignora")
-    return cache
+    return cache, full
 
 
 def _normalize_probs(ans: dict, criteria: dict) -> dict:
@@ -730,6 +840,11 @@ def parse_bar_notes(args) -> dict:
             fail(f"No se encuentra el archivo: {nf}")
         with open(nf, encoding='utf-8') as f:
             raw.extend(l for l in f.read().splitlines() if not l.lstrip().startswith('#'))
+    return parse_bar_note_lines(raw, args.bars)
+
+
+def parse_bar_note_lines(raw: list, max_bars) -> dict:
+    """Líneas 'compás N: texto' → {compás: [textos]} (los fuera de rango se ignoran)."""
     notes = {}
     for line in raw:
         line = line.strip()
@@ -741,9 +856,9 @@ def parse_bar_notes(args) -> dict:
         text = m.group(2).strip()
         for b in parse_bar_spec(m.group(1), line):
             notes.setdefault(b, []).append(text)
-    out_of_range = sorted(b for b in notes if args.bars and b > args.bars)
+    out_of_range = sorted(b for b in notes if max_bars and b > max_bars)
     if out_of_range:
-        warn(f"indicaciones fuera de la obra ({args.bars} compases), se ignoran: "
+        warn(f"indicaciones fuera de la obra ({max_bars} compases), se ignoran: "
              f"{', '.join(map(str, out_of_range))}")
         for b in out_of_range:
             del notes[b]
@@ -754,33 +869,107 @@ def parse_bar_notes(args) -> dict:
 # MODO ACORDES FIJOS: LECTURA DE LOS ACORDES DE UN MIDI
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def load_chords_midi(args) -> tuple:
-    """Lee los acordes de un MIDI con el detector de chord_table.py (importado
-    como módulo: ningún comando suyo devuelve la secuencia detectada).
-    Devuelve (progresión, tónica_inferida) con la progresión contigua desde el
-    pulso 0: cada acorde dura hasta el inicio del siguiente."""
-    path = args.chords_midi
-    if not os.path.isfile(path):
-        fail(f"No se encuentra el archivo: {path}")
+def load_chord_table_module(args):
+    """Importa chord_table.py como módulo (su detector de acordes)."""
     if not os.path.isfile(args.chord_table):
         fail(f"no se encuentra {args.chord_table} (usa --chord-table)")
     spec = importlib.util.spec_from_file_location('chord_table_mod', args.chord_table)
     ct = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ct)
+    return ct
 
+
+def midi_to_chord_segments(ct, path: str, bass_only: bool = False,
+                           min_dur: float = 0.5) -> tuple:
+    """Segmenta un MIDI en acordes: [(pcs, bajo_midi, inicio_tick, dur_ticks)].
+
+    Sustituye a ct.midi_to_chord_sequence, que muestrea en ventanas de 1 pulso y
+    fusiona con el anterior todo segmento de <= 1 pulso (los acordes que cambian
+    cada pulso, o más rápido, desaparecen). Aquí el corte es exacto: cada cambio
+    del conjunto de notas activas abre un segmento. Se descartan los de menos de
+    2 clases de altura (1 con bass_only), los contiguos con las mismas clases se
+    unen, y los de menos de `min_dur` pulsos se funden con el anterior (limpia
+    los solapes de una interpretación humana)."""
+    BASS_THRESHOLD = 61                                  # igual que chord_table.py
+    raw, tpb = ct._parse_midi_raw(path)
+    if not raw:
+        return [], tpb
+    raw = sorted(raw, key=lambda e: (e[0], e[1] == 'on'))   # offs antes que ons
+    active, intervals = {}, []
+    for tick, etype, note in raw:
+        if etype == 'on':
+            active[note] = tick
+        elif note in active:
+            intervals.append((active.pop(note), tick, note))
+    end_all = max(t for t, _, _ in raw) + tpb
+    intervals += [(st, end_all, n) for n, st in active.items()]
+    if bass_only:
+        intervals = [i for i in intervals if i[2] < BASS_THRESHOLD]
+    points = sorted([(st, 1, n) for st, _, n in intervals] +
+                    [(en, 0, n) for _, en, n in intervals], key=lambda x: (x[0], x[1]))
+    ticks = sorted({pt[0] for pt in points})
+
+    min_pcs = 1 if bass_only else 2
+    segs, act, idx = [], Counter(), 0
+    for k, t in enumerate(ticks):
+        while idx < len(points) and points[idx][0] == t:
+            _, on, n = points[idx]
+            idx += 1
+            if on:
+                act[n] += 1
+            else:
+                act[n] -= 1
+                if act[n] <= 0:
+                    del act[n]
+        if k + 1 < len(ticks) and act:
+            pcs = frozenset(n % 12 for n in act)
+            if len(pcs) >= min_pcs:
+                segs.append([pcs, min(act), t, ticks[k + 1] - t])
+
+    def compress(items):
+        out = []
+        for pcs, bass, st, du in items:
+            if out and out[-1][0] == pcs:
+                out[-1][1] = min(out[-1][1], bass)
+                out[-1][3] = st + du - out[-1][2]
+            else:
+                out.append([pcs, bass, st, du])
+        return out
+
+    segs = compress(segs)
+    merged = []
+    for pcs, bass, st, du in segs:
+        if merged and du < min_dur * tpb:               # corto: se funde con el anterior
+            merged[-1][3] = st + du - merged[-1][2]
+        else:
+            merged.append([pcs, bass, st, du])
+    return [tuple(x) for x in compress(merged)], tpb
+
+
+def detect_chords(path: str, args, ct, key_text=None) -> tuple:
+    """Acordes de un MIDI con el detector de chord_table.py. Devuelve
+    (progresión, tónica_inferida); la progresión es contigua desde el pulso 0:
+    cada acorde dura hasta el inicio del siguiente."""
     try:
-        events, tpb = ct.midi_to_chord_sequence(path, bass_only=args.bass_only)
+        events, tpb = midi_to_chord_segments(ct, path, args.bass_only, args.min_dur)
         recognized = ct.chord_sequence_to_numerals(events, tpb)
     except Exception as e:                      # MIDI corrupto o no estándar
         fail(f"no se pudo leer {path}: {e}")
-    recognized = [c for c in recognized
-                  if c['root_pc'] is not None and c['dur_beats'] >= args.min_dur]
+    recognized = [c for c in recognized if c['root_pc'] is not None]
     if not recognized:
         fail(f"no se detectó ningún acorde en {path}")
     recognized.sort(key=lambda c: c['start'])
+    unified = []                                # mismo acorde seguido (p. ej. otra inversión)
+    for c in recognized:
+        if unified and (unified[-1]['root_pc'], unified[-1]['quality']) == \
+                (c['root_pc'], c['quality']):
+            unified[-1]['dur_beats'] = c['start'] + c['dur_beats'] - unified[-1]['start']
+        else:
+            unified.append(dict(c))
+    recognized = unified
 
     inferred = ct.infer_tonic(recognized)
-    tonic = parse_key(args.key)[0] if args.key else inferred
+    tonic = parse_key(key_text)[0] if key_text else inferred
     progression = []
     for i, c in enumerate(recognized):
         start = 0.0 if i == 0 else c['start']
@@ -798,6 +987,14 @@ def load_chords_midi(args) -> tuple:
             'duration_beats': round(dur, 6),
         })
     return progression, inferred
+
+
+def load_chords_midi(args) -> tuple:
+    """--chords-midi: (progresión, tónica_inferida) del MIDI de acordes."""
+    path = args.chords_midi
+    if not os.path.isfile(path):
+        fail(f"No se encuentra el archivo: {path}")
+    return detect_chords(path, args, load_chord_table_module(args), args.key)
 
 
 def fit_progression(progression: list, total: float) -> list:
@@ -962,17 +1159,21 @@ class Composer:
         return seed_end
 
     # ── acorde siguiente ─────────────────────────────────────────────────────
+    def chord_query(self, t: float, dur: float) -> tuple:
+        """(estado, instrucciones, opciones) de la pregunta del acorde siguiente.
+        Compartida con el modo train: garantiza hashes de cache idénticos."""
+        criteria = {k: v['desc'] for k, v in self.candidates.items()}
+        extra = self.extra(t, t + dur)
+        instr = (f"Which chord should come next? It starts at {self.pos(t)} and lasts "
+                 f"{fmt(dur)} beat(s). Choose the single best fit for the description, "
+                 f"the seeds and the harmonic flow." + (EXTRA_HINT if extra else ''))
+        return self.state(extra), instr, criteria
+
     def next_chord(self, t: float) -> dict:
         dur = min(self.chord_durs[len(self.chords) % len(self.chord_durs)],
                   self.total - t)
-        criteria = {k: v['desc'] for k, v in self.candidates.items()}
-        extra = self.extra(t, t + dur)
-        choice, probs = self.jev.ask(
-            'acorde', self.state(extra),
-            f"Which chord should come next? It starts at {self.pos(t)} and lasts "
-            f"{fmt(dur)} beat(s). Choose the single best fit for the description, "
-            f"the seeds and the harmonic flow." + (EXTRA_HINT if extra else ''),
-            criteria)
+        state, instr, criteria = self.chord_query(t, dur)
+        choice, probs = self.jev.ask('acorde', state, instr, criteria)
         label = pick(probs, self.args.temperature, self.rng)
         if self.args.verbose:
             print(f"    {COL['gray']}acorde {self.pos(t)}: {label}  "
@@ -1019,6 +1220,19 @@ class Composer:
             out[midi_to_name(m)] = (m, f"{role}; {motion}")
         return out
 
+    def note_query(self, c: dict, t: float, dur: float) -> tuple:
+        """(estado, instrucciones, opciones, candidatas) de la pregunta de la
+        nota siguiente. Compartida con el modo train."""
+        cands = self.pitch_candidates(c)
+        extra = self.extra(t, t + dur)
+        instr = (f"Which note should the melody play next? It starts at "
+                 f"{self.pos(t)}, lasts {fmt(dur)} beat(s) and sounds over "
+                 f"the chord {c['chord']}. Choose the single best fit for the "
+                 f"description, the motif seed and the harmony."
+                 + (EXTRA_HINT if extra else ''))
+        return (self.state(extra), instr,
+                {k: v[1] for k, v in cands.items()}, cands)
+
     def fill_melody(self, until: float) -> None:
         """Genera notas (pitch por Jev, duración por el ritmo de la semilla) hasta
         que la melodía alcanza `until`. Ninguna nota cruza un cambio de acorde."""
@@ -1035,16 +1249,8 @@ class Composer:
                 self.melody.append({'note': 'R', 'midi': None, 'start': self.mel_t,
                                     'dur': dur, 'source': 'jev'})
             else:
-                cands = self.pitch_candidates(c)
-                extra = self.extra(self.mel_t, self.mel_t + dur)
-                choice, probs = self.jev.ask(
-                    'nota', self.state(extra),
-                    f"Which note should the melody play next? It starts at "
-                    f"{self.pos(self.mel_t)}, lasts {fmt(dur)} beat(s) and sounds over "
-                    f"the chord {c['chord']}. Choose the single best fit for the "
-                    f"description, the motif seed and the harmony."
-                    + (EXTRA_HINT if extra else ''),
-                    {k: v[1] for k, v in cands.items()})
+                state, instr, criteria, cands = self.note_query(c, self.mel_t, dur)
+                choice, probs = self.jev.ask('nota', state, instr, criteria)
                 name = pick(probs, self.args.temperature, self.rng)
                 if self.args.verbose:
                     print(f"    {COL['gray']}nota  {self.pos(self.mel_t)}: {name}  "
@@ -1150,6 +1356,510 @@ def seeds_json(seeds: dict) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# MODO TRAIN: RECONSTRUIR LA CACHE A PARTIR DE MIDIS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+TXT_DIRECTIVE_RE = re.compile(
+    r"^(descripci[oó]n|description|desc|tonalidad|key|modo|mode)\s*:\s*(.+)$",
+    re.IGNORECASE)
+
+
+class TeacherJev(Jev):
+    """«Jev maestro»: en vez de consultar a la API, conoce la respuesta real
+    (la que dice el MIDI) y la registra en la cache con probabilidad 1.0 en
+    ella y 0.0 en el resto de opciones. Mismo formato y misma clave que Jev:
+    las entradas son indistinguibles de las obtenidas de la API.
+
+    Las preguntas de modo, tónica y semillas pasan por ask() (así se reutilizan
+    choose_key_mode y choose_seeds tal cual); las de acorde y nota las registra
+    directamente TrainComposer con record()."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.overwrite = args.overwrite
+        self.data = None
+        self.args_tools = args
+        self.counts = Counter()
+        self._seed_chords = {}      # id → progresión resuelta en Do (memo)
+        self._seed_motifs = {}      # id → notas resueltas en Do, octava 5 (memo)
+
+    # ── registro ─────────────────────────────────────────────────────────────
+    def record(self, kind, state, instructions, criteria, truth) -> None:
+        if len(criteria) < 2:                  # componer no pregunta con 1 opción
+            return
+        if truth not in criteria:
+            self.counts['omitida:' + kind] += 1
+            return
+        key = self.cache_key(state, instructions, criteria)
+        if key in self.cache and not self.overwrite:
+            if key not in self.full:           # entrada antigua: se completa
+                old = self.cache[key]
+                self._store(key, kind, instructions, old, state, criteria,
+                            source=infer_source(old))
+                self.counts['completada'] += 1
+            self.counts['existente'] += 1
+            return
+        ans = {'choice': truth,
+               'probabilities': {k: (1.0 if k == truth else 0.0) for k in criteria}}
+        self._store(key, kind, instructions, ans, state, criteria, source='train')
+        self.counts['nueva'] += 1
+        self.counts['nueva:' + kind] += 1
+
+    def ask(self, kind, state, instructions, criteria):
+        if len(criteria) == 1:
+            only = next(iter(criteria))
+            return only, {only: 1.0}
+        truth = self.truth_for(kind, criteria)
+        self.record(kind, state, instructions, criteria, truth)
+        return truth, {truth: 1.0}
+
+    # ── respuesta real de cada pregunta ──────────────────────────────────────
+    def truth_for(self, kind, criteria):
+        d = self.data
+        if kind == 'modo':
+            return d.mode
+        if kind == 'tonica':
+            for label in criteria:
+                if NOTE_PC[label.split('/')[0]] % 12 == d.tonic:
+                    return label
+        if kind == 'semilla_acordes':
+            return self.best_chord_seed(criteria)
+        if kind == 'semilla_motivo':
+            return self.best_motif_seed(criteria)
+        fail(f"pregunta '{kind}' no soportada por el modo train")
+
+    def best_chord_seed(self, criteria):
+        """Entrada del catálogo cuya progresión coincide mejor con el arranque
+        del MIDI (acorde a acorde, en rejilla de 0.25 pulsos). A igualdad gana
+        la más corta: deja más música real para entrenar."""
+        d, q = self.data, 0.25
+        best, best_score = None, -1.0
+        for label in criteria:
+            eid = int(re.match(r'#(\d+)', label).group(1))
+            if eid not in self._seed_chords:
+                self._seed_chords[eid] = resolve_chord_seed(
+                    self.args_tools.chord_table, eid, 0)
+            seed = self._seed_chords[eid]
+            length = min(sum(c['duration_beats'] for c in seed), d.total)
+            hits = slots = 0
+            for k in range(int(length / q)):
+                t = (k + 0.5) * q
+                slots += 1
+                hits += (_seed_name_at(seed, t, d.tonic) == _name_at(d.chords, t))
+            score = hits / max(1, slots) - 1e-6 * length
+            if score > best_score + 1e-12:
+                best, best_score = label, score
+        return best
+
+    def best_motif_seed(self, criteria):
+        """Entrada del catálogo cuyo motivo coincide mejor con el arranque de la
+        melodía (por clases de altura, en rejilla de 0.25 pulsos)."""
+        d, q = self.data, 0.25
+        best, best_score = None, -1.0
+        for label in criteria:
+            eid = int(re.match(r'#(\d+)', label).group(1))
+            if eid not in self._seed_motifs:
+                self._seed_motifs[eid] = resolve_motif_seed(
+                    self.args_tools.motif_table, eid, 0, 5)
+            notes = self._seed_motifs[eid]
+            length = min(sum(n['duration_beats'] for n in notes), d.total)
+            shift = d.tonic + (d.octave - 5) * 12
+            hits = slots = 0
+            for k in range(int(length / q)):
+                t = (k + 0.5) * q
+                slots += 1
+                seed_m = _midi_at_seed(notes, t)
+                real_m = _midi_at_melody(d.melody, t)
+                if seed_m is None or real_m is None:
+                    hits += (seed_m is None and real_m is None)
+                else:
+                    hits += ((seed_m + shift) % 12 == real_m % 12)
+            score = hits / max(1, slots)
+            if score > best_score + 1e-12:
+                best, best_score = label, score
+        return best
+
+
+def _name_at(chords: list, t: float):
+    for c in chords:
+        if c['start'] - EPS <= t < c['start'] + c['dur'] - EPS:
+            return c['chord']
+    return None
+
+
+def _seed_name_at(seed: list, t: float, tonic: int):
+    """Nombre del acorde de la semilla (resuelta en Do) en t, transpuesto a la tónica."""
+    acc = 0.0
+    for c in seed:
+        if acc <= t < acc + c['duration_beats']:
+            name = c['chord']
+            rn = 2 if len(name) > 1 and name[1] in '#b' else 1
+            return PITCH_NAMES[(c['pitches'][0] + tonic) % 12] + name[rn:]
+        acc += c['duration_beats']
+    return None
+
+
+def _midi_at_seed(notes: list, t: float):
+    acc = 0.0
+    for n in notes:
+        if acc <= t < acc + n['duration_beats']:
+            return n['midi']
+        acc += n['duration_beats']
+    return None
+
+
+def _midi_at_melody(melody: list, t: float):
+    for n in melody:
+        if n['start'] - EPS <= t < n['start'] + n['dur'] - EPS:
+            return n['midi']
+    return None
+
+
+# ── Lectura del MIDI: separar melodía y armonía ──────────────────────────────
+
+def read_midi_notes(path: str) -> tuple:
+    """(notas, ticks_por_pulso, pulsos_por_compás) de un MIDI. Cada nota:
+    {start, end (ticks), pitch, track, channel}. Se ignora el canal 10 (batería)."""
+    try:
+        mid = mido.MidiFile(path)
+    except Exception as e:
+        fail(f"no se pudo leer {path}: {e}")
+    notes, beats = [], None
+    for ti, track in enumerate(mid.tracks):
+        t, active = 0, {}
+        for msg in track:
+            t += msg.time
+            if msg.type == 'time_signature' and beats is None:
+                beats = max(1, round(msg.numerator * 4 / msg.denominator))
+            elif msg.type == 'note_on' and msg.velocity > 0:
+                active.setdefault((msg.channel, msg.note), []).append(t)
+            elif msg.type in ('note_off', 'note_on'):
+                lst = active.get((msg.channel, msg.note))
+                if lst:
+                    st = lst.pop(0)
+                    notes.append({'start': st, 'end': max(t, st + 1), 'pitch': msg.note,
+                                  'track': ti, 'channel': msg.channel})
+        for (ch, n), lst in active.items():
+            for st in lst:
+                notes.append({'start': st, 'end': max(t, st + 1), 'pitch': n,
+                              'track': ti, 'channel': ch})
+    notes = [n for n in notes if n['channel'] != 9]
+    if not notes:
+        fail(f"{path}: sin notas")
+    return notes, mid.ticks_per_beat, beats or 4
+
+
+def split_melody_harmony(notes: list, tpb: int, melody_track=None) -> tuple:
+    """Separa (melodía, armonía). Melodía: la pista/canal monofónico de registro
+    más agudo; si no hay ninguno, la nota más aguda de cada ataque (skyline)."""
+    mel = None
+    if melody_track is not None:
+        mel = [n for n in notes if n['track'] == melody_track]
+        if not mel:
+            fail(f"--melody-track {melody_track}: la pista no tiene notas")
+    else:
+        groups = {}
+        for n in notes:
+            groups.setdefault((n['track'], n['channel']), []).append(n)
+        best = None
+        for g in groups.values():
+            if len(g) < 4:
+                continue
+            g = sorted(g, key=lambda n: n['start'])
+            overlaps = sum(1 for a, b in zip(g, g[1:]) if b['start'] < a['end'] - tpb / 8)
+            if overlaps / len(g) > 0.15:
+                continue                                   # polifónica: no es melodía
+            mean = sum(n['pitch'] for n in g) / len(g)
+            if best is None or mean > best[0]:
+                best = (mean, g)
+        if best:
+            mel = best[1]
+    if mel is None:                                        # skyline
+        by_onset = {}
+        for n in notes:
+            by_onset.setdefault(round(n['start'] / (tpb / 8)), []).append(n)
+        mel = [max(g, key=lambda n: n['pitch']) for g in by_onset.values()]
+    ids = {id(n) for n in mel}
+    return mel, [n for n in notes if id(n) not in ids]
+
+
+def write_harmony_midi(notes: list, tpb: int, path: str) -> None:
+    """MIDI temporal con solo la armonía, para el detector de chord_table.py."""
+    ev = []
+    for n in notes:
+        ev.append((n['start'], 1, n['pitch']))
+        ev.append((n['end'], 0, n['pitch']))
+    ev.sort()
+    mid = mido.MidiFile(type=0, ticks_per_beat=tpb)
+    tr = mido.MidiTrack()
+    mid.tracks.append(tr)
+    last = 0
+    for tick, on, pitch in ev:
+        tr.append(mido.Message('note_on' if on else 'note_off', channel=0, note=pitch,
+                               velocity=70 if on else 0, time=tick - last))
+        last = tick
+    mid.save(path)
+
+
+def quantize_melody(mel: list, tpb: int, q: float) -> list:
+    """Melodía monofónica en pulsos y cuantizada: [{start, dur, midi}]."""
+    mono = []
+    for n in sorted(mel, key=lambda n: (n['start'], -n['pitch'])):
+        if mono and n['start'] == mono[-1]['start']:
+            continue                                       # mismo ataque: la más aguda
+        mono.append(dict(n))
+    for a, b in zip(mono, mono[1:]):
+        a['end'] = min(a['end'], b['start'])               # legato → sin solapes
+    out, prev_end = [], 0.0
+    for n in mono:
+        s_ = max(round(n['start'] / tpb / q) * q, prev_end)
+        e_ = round(n['end'] / tpb / q) * q
+        if e_ - s_ < q - EPS:
+            continue                                       # más corta que la rejilla
+        out.append({'start': round(s_, 6), 'dur': round(e_ - s_, 6), 'midi': n['pitch']})
+        prev_end = e_
+    return out
+
+
+def infer_mode(chords: list, melody: list, tonic: int) -> str:
+    """Modo cuya escala (en la tónica dada) contiene más duración de notas y acordes."""
+    w = [0.0] * 12
+    for n in melody:
+        w[n['midi'] % 12] += n['dur']
+    for c in chords:
+        for pc in c['pitches']:
+            w[pc % 12] += c['duration_beats'] * 0.5
+    total = sum(w) or 1.0
+    best, best_score = MODES[0], -1.0
+    for m in MODES:
+        pcs = {(tonic + iv) % 12 for iv in MODE_INTERVALS[m]}
+        score = sum(w[p] for p in pcs) / total
+        if score > best_score + 1e-9:
+            best, best_score = m, score
+    return best
+
+
+def read_train_txt(path: str):
+    """X.txt → (descripción|None, tonalidad|None, modo|None, líneas de indicaciones)."""
+    desc, key, mode, notes = [], None, None, []
+    if not os.path.isfile(path):
+        return None, None, None, []
+    with open(path, encoding='utf-8') as f:
+        for line in f.read().splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            m = TXT_DIRECTIVE_RE.match(line)
+            if not m:
+                notes.append(line)
+                continue
+            kind, value = m.group(1).lower(), m.group(2).strip()
+            if kind.startswith(('descr', 'desc')):
+                desc.append(value)
+            elif kind in ('tonalidad', 'key'):
+                key = value
+            else:
+                mode = value
+    return ('\n'.join(desc) or None), key, mode, notes
+
+
+# ── Recorrido con ventana deslizante ─────────────────────────────────────────
+
+class TrainComposer(Composer):
+    """Recorre la armonía y la melodía reales con la misma ventana deslizante
+    que Composer y, en vez de preguntar a Jev, registra la respuesta real."""
+
+    def __init__(self, jev, data, seeds, args):
+        super().__init__(jev, data.desc, data.tonic, data.mode, seeds, args)
+        self.data = data
+        self.starts = {round(n['start'], 6): n for n in data.melody}
+        self.start_list = sorted(self.starts)
+
+    def follow_melody(self, until: float) -> None:
+        """Equivalente de fill_melody con la melodía real: una consulta por nota
+        (si estaba entre las opciones) y silencios en los huecos. Ninguna nota
+        cruza un cambio de acorde (lo que sobra pasa a silencio)."""
+        until = min(until, self.total)
+        while self.mel_t < until - EPS:
+            c = self.chord_at(self.mel_t)
+            c_end = c['start'] + c['dur']
+            note = self.starts.get(round(self.mel_t, 6))
+            if note:
+                dur = min(note['dur'], until - self.mel_t, c_end - self.mel_t)
+                if dur <= EPS:
+                    break
+                state, instr, criteria, cands = self.note_query(c, self.mel_t, dur)
+                name = midi_to_name(note['midi'])
+                self.jev.record('nota', state, instr, criteria, name)
+                self.melody.append({'note': name, 'midi': note['midi'],
+                                    'start': self.mel_t, 'dur': dur, 'source': 'train'})
+                self.last_midi = note['midi']
+            else:
+                k = bisect.bisect_right(self.start_list, self.mel_t + EPS)
+                nxt = self.start_list[k] if k < len(self.start_list) else float('inf')
+                dur = min(nxt - self.mel_t, until - self.mel_t, c_end - self.mel_t)
+                if dur <= EPS:
+                    break
+                self.melody.append({'note': 'R', 'midi': None, 'start': self.mel_t,
+                                    'dur': dur, 'source': 'train'})
+            self.mel_t = round(self.mel_t + dur, 6)
+
+    def train_chord(self, rc: dict, t: float, dur: float) -> None:
+        state, instr, criteria = self.chord_query(t, dur)
+        label = next((k for k, v in self.candidates.items()
+                      if v['chord'] == rc['chord']), None)
+        if label is not None:
+            self.jev.record('acorde', state, instr, criteria, label)
+            c = self.candidates[label]
+            chord = {'chord': c['chord'], 'numeral': c['numeral'], 'pitches': c['pitches']}
+        else:                                  # acorde no diatónico: no era una opción
+            self.jev.counts['omitida:acorde'] += 1
+            chord = {'chord': rc['chord'], 'numeral': rc.get('numeral', ''),
+                     'pitches': rc['pitches']}
+        self.chords.append(dict(chord, start=t, dur=dur, source='train'))
+
+    def run(self) -> None:
+        if self.fixed:                         # estilo fixed: solo la melodía
+            self.place_seed()
+            for c in list(self.chords):
+                self.follow_melody(c['start'] + c['dur'])
+            return
+        t = self.place_seed()
+        self.follow_melody(t)
+        for rc in self.data.chords:
+            end = min(rc['start'] + rc['dur'], self.total)
+            if end <= t + EPS:
+                continue
+            start = max(rc['start'], t)
+            self.train_chord(rc, start, end - start)
+            t = end
+            self.follow_melody(t)
+
+
+def build_train_data(path: str, args, ct, teacher) -> types.SimpleNamespace:
+    """Analiza un MIDI (+ su .txt) y lo deja listo para recorrerlo."""
+    notes, tpb, midi_beats = read_midi_notes(path)
+    mel_notes, harm_notes = split_melody_harmony(notes, tpb, args.melody_track)
+    if not harm_notes:
+        fail(f"{path}: no queda armonía tras separar la melodía")
+    with tempfile.TemporaryDirectory() as td:
+        hp = os.path.join(td, 'harmony.mid')
+        write_harmony_midi(harm_notes, tpb, hp)
+        progression, inferred = detect_chords(hp, args, ct, None)
+    melody = quantize_melody(mel_notes, tpb, args.quant)
+    if not melody:
+        fail(f"{path}: no se detectó melodía")
+
+    stem = os.path.splitext(os.path.basename(path))[0]
+    desc, txt_key, txt_mode, note_lines = read_train_txt(
+        os.path.splitext(path)[0] + '.txt')
+    if desc is None:
+        desc = args.desc or stem.replace('_', ' ')
+        warn(f"{stem}: sin 'descripción:' en su .txt, se usa «{desc}»")
+
+    key_text = txt_key or args.key
+    key_pc, key_hint = parse_key(key_text) if key_text else (None, None)
+    tonic = key_pc if key_pc is not None else inferred
+    mode = txt_mode or args.mode or key_hint
+    if mode is not None and mode not in MODES:
+        fail(f"{stem}: modo no válido '{mode}' (opciones: {', '.join(MODES)})")
+
+    beats = args.beats or midi_beats
+    end = max(sum(c['duration_beats'] for c in progression),
+              max(n['start'] + n['dur'] for n in melody))
+    bars = max(1, int(math.ceil(end / beats - EPS)))
+    total = float(bars * beats)
+    fixed = fit_progression(progression, total)
+    chords, t = [], 0.0
+    for c in fixed:
+        chords.append(dict(c, start=round(t, 6), dur=c['duration_beats']))
+        t += c['duration_beats']
+    melody = [dict(n, dur=min(n['dur'], total - n['start']))
+              for n in melody if n['start'] < total - EPS]
+    if mode is None:
+        mode = infer_mode(fixed, melody, tonic)
+    octave = args.octave
+    if octave is None:                         # centrar el rango [base-5, base+19]
+        med = statistics.median(n['midi'] for n in melody)
+        octave = max(2, min(7, round((med - 7 - tonic) / 12)))
+    return types.SimpleNamespace(
+        path=path, stem=stem, desc=desc, tonic=tonic, mode=mode, inferred=inferred,
+        key_forced=key_pc is not None, beats=beats, bars=bars, total=total,
+        octave=octave, fixed_progression=fixed, chords=chords, melody=melody,
+        bar_notes=parse_bar_note_lines(note_lines, bars))
+
+
+def run_train_pass(teacher, data, base_args, style: str, depth: int) -> None:
+    a = copy.copy(base_args)
+    a.bars, a.beats, a.depth, a.octave = data.bars, data.beats, depth, data.octave
+    a.rng_obj, a.seed_temp, a.temperature, a.verbose = random.Random(0), 0.0, 0.0, False
+    a.bar_notes_map = data.bar_notes
+    a.mode = None
+    if style == 'fixed':
+        a.chords_midi = data.path
+        a.key = PITCH_NAMES[data.tonic] if data.key_forced else None
+        fixed = data.fixed_progression
+    else:
+        a.chords_midi, a.key, fixed = None, None, None
+    teacher.data, teacher.args_tools = data, a
+    with contextlib.redirect_stdout(io.StringIO()):       # silenciar los print de componer
+        tonic, mode = choose_key_mode(teacher, data.desc, a, a.rng_obj, fixed, data.inferred)
+        seeds = choose_seeds(teacher, data.desc, tonic, mode, a, fixed)
+    TrainComposer(teacher, data, seeds, a).run()
+
+
+def cmd_train(args) -> None:
+    if not MIDO_OK:
+        fail("train necesita mido (pip install mido)")
+    if not os.path.isdir(args.dir):
+        fail(f"No es un directorio: {args.dir}")
+    files = sorted(os.path.join(args.dir, f) for f in os.listdir(args.dir)
+                   if f.lower().endswith(('.mid', '.midi')))
+    if not files:
+        fail(f"no hay .mid/.midi en {args.dir}")
+    try:
+        depths = sorted({int(x) for x in args.depth.split(',') if x.strip()})
+    except ValueError:
+        fail(f"--depth no válido: '{args.depth}' (ej. 4 ó 2,4,6)")
+    if not depths or depths[0] < 1:
+        fail("--depth debe ser >= 1")
+    styles = ['generate', 'fixed'] if args.style == 'both' else [args.style]
+    args.cache, args.cache_only, args.verbose = True, False, False
+    ct = load_chord_table_module(args)
+    teacher = TeacherJev(args)
+
+    banner('JEV COMPOSER — Train')
+    print(f"  {COL['gray']}cache: {teacher.path}  ({len(teacher.cache)} entradas){COL['reset']}\n")
+    ok = bad = 0
+    for path in files:
+        before = Counter(teacher.counts)
+        try:
+            data = build_train_data(path, args, ct, teacher)
+            for depth in depths:
+                for style in styles:
+                    run_train_pass(teacher, data, args, style, depth)
+        except SystemExit:
+            bad += 1
+            print(f"  {COL['red']}✗ {os.path.basename(path)}{COL['reset']} (omitido)\n")
+            continue
+        ok += 1
+        d = teacher.counts - before
+        omit = ', '.join(f"{k.split(':')[1]} {v}" for k, v in sorted(d.items())
+                         if k.startswith('omitida:'))
+        print(f"  {COL['green']}✓{COL['reset']} {COL['bold']}{os.path.basename(path)}{COL['reset']}  "
+              f"{PITCH_NAMES[data.tonic]} {data.mode} · {data.bars} compases "
+              f"({data.beats}/4) · octava {data.octave}")
+        print(f"      {COL['gray']}+{d['nueva']} nuevas, {d['existente']} ya existentes"
+              + (f", omitidas: {omit}" if omit else '') + COL['reset'] + '\n')
+    tot = teacher.counts
+    kinds = ', '.join(f"{k.split(':')[1]} {v}" for k, v in sorted(tot.items())
+                      if k.startswith('nueva:'))
+    print(f"  {len(files)} MIDI(s): {ok} ok, {bad} omitidos")
+    print(f"  {COL['gray']}{tot['nueva']} entradas nuevas ({kinds}), "
+          f"{tot['existente']} ya existentes; cache: {teacher.path}{COL['reset']}\n")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # SUBCOMANDOS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1197,7 +1907,7 @@ def cmd_semillas(args) -> None:
     if args.export_json:
         out = {'tonic': PITCH_NAMES[tonic], 'mode': mode, 'octave': args.octave,
                'seeds': seeds_json(seeds), 'queries': jev.log,
-               'generator': 'jev_composer.py v1.0'}
+               'generator': 'jev_composer.py v4.0'}
         with open(_ensure_parent(args.export_json), 'w', encoding='utf-8') as f:
             json.dump(out, f, indent=2, ensure_ascii=False)
         print(f"  → JSON:  {args.export_json}")
@@ -1257,7 +1967,7 @@ def cmd_componer(args) -> None:
         'chords':       chords,
         'melody':       melody,
         'queries':      jev.log,
-        'generator':    'jev_composer.py v1.0',
+        'generator':    'jev_composer.py v4.0',
     }
     print()
     with open(_ensure_parent(json_path), 'w', encoding='utf-8') as f:
@@ -1290,23 +2000,26 @@ def cmd_cache(args) -> None:
     if not os.path.isfile(path):
         print(f"  Sin cache en {path}\n")
         return
-    kinds, models, n = Counter(), Counter(), 0
-    seen = set()
+    recs = {}                                   # la última línea de cada clave gana
     with open(path, encoding='utf-8') as f:
         for line in f:
             try:
                 rec = json.loads(line)
             except ValueError:
                 continue
-            if rec.get('key') in seen:
-                continue
-            seen.add(rec.get('key'))
-            n += 1
-            kinds[rec.get('kind', '?')] += 1
-            models[rec.get('model', '?')] += 1
+            recs[rec.get('key')] = rec
+    n = len(recs)
+    kinds = Counter(r.get('kind', '?') for r in recs.values())
+    models = Counter(r.get('model', '?') for r in recs.values())
+    complete = sum(1 for r in recs.values() if r.get('state') and r.get('criteria'))
+    sources = Counter(r.get('source') or infer_source(r.get('answer') or {})
+                      for r in recs.values())
     print(f"  Fichero:    {path}")
     print(f"  Tamaño:     {os.path.getsize(path) / 1024:.1f} KiB")
-    print(f"  Consultas:  {n}\n")
+    print(f"  Consultas:  {n}")
+    print(f"  Completas:  {complete} de {n} (con estado y opciones; las demás se "
+          f"completan al reutilizarlas con --cache)")
+    print(f"  Origen:     " + ', '.join(f"{k} {v}" for k, v in sources.most_common()) + "\n")
     print(f"  {COL['bold']}Por tipo:{COL['reset']}")
     for k, v in sorted(kinds.items(), key=lambda x: -x[1]):
         print(f"    {k:<18} {v:>5}")
@@ -1319,6 +2032,48 @@ def cmd_cache(args) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def seed_opts_train():
+    """Opciones de train (parser padre)."""
+    t = argparse.ArgumentParser(add_help=False)
+    t.add_argument('dir', metavar='DIR', help='Directorio con los .mid/.midi (y sus .txt)')
+    t.add_argument('--model', type=str, default=DEFAULT_MODEL,
+                   help=f'Modelo con el que se firman las entradas (default: {DEFAULT_MODEL})')
+    t.add_argument('--url', type=str, default=DEFAULT_URL, help=argparse.SUPPRESS)
+    t.add_argument('--cache-file', type=str, default=DEFAULT_CACHE, dest='cache_file',
+                   metavar='FILE', help=f'Fichero de cache JSONL (default: {DEFAULT_CACHE})')
+    t.add_argument('--overwrite', action='store_true',
+                   help='Reescribir entradas ya existentes en la cache')
+    t.add_argument('--depth', type=str, default='4', metavar='N[,N...]',
+                   help='Profundidades de ventana a reconstruir (default: 4)')
+    t.add_argument('--octave', type=int, default=None,
+                   help='Octava base (default: automática por obra)')
+    t.add_argument('--leap', type=int, default=9,
+                   help='Salto melódico máximo en semitonos (default: 9)')
+    t.add_argument('--beats', type=int, default=None,
+                   help='Pulsos por compás (default: el del MIDI, o 4)')
+    t.add_argument('--quant', type=float, default=0.25, metavar='BEATS',
+                   help='Rejilla de cuantización de la melodía (default: 0.25)')
+    t.add_argument('--melody-track', type=int, default=None, dest='melody_track',
+                   metavar='N', help='Forzar la pista (0-based) con la melodía')
+    t.add_argument('--style', choices=['generate', 'fixed', 'both'], default='both',
+                   help='Entradas del modo normal, del modo --chords-midi, o ambas')
+    t.add_argument('--desc', type=str, default=None, metavar='TEXTO',
+                   help="Descripción para los MIDIs sin 'descripción:' en su .txt")
+    t.add_argument('--key', type=str, help='Fijar la tónica de todos los MIDIs')
+    t.add_argument('--mode', type=str, choices=MODES, help='Fijar el modo de todos los MIDIs')
+    t.add_argument('--bass-only', action='store_true', dest='bass_only',
+                   help='Detectar acordes solo con las notas graves')
+    t.add_argument('--min-dur', type=float, default=0.5, dest='min_dur', metavar='BEATS',
+                   help='Fundir con el anterior los acordes más cortos que esto (default: 0.5)')
+    t.add_argument('--chord-table', type=str, dest='chord_table',
+                   default=os.path.join(HERE, 'chord_table.py'), metavar='FILE',
+                   help='Ruta de chord_table.py (default: junto a este script)')
+    t.add_argument('--motif-table', type=str, dest='motif_table',
+                   default=os.path.join(HERE, 'motif_table.py'), metavar='FILE',
+                   help='Ruta de motif_table.py (default: junto a este script)')
+    return t
+
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -1406,9 +2161,15 @@ def build_parser():
                    help='Usar los acordes de este MIDI en vez de generarlos')
     p.add_argument('--bass-only', action='store_true', dest='bass_only',
                    help='(con --chords-midi) detectar acordes solo con notas graves')
-    p.add_argument('--min-dur', type=float, default=0.0, dest='min_dur', metavar='BEATS',
-                   help='(con --chords-midi) ignorar acordes más cortos que esto')
+    p.add_argument('--min-dur', type=float, default=0.5, dest='min_dur', metavar='BEATS',
+                   help='(con --chords-midi) fundir con el anterior los acordes más '
+                        'cortos que esto (default: 0.5)')
     p.set_defaults(func=cmd_componer)
+
+    p = sub.add_parser('train', parents=[seed_opts_train()],
+                       help='Reconstruir la cache a partir de MIDIs',
+                       formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.set_defaults(func=cmd_train)
 
     p = sub.add_parser('cache', help='Estadísticas de la cache de consultas',
                        formatter_class=argparse.RawDescriptionHelpFormatter)

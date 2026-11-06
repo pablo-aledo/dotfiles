@@ -317,7 +317,7 @@ _FINGERPRINT_KEYS = (
 # =============================================================================
 # §2  DSP: extracción de f0 y loudness framewise (autocontenido)
 #
-#     Basado en el YIN de genopatch_v2.py (De Cheveigné & Kawahara 2002),
+#     Basado en el YIN de genopatch.py (De Cheveigné & Kawahara 2002),
 #     pero llamado una vez por frame (hop = sample_rate/frame_rate) en vez
 #     de una sola vez por clip -- necesitamos un CONTORNO, no una nota.
 # =============================================================================

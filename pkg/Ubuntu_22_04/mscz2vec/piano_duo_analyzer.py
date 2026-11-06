@@ -1,71 +1,90 @@
 #!/usr/bin/env python3
 """
 piano_duo_analyzer.py — Visualizador HTML de piano a dos manos con análisis
-armónico (MIDI de dos pistas → informe HTML interactivo)
-(versión base de la familia piano_duo_analyzer*; el banner imprime «v2.0»).
+armónico y estructural (MIDI de dos pistas → informe HTML interactivo)
+(versión 5 de la familia piano_duo_analyzer*; el banner imprime «v2.0»).
 
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
 ────────────────────────────────────────────────────────────────────────────
 Toma un MIDI con la mano derecha en una pista y la izquierda en otra, detecta
-tonalidad y acordes, y dibuja un informe HTML con tres filas principales (más una fila «Fuente
-armonía» que indica qué mano aporta los acordes en cada tramo):
+tonalidad y acordes y genera un informe HTML con, de arriba abajo: Secciones ·
+Fuente armonía · piano roll de la mano derecha · piano roll de la mano
+izquierda (ambos con teclado lateral) · Acordes con su función armónica ·
+curvas de Tensión, Densidad y Dinámica con las cadencias · Vista general con
+los compases repetidos. Zoom y tooltip al pasar sobre los acordes.
 
-  · Piano roll de la mano DERECHA. Cada nota se colorea según su posición en el
-    acorde que suena en ese instante:
-        azul     → 1.ª nota del acorde (la más grave / fundamental)
-        amarillo → 2.ª nota          verde → 3.ª nota        blanco → 4.ª nota
-        rojo     → no pertenece al acorde
-  · Piano roll de la mano IZQUIERDA. Las notas del acorde se colorean por la
-    raíz detectada: Do rojo · Re naranja · Mi amarillo · Fa verde · Sol azul
-    claro · La azul · Si violeta (las alteradas, con tonos intermedios).
-  · Acordes por compás: nombre del acorde y función armónica
-    (T = tónica, PD = predominante, D = dominante, Dsec = dominante secundaria).
-
-Cómo se obtiene: la tonalidad global con el perfil de Krumhansl-Schmuckler y,
-en ventana deslizante, la tonalidad local (modulaciones); el acorde de cada
-compás por plantillas de tríadas y cuatriadas con detección de inversión; los
-arpegios se agrupan en una ventana de tiempo (--arp-window) para tratarlos como
-un único acorde. La armonía puede salir de una mano u otra según el compás
-(--harmony-source); sin indicarlo, gana en cada compás la mano con mayor
-densidad armónica y la mano que no aporta la armonía se colorea por posición
-en el acorde, la que sí la aporta por raíz.
+  - Tonalidad: Krumhansl-Schmuckler global y, por ventana deslizante, local
+    (modulaciones); --single-key la fija a la global.
+  - Acordes: plantillas con inversiones; arpegios y bajos de tipo Alberti se
+    fusionan en un único acorde (desactivable con --no-arp-fusion).
+  - Fuente armónica por compás: una mano, la otra o ambas. Por defecto gana en
+    cada compás la mano con más densidad armónica (--harmony-source la fija);
+    NOVEDAD de v5: --both-hands-source combina las notas de las dos manos para
+    detectar el acorde en los compases indicados (útil cuando el acorde se
+    reparte entre ambas), y en ellos todas las notas se colorean por su
+    posición en el acorde combinado.
+  - Color: la mano que no aporta la armonía se colorea por posición en el
+    acorde (orden de altura con --voicing-order, defecto; orden teórico
+    fundamental/3.ª/5.ª con --theoretical-order); la que la aporta, por raíz.
+  - Estructura: tensión por función (T 0.0, PD 0.4, Dsec 0.7, D 1.0, otras 0.5),
+    cadencias (perfecta V→I, plagal IV→I, rota V→vi, semicadencia I→V), motivos
+    y secciones por compresión gramatical Re-Pair (con respaldo en fronteras de
+    motivos y, si no, partes iguales) y compases de contorno melódico repetido.
 
 ────────────────────────────────────────────────────────────────────────────
 Modos de uso
 ────────────────────────────────────────────────────────────────────────────
   Análisis de un MIDI (defecto)   python piano_duo_analyzer.py archivo.mid
-  Fuente armónica fija o por tramos   --harmony-source left | right |
-                                  "1-4:right,5-12:left" (compases desde 1).
-  Modo de prueba (--test)         Genera un MIDI sintético (A: Do mayor con
-                                  arpegios, B: La menor con acordes en bloque,
-                                  A': Do mayor con inversiones) y lo analiza.
-                                  También se activa si no se da ningún MIDI.
+  Fuente armónica de una mano o por tramos   --harmony-source
+  Ambas manos en ciertos compases            --both-hands-source
+  Sin fusión de arpegios / tonalidad única   --no-arp-fusion · --single-key
+  Color de la melodía                        --voicing-order | --theoretical-order
+  Modo de prueba (--test)         MIDI sintético (A / B / A') generado y
+                                  analizado; también si no se da ningún MIDI.
 
 ────────────────────────────────────────────────────────────────────────────
 Entradas y salidas
 ────────────────────────────────────────────────────────────────────────────
-  Entrada : un MIDI con (al menos) dos pistas: derecha (--right, defecto 0) e
-            izquierda (--left, defecto 1), con índices de pista desde 0.
-  Salida  : HTML autocontenido en -o/--output (defecto <midi>_piano.html, junto
-            al MIDI; se crea el directorio padre si falta) y un resumen por
-            consola (pistas, tonalidad global, modulaciones, fuente armónica
-            por tramo). En --test el MIDI se escribe en la ruta fija
-            /home/claude/test_piano_duo_v2.mid.
+  Entrada : MIDI con mano derecha (--right, defecto 0) e izquierda (--left,
+            defecto 1) en pistas distintas (índices desde 0).
+  Salida  : HTML autocontenido en -o/--output (defecto <midi>_piano.html; se
+            crea el directorio padre) y resumen por consola (pistas, tonalidad,
+            modulaciones, fuente armónica por tramo, motivos, cadencias,
+            secciones). En --test el MIDI de prueba se escribe en
+            /home/claude/test_piano_duo_v2.mid (ruta fija).
 
 ────────────────────────────────────────────────────────────────────────────
 Opciones
 ────────────────────────────────────────────────────────────────────────────
-    midi                 Fichero MIDI de entrada (opcional si se usa --test).
+  Entrada y manos
+    midi                 Fichero MIDI de entrada (opcional con --test).
     -o, --output FILE    HTML de salida (defecto <midi>_piano.html).
     --right N            Pista (desde 0) de la mano derecha (defecto 0).
     --left N             Pista (desde 0) de la mano izquierda (defecto 1).
+  Detección armónica
+    --harmony-source S   Fuente armónica para la detección de acordes:
+                           "left"                → mano izquierda en toda la obra
+                           "right"               → mano derecha en toda la obra
+                           "1-4:right,5-12:left" → por rangos de compases (desde 1)
+                         Sin indicar: automática por compás (gana la mano con
+                         mayor densidad armónica).
+    --both-hands-source R  Compases donde AMBAS manos contribuyen al acorde:
+                         "all", "13-100" o "5-8,17-24" (desde 1). Desactivado
+                         por defecto.
     --arp-window B       Ventana en tiempos para agrupar arpegios (defecto 1.0;
-                         subir para arpegios lentos; 0 = sin agrupación).
+                         0 = sin agrupación).
+    --no-arp-fusion      Desactiva la fusión de arpegios y bajos en un solo
+                         acorde y la deduplicación de acordes repetidos.
     --key-window N       Compases de la ventana de tonalidad local (defecto 8;
-                         0 = solo tonalidad global).
-    --harmony-source S   Fuente armónica: "left", "right" o por tramos, p. ej.
-                         "1-4:right,5-12:left". Sin indicar: automática.
+                         0 = solo global).
+    --single-key         Una única tonalidad global; sin modulaciones locales.
+  Color de la melodía
+    --voicing-order      Por orden ascendente de altura de las notas del acorde:
+                         la más grave azul, la siguiente amarilla… (defecto).
+    --theoretical-order  Por orden teórico: fundamental azul, 3.ª amarilla, 5.ª
+                         verde, independiente de la inversión.
+  Pruebas
     --test               Genera un MIDI sintético y lo analiza.
 
 ────────────────────────────────────────────────────────────────────────────
@@ -79,46 +98,58 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 
 @params v1
 [*]
-midi             file  io=in ext=mid  # Archivo MIDI de entrada
---output         file  io=out ext=mid alias=-o  # Salida HTML
---right          int   default=0  # Índice de pista para mano derecha
---left           int   default=1  # Índice de pista para mano izquierda
---arp-window     float default=1.0 unit=tiempos  # Ventana en tiempos para agrupar arpegios
---key-window     int   default=8  # Compases para detección local de tonalidad
---harmony-source str   format='left | right | "1-4:right,5-12:left" (compases desde 1)'
---test           bool  default=false  # Genera MIDI sintético de prueba y lo analiza
+midi                file  io=in ext=mid  # Archivo MIDI de entrada
+--output            file  io=out ext=mid alias=-o  # Salida HTML
+--right             int   default=0  # Índice de pista para mano derecha
+--left              int   default=1  # Índice de pista para mano izquierda
+--arp-window        float default=1.0 unit=tiempos  # Ventana en tiempos para agrupar arpegios
+--key-window        int   default=8  # Compases para detección local de tonalidad
+--harmony-source    str   format='left | right | "1-4:right,5-12:left" (compases desde 1)'
+--both-hands-source str   format='all | "13-100" | "5-8,17-24" (compases desde 1)'
+--no-arp-fusion     bool  default=true  # Desactivar fusión de bajo+acorde y deduplicación de…
+--single-key        bool  default=false  # Usar una única tonalidad global (sin detección de…
+--voicing-order     bool  default=false  # Color melody notes by ascending pitch order of chord notes
+--theoretical-order bool  default=true  # Color melody notes by theoretical interval order…
+--test              bool  default=false  # Genera MIDI sintético de prueba y lo analiza
 @end
 
 ────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
-  # Informe con los valores por defecto (pista 0 = derecha, 1 = izquierda):
+  # Informe con los valores por defecto:
   python piano_duo_analyzer.py archivo.mid
 
-  # Elegir el HTML de salida:
-  python piano_duo_analyzer.py archivo.mid -o informe.html
-
-  # MIDI con las manos en otras pistas:
-  python piano_duo_analyzer.py archivo.mid --right 1 --left 2
+  # HTML y pistas explícitos:
+  python piano_duo_analyzer.py archivo.mid -o informe.html --right 1 --left 2
 
   # Arpegios lentos y tonalidad local en ventanas de 4 compases:
   python piano_duo_analyzer.py archivo.mid --arp-window 2.0 --key-window 4
 
-  # Sin agrupar arpegios y solo tonalidad global:
-  python piano_duo_analyzer.py archivo.mid --arp-window 0 --key-window 0
-
-  # Forzar la armonía desde una sola mano, o por tramos:
+  # Armonía desde una mano, o por tramos de compases:
   python piano_duo_analyzer.py archivo.mid --harmony-source right
   python piano_duo_analyzer.py archivo.mid --harmony-source "1-8:right,9-24:left"
 
-  # Prueba con el MIDI sintético incluido:
+  # Acordes repartidos entre ambas manos en los compases 13-24 (o en toda la obra):
+  python piano_duo_analyzer.py archivo.mid --both-hands-source "13-24"
+  python piano_duo_analyzer.py archivo.mid --both-hands-source all
+  python piano_duo_analyzer.py archivo.mid --both-hands-source "5-8,17-24" --harmony-source left
+
+  # Sin fusión de arpegios y con una sola tonalidad:
+  python piano_duo_analyzer.py archivo.mid --no-arp-fusion --single-key
+
+  # Colorear la melodía por orden teórico del acorde, o por orden de altura:
+  python piano_duo_analyzer.py archivo.mid --theoretical-order
+  python piano_duo_analyzer.py archivo.mid --voicing-order
+
+  # Prueba con el MIDI sintético:
   python piano_duo_analyzer.py --test
 
 ────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
-mido (pip install mido). Véase también piano_duo_analyzer_v3.py y posteriores
-(curvas de tensión/densidad/dinámica, secciones, cadencias y más opciones).
+mido (pip install mido). Versiones anteriores de la familia:
+piano_duo_analyzer.py, _v3 (curvas y cadencias) y _v4 (Re-Pair, fusión de
+arpegios, modos de color).
 """
 
 from __future__ import annotations
@@ -171,16 +202,16 @@ ROOT_NOTE_COLORS = {
 # accidentales reciben el color de la nota más cercana
 ROOT_NOTE_COLORS_EXACT = {
     0:  '#ef4444',   # Do  → Rojo
-    1:  '#f08030',   # Do#
+    1:  '#c084fc',   # Do# → Púrpura (entre rojo y naranja)
     2:  '#f97316',   # Re  → Naranja
-    3:  '#f0b020',   # Re#
+    3:  '#f5a623',   # Re# → Naranja-amarillo (entre naranja y amarillo)
     4:  '#fbbf24',   # Mi  → Amarillo
     5:  '#22c55e',   # Fa  → Verde
-    6:  '#1aaa40',   # Fa#
+    6:  '#0ea5e9',   # Fa# → Azul cielo (entre verde y azul claro)
     7:  '#38bdf8',   # Sol → Azul claro
-    8:  '#2080d8',   # Sol#
+    8:  '#06b6d4',   # Sol#→ Cian (entre azul claro y azul)
     9:  '#3b82f6',   # La  → Azul
-    10: '#6040b8',   # La#
+    10: '#e879f9',   # La# → Fucsia (entre azul y violeta)
     11: '#8b5cf6',   # Si  → Violeta
 }
 
@@ -433,7 +464,9 @@ def _best_chord(pitches: List[int]) -> Tuple[str, int, int, str, str]:
 def build_chord_timeline(harmony_notes: List[Dict],
                           arp_window: float = 1.0,
                           bpb: float = 4.0,
-                          bass_notes: Optional[List[Dict]] = None) -> List[Dict]:
+                          bass_notes: Optional[List[Dict]] = None,
+                          arp_fusion: bool = True,
+                          both_hands_bars: Optional[List[bool]] = None) -> List[Dict]:
     """
     Build a chord event timeline.
 
@@ -485,9 +518,13 @@ def build_chord_timeline(harmony_notes: List[Dict],
         for n in h_notes:
             gi = group_idx(n['start_beat'])
             sub_groups.setdefault(gi, []).append(n)
-        for n in b_notes:
-            gi = group_idx(n['start_beat'])
-            sub_groups.setdefault(gi, []).append(n)
+        # b_notes drive split boundaries only — do NOT add their pitches
+        # to the chord group, as they are melody notes, not harmony notes
+        # EXCEPTION: bars marked in both_hands_bars use ALL notes for chord detection
+        if both_hands_bars and bar < len(both_hands_bars) and both_hands_bars[bar]:
+            for n in b_notes:
+                gi = group_idx(n['start_beat'])
+                sub_groups.setdefault(gi, []).append(n)
 
         for gi in sorted(sub_groups.keys()):
             groups.append(sub_groups[gi])
@@ -509,6 +546,90 @@ def build_chord_timeline(harmony_notes: List[Dict],
             'pitches':    pitches,
         })
 
+    # ── Arpeggio / bass pattern fusion (optional, disabled with --no-arp-fusion) ─
+    if arp_fusion:
+
+        # Step 1: Alberti bass — 3+ consecutive single notes forming a triad
+        def is_alberti_group(evs):
+            if len(evs) < 3: return False
+            if evs[-1]['start_beat'] - evs[0]['start_beat'] > bpb: return False
+            pcs = {e['pitches'][0] % 12 for e in evs}
+            if len(pcs) < 2: return False
+            _, root, _, _, ctype = _best_chord([e['pitches'][0] for e in evs])
+            return root >= 0 and ctype in ('maj','min','dim','aug','maj7','min7','dom7')
+
+        alberti: List[Dict] = []
+        i = 0
+        while i < len(chord_events):
+            if len(chord_events[i]['pitches']) == 1:
+                window = [chord_events[i]]
+                j = i + 1
+                while (j < len(chord_events)
+                       and len(chord_events[j]['pitches']) == 1
+                       and chord_events[j]['start_beat'] - chord_events[i]['start_beat'] <= bpb
+                       and int(chord_events[j]['start_beat'] / bpb) == int(chord_events[i]['start_beat'] / bpb)
+                       and len(window) < 8):
+                    window.append(chord_events[j]); j += 1
+                merged = False
+                for end in range(len(window), 2, -1):
+                    grp = window[:end]
+                    if is_alberti_group(grp):
+                        all_p = [e['pitches'][0] for e in grp]
+                        lbl, rpc, bpc, inv, ctype = _best_chord(all_p)
+                        alberti.append({'start_beat': grp[0]['start_beat'],
+                                        'end_beat':   grp[-1]['end_beat'],
+                                        'chord_name': lbl, 'root_pc': rpc,
+                                        'bass_pc': bpc, 'inv_str': inv,
+                                        'ctype': ctype,
+                                        'pitches': sorted(set(all_p))})
+                        i += end; merged = True; break
+                if not merged:
+                    alberti.append(chord_events[i]); i += 1
+            else:
+                alberti.append(chord_events[i]); i += 1
+        chord_events = alberti
+
+        # Step 2: Bass+chord fusion — single bass note → ≥2 simultaneous notes
+        fused: List[Dict] = []
+        i = 0
+        while i < len(chord_events):
+            ev = chord_events[i]
+            if len(ev['pitches']) == 1 and i + 1 < len(chord_events):
+                nxt = chord_events[i + 1]
+                gap = nxt['start_beat'] - ev['start_beat']
+                same_bar = int(ev['start_beat']/bpb) == int(nxt['start_beat']/bpb)
+                if same_bar and gap <= 1.0 and len(nxt['pitches']) >= 2:
+                    mp = sorted(set(ev['pitches'] + nxt['pitches']))
+                    lbl, rpc, bpc, inv, ctype = _best_chord(mp)
+                    fused.append({'start_beat': ev['start_beat'],
+                                  'end_beat': nxt['end_beat'],
+                                  'chord_name': lbl, 'root_pc': rpc,
+                                  'bass_pc': bpc, 'inv_str': inv,
+                                  'ctype': ctype, 'pitches': mp})
+                    i += 2; continue
+            fused.append(ev); i += 1
+        chord_events = fused
+
+        # Step 3: Chord repetition deduplication
+        # Match: same bar AND (identical PCs OR next is a strict subset of current).
+        # This handles bass+chord+repeat where the repeat omits the bass note.
+        deduped: List[Dict] = []
+        i = 0
+        while i < len(chord_events):
+            ev = dict(chord_events[i])
+            pcs = frozenset(p % 12 for p in ev['pitches'])
+            j = i + 1
+            while j < len(chord_events):
+                nxt = chord_events[j]
+                nxt_pcs = frozenset(p % 12 for p in nxt['pitches'])
+                same_bar = int(ev['start_beat']/bpb) == int(nxt['start_beat']/bpb)
+                if same_bar and (nxt_pcs == pcs or nxt_pcs < pcs):
+                    ev['end_beat'] = nxt['end_beat']; j += 1
+                else:
+                    break
+            deduped.append(ev); i = j
+        chord_events = deduped
+
     for i in range(len(chord_events) - 1):
         chord_events[i]['end_beat'] = chord_events[i + 1]['start_beat']
 
@@ -522,38 +643,53 @@ def build_chord_timeline(harmony_notes: List[Dict],
 
     return merged
 
-def chord_position_for_note(pitch: int, chord_event: Optional[Dict]) -> int:
+def chord_position_for_note(pitch: int, chord_event: Optional[Dict],
+                             voicing_order: bool = True) -> int:
     """
-    Returns the *structural* position of the note in the chord (0-3), or -1.
+    Returns the position (0-3) of the note in the chord, or -1 if not in chord.
 
-    Uses template interval order from the root — NOT the voicing order of the
-    sounding pitches — so inversions always produce the same colours:
+    voicing_order=True  (default):
+        Position by ascending pitch-class order of the actual sounding notes.
+        "1st note from low to high = blue, 2nd = yellow, 3rd = green, 4th = white"
+        Example — Amaj/C# [C#4,E4,A4,C#5]:  C#→0, E→1, A→2
 
-      Cmaj root pos  (C3-E3-G3):   C→0  E→1  G→2
-      Cmaj 1st inv   (E3-G3-C4):   C→0  E→1  G→2   ← same colours
-      Cmaj 2nd inv   (G2-C3-E3):   C→0  E→1  G→2   ← same colours
-
-    Template order for common types:
-      maj/min/dim/aug/sus: root(0), 3rd/2nd/4th(1), 5th(2)
-      *7 chords:           root(0), 3rd(1), 5th(2), 7th(3)
+    voicing_order=False  (theoretical):
+        Position by chord template interval order from the root.
+        Inversions produce the same colours regardless of voicing.
+        Example — Amaj/C# [C#4,E4,A4,C#5]:  A→0, C#→1, E→2  (root, 3rd, 5th)
     """
     if chord_event is None:
         return -1
-    root_pc = chord_event.get('root_pc', -1)
-    ctype   = chord_event.get('ctype', '')
-    if root_pc < 0:
+
+    if voicing_order:
+        # Order by ascending pitch class of actual sounding notes
+        pitches = chord_event.get('pitches', [])
+        if not pitches:
+            return -1
+        pc_to_lowest: Dict[int, int] = {}
+        for p in pitches:
+            pc = p % 12
+            if pc not in pc_to_lowest or p < pc_to_lowest[pc]:
+                pc_to_lowest[pc] = p
+        sorted_pcs = [pc for pc, _ in sorted(pc_to_lowest.items(), key=lambda x: x[1])]
+        note_pc = pitch % 12
+        if note_pc in sorted_pcs:
+            return min(sorted_pcs.index(note_pc), 3)
         return -1
-
-    template = CHORD_TEMPLATES.get(ctype)
-    if not template:
-        return 0 if pitch % 12 == root_pc else -1
-
-    # Structural PCs in template order (not sorted)
-    struct_pcs = [(root_pc + iv) % 12 for iv in template]
-    note_pc    = pitch % 12
-    if note_pc in struct_pcs:
-        return min(struct_pcs.index(note_pc), 3)
-    return -1
+    else:
+        # Theoretical: template interval order from root
+        root_pc = chord_event.get('root_pc', -1)
+        ctype   = chord_event.get('ctype', '')
+        if root_pc < 0:
+            return -1
+        template = CHORD_TEMPLATES.get(ctype)
+        if not template:
+            return 0 if pitch % 12 == root_pc else -1
+        struct_pcs = [(root_pc + iv) % 12 for iv in template]
+        note_pc    = pitch % 12
+        if note_pc in struct_pcs:
+            return min(struct_pcs.index(note_pc), 3)
+        return -1
 
 def find_chord_at_beat(chord_timeline: List[Dict], beat: float) -> Optional[Dict]:
     """Binary-search-like lookup of the active chord at a given beat."""
@@ -629,6 +765,7 @@ def compute_chords_per_bar(left_notes: List[Dict], n_bars: int,
 # HTML BUILD
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def build_html(mid_path: str,
                right_track: Dict, left_track: Dict,
                chord_timeline: List[Dict],
@@ -636,117 +773,196 @@ def build_html(mid_path: str,
                global_tonic: int, global_mode: str,
                keys_per_bar: List[Tuple[int, str]],
                src_per_bar: List[str],
-               n_bars: int) -> str:
+               n_bars: int,
+               tension: List[float] = None,
+               density: List[float] = None,
+               avg_velocity: List[float] = None,
+               motifs: List[Dict] = None,
+               cadences: List[Dict] = None,
+               sections: List[Dict] = None,
+               repeated_bars: Dict = None,
+               voicing_order: bool = True,
+               both_hands_bars: Optional[List[bool]] = None) -> str:
 
-    bpb       = right_track['bpb']
-    all_beats = ([n['end_beat'] for n in right_track['notes']] +
-                 [n['end_beat'] for n in left_track['notes']])
-    # Use n_bars * bpb as total_beats so bar boundaries land on exact pixel columns.
-    # max(end_beat) can be fractionally short due to note-off quantization.
+    import json as _json
+
+    tension      = tension      or [0.0] * n_bars
+    density      = density      or [0.0] * n_bars
+    avg_velocity = avg_velocity or [0.5] * n_bars
+    motifs       = motifs       or []
+    cadences     = cadences     or []
+    sections     = sections     or [{'bar': 0, 'end': n_bars, 'label': 'A', 'color': '#3b82f6'}]
+    repeated_bars = repeated_bars or {}
+    both_hands_bars = both_hands_bars or [False] * n_bars
+
+    bpb         = right_track['bpb']
     total_beats = n_bars * bpb
 
-    CANVAS_W    = 1600
-    ROW_H_ROLL  = 110
-    ROW_H_CHORD = 44
-    LABEL_W     = 200
+    PIANO_W   = 32        # width of piano keyboard strip (px)
+    CANVAS_W  = 1600      # roll canvas width
+    ROW_H     = 160       # height of each piano roll
+    CHORD_H   = 52        # chord row height
+    LABEL_W   = 210       # left label column width
 
-    # Build a beat→source lookup for fast per-note decisions
-    # src_per_bar is indexed by bar number
-    def src_at_bar(bar: int) -> str:
+    NOTE_NAMES_ES = ['Do','Do#','Re','Re#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si']
+
+    def src_at_bar(bar):
         return src_per_bar[bar] if bar < len(src_per_bar) else 'left'
 
-    # ── Right hand note rects ──────────────────────────────────────────────
-    # When RH IS the harmony source → color by root (same as LH coloring)
-    # When RH is NOT the harmony source → color by structural position in chord
-    right_notes = right_track['notes']
-    rh_pitches  = [n['pitch'] for n in right_notes] or [60]
-    rh_p_min    = max(0,   min(rh_pitches) - 2)
-    rh_p_max    = min(127, max(rh_pitches) + 2)
-    rh_p_range  = max(1, rh_p_max - rh_p_min)
+    def bx(beat):  return round(beat / total_beats * CANVAS_W, 2)
+    def bw(dur):   return round(max(2.0, dur / total_beats * CANVAS_W), 2)
 
-    right_rects = []
-    for n in right_notes:
-        bar      = n['start_bar']
-        src      = src_at_bar(bar)
-        chord_ev = find_chord_at_beat(chord_timeline, n['start_beat'])
-        if src == 'right':
-            # This track IS the harmony source → color by bass note (lowest pitch of chord)
-            bass_pc = chord_ev['bass_pc'] if chord_ev and chord_ev.get('bass_pc', -1) >= 0 else n['pitch'] % 12
-            color   = ROOT_NOTE_COLORS_EXACT.get(bass_pc, '#94a3b8')
-            role    = 'harmony'
-        else:
-            # This track is the melody → color by position in chord
-            pos   = chord_position_for_note(n['pitch'], chord_ev)
-            color = CHORD_POSITION_COLORS.get(pos, '#ef4444')
-            role  = 'melody'
-        x      = round(n['start_beat'] / total_beats * CANVAS_W, 2)
-        w      = round(max(2.0, n['dur_beat'] / total_beats * CANVAS_W), 2)
-        frac   = (n['pitch'] - rh_p_min) / rh_p_range
-        note_h = max(2.0, round(ROW_H_ROLL / rh_p_range * 0.9, 2))
-        y      = round((1.0 - frac) * (ROW_H_ROLL - note_h), 2)
-        right_rects.append({'x': x, 'y': y, 'w': w, 'h': note_h, 'c': color, 'role': role})
+    # ── Pitch range per track (with padding) ──────────────────────────────
+    def pitch_range(notes, pad=2):
+        if not notes: return 48, 72
+        pitches = [n['pitch'] for n in notes]
+        return max(0, min(pitches)-pad), min(127, max(pitches)+pad)
 
-    # ── Left hand note rects ───────────────────────────────────────────────
-    # When LH IS the harmony source → color by root
-    # When LH is NOT the harmony source → color by structural position in chord
-    left_notes = left_track['notes']
-    lh_pitches = [n['pitch'] for n in left_notes] or [48]
-    lh_p_min   = max(0,   min(lh_pitches) - 2)
-    lh_p_max   = min(127, max(lh_pitches) + 2)
+    rh_p_min, rh_p_max = pitch_range(right_track['notes'])
+    lh_p_min, lh_p_max = pitch_range(left_track['notes'])
+    rh_p_range = max(1, rh_p_max - rh_p_min)
     lh_p_range = max(1, lh_p_max - lh_p_min)
 
-    left_rects = []
-    for n in left_notes:
-        bar      = n['start_bar']
-        src      = src_at_bar(bar)
-        chord_ev = find_chord_at_beat(chord_timeline, n['start_beat'])
-        if src == 'left':
-            # LH is harmony source → color by bass note (lowest pitch of chord)
-            bass_pc = chord_ev['bass_pc'] if chord_ev and chord_ev.get('bass_pc', -1) >= 0 else n['pitch'] % 12
-            color   = ROOT_NOTE_COLORS_EXACT.get(bass_pc, '#94a3b8')
-            role    = 'harmony'
-        else:
-            # LH is melody/bass → position color
-            pos   = chord_position_for_note(n['pitch'], chord_ev)
-            color = CHORD_POSITION_COLORS.get(pos, '#ef4444')
-            role  = 'melody'
-        x      = round(n['start_beat'] / total_beats * CANVAS_W, 2)
-        w      = round(max(2.0, n['dur_beat'] / total_beats * CANVAS_W), 2)
-        frac   = (n['pitch'] - lh_p_min) / lh_p_range
-        note_h = max(2.0, round(ROW_H_ROLL / lh_p_range * 0.9, 2))
-        y      = round((1.0 - frac) * (ROW_H_ROLL - note_h), 2)
-        left_rects.append({'x': x, 'y': y, 'w': w, 'h': note_h, 'c': color, 'role': role})
+    def note_y(pitch, p_min, p_range, row_h):
+        note_h = max(3.0, round(row_h / p_range * 0.85, 2))
+        frac   = (pitch - p_min) / p_range
+        y      = round((1.0 - frac) * (row_h - note_h), 2)
+        return y, note_h
 
-    # Unified beat→pixel converter (used everywhere)
-    def bx(beat: float) -> float:
-        return round(beat / total_beats * CANVAS_W, 2)
-    def bw(dur: float) -> float:
-        return round(max(2.0, dur / total_beats * CANVAS_W), 2)
+    # ── Piano keyboard data (for SVG strip) ──────────────────────────────
+    def piano_keys(p_min, p_max, row_h):
+        """Return list of key rects for an SVG piano strip."""
+        keys = []
+        p_range = max(1, p_max - p_min)
+        for pitch in range(p_min, p_max + 1):
+            pc = pitch % 12
+            is_black = pc in (1, 3, 6, 8, 10)
+            y, h = note_y(pitch, p_min, p_range, row_h)
+            keys.append({'pitch': pitch, 'pc': pc, 'black': is_black, 'y': y, 'h': h})
+        return keys
 
-    # ── Chord bar items — positioned by chord_timeline start_beat ──────────
-    # Use chord_timeline directly (beat-accurate) instead of per-bar buckets
-    chord_items = []
+    rh_keys = piano_keys(rh_p_min, rh_p_max, ROW_H)
+    lh_keys = piano_keys(lh_p_min, lh_p_max, ROW_H)
+
+    # ── C guide lines (y positions of every C in range) ───────────────────
+    def c_lines(p_min, p_max, row_h):
+        lines = []
+        p_range = max(1, p_max - p_min)
+        for pitch in range(p_min, p_max + 1):
+            if pitch % 12 == 0:
+                y, h = note_y(pitch, p_min, p_range, row_h)
+                lines.append({'y': round(y + h/2, 2),
+                               'label': f'C{pitch//12 - 1}'})
+        return lines
+
+    rh_c_lines = c_lines(rh_p_min, rh_p_max, ROW_H)
+    lh_c_lines = c_lines(lh_p_min, lh_p_max, ROW_H)
+
+    # ── Chord background spans (for roll background tinting) ──────────────
+    chord_bg = []
     for ev in chord_timeline:
-        # Find the bar's harmonic function from chords_per_bar
         bar = int(ev['start_beat'] / bpb)
         cpb = chords_per_bar[bar] if bar < len(chords_per_bar) else {}
-        local_key_label = (f"{ROOT_NOTE_NAMES[cpb['tonic']]} {cpb['mode']}"
-                           if cpb.get('tonic', -1) >= 0 else '')
-        func  = cpb.get('function', '—')
-        color = cpb.get('color', HARM_FUNC_COLORS['—'])
-        x = bx(ev['start_beat'])
-        w = bw(ev['end_beat'] - ev['start_beat'])
-        chord_items.append({
-            'x':     x,
-            'w':     w,
+        color = cpb.get('color', '#1e293b')
+        chord_bg.append({'x': bx(ev['start_beat']),
+                         'w': bw(ev['end_beat'] - ev['start_beat']),
+                         'color': color})
+
+    # ── Note rects ────────────────────────────────────────────────────────
+    def make_rects(notes, p_min, p_range, is_right, voicing_order=True):
+        rects = []
+        for n in notes:
+            bar  = n['start_bar']
+            src  = src_at_bar(bar)
+            ev   = find_chord_at_beat(chord_timeline, n['start_beat'])
+            bh   = bar < len(both_hands_bars) and both_hands_bars[bar]
+            if bh:
+                # Both-hands bar: color ALL notes by position in combined chord
+                pos   = chord_position_for_note(n['pitch'], ev, voicing_order)
+                color = CHORD_POSITION_COLORS.get(pos, '#ef4444')
+                role  = 'melody'
+            elif (is_right and src == 'right') or (not is_right and src == 'left'):
+                bass_pc = ev['bass_pc'] if ev and ev.get('bass_pc',-1) >= 0 else n['pitch']%12
+                color   = ROOT_NOTE_COLORS_EXACT.get(bass_pc, '#94a3b8')
+                role    = 'harmony'
+            else:
+                pos   = chord_position_for_note(n['pitch'], ev, voicing_order)
+                color = CHORD_POSITION_COLORS.get(pos, '#ef4444')
+                role  = 'melody'
+            x = bx(n['start_beat'])
+            w = bw(n['dur_beat'])
+            y, h = note_y(n['pitch'], p_min, p_range, ROW_H)
+            pc   = n['pitch'] % 12
+            name = NOTE_NAMES_ES[pc]
+            chord_id = id(ev) if ev else -1
+            vel  = round(n.get('vel_norm', n['vel']/127.0), 3)
+            rects.append({'x': x, 'y': round(y,2), 'w': w, 'h': round(h,2),
+                          'c': color, 'role': role, 'name': name,
+                          'pitch': n['pitch'], 'cid': chord_id, 'v': vel})
+        return rects
+
+    right_rects = make_rects(right_track['notes'], rh_p_min, rh_p_range, True,  voicing_order)
+    left_rects  = make_rects(left_track['notes'],  lh_p_min, lh_p_range, False, voicing_order)
+
+    # Add chord id index to chord_timeline events (for hover linking)
+    ct_indexed = []
+    for ev in chord_timeline:
+        bar = int(ev['start_beat'] / bpb)
+        cpb = chords_per_bar[bar] if bar < len(chords_per_bar) else {}
+        local_key = (f"{ROOT_NOTE_NAMES[cpb['tonic']]} {cpb['mode']}"
+                     if cpb.get('tonic',-1) >= 0 else '')
+        ct_indexed.append({
+            'x':     bx(ev['start_beat']),
+            'w':     bw(ev['end_beat'] - ev['start_beat']),
             'label': ev['chord_name'],
-            'func':  func,
-            'color': color,
-            'key':   local_key_label,
-            'inv':   ev.get('inv_str', ''),
+            'func':  cpb.get('function','—'),
+            'color': cpb.get('color', HARM_FUNC_COLORS['—']),
+            'inv':   ev.get('inv_str',''),
+            'id':    id(ev),
         })
 
-    # ── Harmony-source spans ───────────────────────────────────────────────
+    # ── New analysis data for JS ──────────────────────────────────────────
+    # Per-bar curves (x = bar center in canvas pixels)
+    bar_w_px = CANVAS_W / max(n_bars, 1)
+    tension_pts   = [{'x': round((b+0.5)*bar_w_px, 1), 'v': round(tension[b], 3)}
+                     for b in range(n_bars)]
+    density_pts   = [{'x': round((b+0.5)*bar_w_px, 1), 'v': round(density[b], 3)}
+                     for b in range(n_bars)]
+    velocity_pts  = [{'x': round((b+0.5)*bar_w_px, 1), 'v': round(avg_velocity[b], 3)}
+                     for b in range(n_bars)]
+
+    # Motif spans: each occurrence tagged with which track it belongs to
+    # A motif occurrence belongs to the track that is MELODY at that beat
+    motif_spans_rh = []
+    motif_spans_lh = []
+    for m in motifs:
+        for occ in m['occurrences']:
+            bar = int(occ['start_beat'] / bpb)
+            src = src_per_bar[bar] if bar < len(src_per_bar) else 'left'
+            span = {
+                'x':     bx(occ['start_beat']),
+                'w':     bw(occ['end_beat'] - occ['start_beat']),
+                'label': m['label'],
+                'color': m['color'],
+            }
+            # melody is on RH when LH is harmony (src='left'), and vice versa
+            if src == 'left':
+                motif_spans_rh.append(span)
+            else:
+                motif_spans_lh.append(span)
+
+    # Cadence markers
+    cadence_marks = [{'x': bx(c['beat']), 'type': c['type'], 'color': c['color']}
+                     for c in cadences]
+
+    # Section spans
+    section_spans = [{'x':     bx(s['bar'] * bpb),
+                      'w':     bw((s['end'] - s['bar']) * bpb),
+                      'label': s['label'],
+                      'color': s['color']}
+                     for s in sections]
+
+    # ── Source spans ──────────────────────────────────────────────────────
     src_spans = []
     i = 0
     while i < n_bars:
@@ -754,204 +970,532 @@ def build_html(mid_path: str,
         j = i
         while j < n_bars and (src_per_bar[j] if j < len(src_per_bar) else 'left') == s:
             j += 1
-        x = bx(i * bpb)
-        w = bw((j - i) * bpb)
-        src_spans.append({
-            'x':  x,
-            'w':  w,
-            'src': s,
-            'label': 'MD' if s == 'right' else 'MI',
-            'color': '#3b82f6' if s == 'right' else '#22c55e',
-        })
+        src_spans.append({'x': bx(i*bpb), 'w': bw((j-i)*bpb),
+                          'label': 'MD' if s=='right' else 'MI',
+                          'color': '#3b82f6' if s=='right' else '#22c55e'})
         i = j
 
-    # ── Bar ruler — beat-based x positions ────────────────────────────────
+    # ── Repeated bars spans (for ruler overlay) ───────────────────────────
+    # Each entry: {x, w, color, label} — shown as a thin colored stripe
+    # in the bar ruler so repeated bars are immediately visible
+    repeated_bar_spans = []
+    for bar_idx, info in repeated_bars.items():
+        repeated_bar_spans.append({
+            'x':     bx(bar_idx * bpb),
+            'w':     bw(bpb),
+            'color': info['color'],
+            'group': info['group'],
+        })
+
+    # ── Bar ruler HTML ─────────────────────────────────────────────────────
     bar_ticks_html = ''
     tick_every = max(1, n_bars // 32)
     for bi in range(0, n_bars, tick_every):
-        x_pct = (bi * bpb) / total_beats * 100.0
-        bar_ticks_html += (
-            f'<div class="bar-tick" style="left:{x_pct:.4f}%">{bi+1}</div>'
-        )
+        x_px = round(bi * CANVAS_W / n_bars, 2)
+        bar_ticks_html += f'<div class="bar-tick" style="left:{x_px}px">{bi+1}</div>'
 
-    # ── Legend HTML ─────────────────────────────────────────────────────────
-    legend_html = ''
-    legend_html += '<span class="leg-title">FUENTE ARMÓNICA:</span>'
+    # ── Piano SVG ─────────────────────────────────────────────────────────
+    def piano_svg(keys, row_h, p_min, p_max, c_lines_data):
+        p_range = max(1, p_max - p_min)
+        lines = [f'<svg width="{PIANO_W}" height="{row_h}" xmlns="http://www.w3.org/2000/svg">']
+        # White keys background
+        lines.append(f'<rect width="{PIANO_W}" height="{row_h}" fill="#1a2744"/>')
+        # C guide lines (extend into roll — drawn on canvas, but mark on piano too)
+        for cl in c_lines_data:
+            lines.append(f'<line x1="0" y1="{cl["y"]:.1f}" x2="{PIANO_W}" y2="{cl["y"]:.1f}" '
+                         f'stroke="#3b82f6" stroke-width="0.8" opacity="0.6"/>')
+            lines.append(f'<text x="2" y="{cl["y"]-1:.1f}" fill="#3b82f6" '
+                         f'font-size="6" font-family="monospace">{cl["label"]}</text>')
+        # White keys
+        for k in keys:
+            if not k['black']:
+                lines.append(f'<rect x="1" y="{k["y"]:.1f}" width="{PIANO_W-2}" height="{k["h"]:.1f}" '
+                             f'fill="#e8eef8" rx="1" opacity="0.85"/>')
+        # Black keys
+        for k in keys:
+            if k['black']:
+                lines.append(f'<rect x="1" y="{k["y"]:.1f}" width="{int(PIANO_W*0.6)}" height="{k["h"]:.1f}" '
+                             f'fill="#0a1628" rx="1"/>')
+        lines.append('</svg>')
+        return ''.join(lines)
+
+    rh_piano_svg = piano_svg(rh_keys, ROW_H, rh_p_min, rh_p_max, rh_c_lines)
+    lh_piano_svg = piano_svg(lh_keys, ROW_H, lh_p_min, lh_p_max, lh_c_lines)
+
+    # ── Legend ─────────────────────────────────────────────────────────────
+    legend_html  = '<span class="leg-title">FUENTE ARMÓNICA:</span>'
     legend_html += ('<div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>MD lleva armonía</div>'
                     '<div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div>MI lleva armonía</div>')
     legend_html += '<span class="leg-title" style="margin-left:16px">POSICIÓN EN ACORDE (mano melódica):</span>'
-    pos_labels = [(0,'1ª (fund.)'), (1,'2ª'), (2,'3ª'), (3,'4ª'), (-1,'Fuera')]
-    for pos, lbl in pos_labels:
+    for pos, lbl in [(0,'1ª fund.'),(1,'2ª'),(2,'3ª'),(3,'7ª/4ª'),(-1,'Fuera')]:
         col = CHORD_POSITION_COLORS[pos]
-        legend_html += (f'<div class="legend-item">'
-                        f'<div class="legend-dot" style="background:{col};'
+        legend_html += (f'<div class="legend-item"><div class="legend-dot" style="background:{col};'
                         f'{"border:1px solid #555" if pos==3 else ""}"></div>{lbl}</div>')
-    legend_html += '<span class="leg-title" style="margin-left:16px">NOTA MÁS GRAVE (mano armónica):</span>'
-    root_samples = [(0,'Do'),(2,'Re'),(4,'Mi'),(5,'Fa'),(7,'Sol'),(9,'La'),(11,'Si')]
-    for pc, name in root_samples:
+    legend_html += '<span class="leg-title" style="margin-left:16px">BAJO (mano armónica):</span>'
+    for pc, name in [(0,'Do'),(2,'Re'),(4,'Mi'),(5,'Fa'),(7,'Sol'),(9,'La'),(11,'Si')]:
         col = ROOT_NOTE_COLORS_EXACT[pc]
-        legend_html += (f'<div class="legend-item">'
-                        f'<div class="legend-dot" style="background:{col}"></div>{name}</div>')
-    legend_html += '<span class="leg-title" style="margin-left:16px">FUNCIÓN ARMÓNICA:</span>'
+        legend_html += f'<div class="legend-item"><div class="legend-dot" style="background:{col}"></div>{name}</div>'
+    legend_html += '<span class="leg-title" style="margin-left:16px">COMPASES REPETIDOS:</span>'
+    legend_html += '<div class="legend-item"><div class="legend-dot" style="background:linear-gradient(to right,#ff6b6b,#ffd93d,#6bcb77)"></div>mismo color = mismo patrón melódico</div>'
+    legend_html += '<span class="leg-title" style="margin-left:16px">FUNCIÓN:</span>'
     for func, col in HARM_FUNC_COLORS.items():
         if func == '—': continue
-        legend_html += (f'<div class="legend-item">'
-                        f'<div class="legend-dot" style="background:{col}"></div>'
-                        f'{HARM_FUNC_LABELS.get(func, func)}</div>')
+        legend_html += (f'<div class="legend-item"><div class="legend-dot" style="background:{col}"></div>'
+                        f'{HARM_FUNC_LABELS.get(func,func)}</div>')
 
     title = os.path.basename(mid_path)
     tonic_name = ROOT_NOTE_NAMES[global_tonic]
-
-    # Build compact key-change summary for the header
     key_changes = []
     prev_key = None
     for b, k in enumerate(keys_per_bar):
-        label = f'{ROOT_NOTE_NAMES[k[0]]} {k[1]}'
-        if label != prev_key:
-            key_changes.append((b + 1, label))
-            prev_key = label
-    if len(key_changes) <= 1:
-        key_summary = f'{tonic_name} {global_mode}'
-    else:
-        key_summary = ' → '.join(f'c.{b} {l}' for b, l in key_changes[:6])
-        if len(key_changes) > 6:
-            key_summary += ' …'
+        lbl = f'{ROOT_NOTE_NAMES[k[0]]} {k[1]}'
+        if lbl != prev_key:
+            key_changes.append((b+1, lbl)); prev_key = lbl
+    key_summary = (f'{tonic_name} {global_mode}' if len(key_changes) <= 1
+                   else ' → '.join(f'c.{b} {l}' for b,l in key_changes[:6]))
 
+    # ─────────────────────────────────────────────────────────────────────
+    # JavaScript — all rendering + interactivity
+    # ─────────────────────────────────────────────────────────────────────
     js = f"""
-(function() {{
-  var CW    = {CANVAS_W};
-  var NBARS = {n_bars};
+(function() {{{{
+  var CW = {CANVAS_W}, NBARS = {n_bars}, TOTAL_BEATS = {total_beats};
 
-  function drawGrid(ctx, h) {{
-    var bw = CW / NBARS;
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  // ── Zoom / pan state ──────────────────────────────────────────────────
+  var zoom = 1.0;
+  var MIN_ZOOM = 1.0, MAX_ZOOM = 20.0;
+
+  // Native scroll container — much simpler than manual panX
+  var scrollWrap = document.querySelector('.scroll-wrap');
+
+  // Resize all canvases and piano wraps to match zoom
+  function applyZoom() {{
+    var w = Math.round({CANVAS_W} * zoom);
+    document.querySelectorAll('.zoomable-canvas').forEach(function(cv) {{
+      cv.style.width = w + 'px';
+    }});
+    document.querySelectorAll('.piano-wrap').forEach(function(p) {{
+      p.style.flexShrink = '0';
+    }});
+    document.querySelectorAll('.ruler-track').forEach(function(rt) {{
+      rt.style.width = w + 'px';
+      rt.style.minWidth = w + 'px';
+    }});
+    // Reposition bar ticks using same pixel formula as canvas notes
+    var ticks = document.querySelectorAll('.bar-tick');
+    ticks.forEach(function(t) {{
+      var b = parseInt(t.textContent) - 1;
+      var xPx = b * ({CANVAS_W} / {n_bars}) * zoom;
+      t.style.left = xPx + 'px';
+    }});
+  }}
+
+  // Hover state
+
+  // ── Data ──────────────────────────────────────────────────────────────
+  var SRC_SPANS   = {_json.dumps(src_spans)};
+  var CHORD_BG    = {_json.dumps(chord_bg)};
+  var CHORD_ITEMS = {_json.dumps(ct_indexed)};
+  var RH_RECTS    = {_json.dumps(right_rects)};
+  var LH_RECTS    = {_json.dumps(left_rects)};
+  var RH_C_LINES  = {_json.dumps(rh_c_lines)};
+  var LH_C_LINES  = {_json.dumps(lh_c_lines)};
+  var TENSION_PTS   = {_json.dumps(tension_pts)};
+  var DENSITY_PTS   = {_json.dumps(density_pts)};
+  var VELOCITY_PTS  = {_json.dumps(velocity_pts)};
+  var MOTIF_SPANS_RH = {_json.dumps(motif_spans_rh)};
+  var MOTIF_SPANS_LH = {_json.dumps(motif_spans_lh)};
+  var CADENCE_MARKS = {_json.dumps(cadence_marks)};
+  var SECTION_SPANS = {_json.dumps(section_spans)};
+  var REPEATED_BAR_SPANS = {_json.dumps(repeated_bar_spans)};
+
+  // ── Drawing helpers ───────────────────────────────────────────────────
+  // Canvas coords: notes are drawn at their natural pixel positions (no zoom transform)
+  // The canvas is CSS-scaled via style.width; the canvas resolution stays fixed.
+  // So all drawing uses original coordinates — CSS handles zoom scaling.
+
+  function clearCanvas(ctx, cv, bg) {{
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, cv.width, cv.height);
+  }}
+
+  function drawBarLines(ctx, H) {{
+    var barW = {CANVAS_W} / {n_bars};
     ctx.lineWidth = 0.5;
-    for (var b = 0; b <= NBARS; b++) {{
-      ctx.beginPath(); ctx.moveTo(b*bw, 0); ctx.lineTo(b*bw, h); ctx.stroke();
+    for (var b = 0; b <= {n_bars}; b++) {{
+      var x = b * barW;
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
     }}
   }}
 
-  var SRC_SPANS = {json.dumps(src_spans)};
-
-  // Helper: draw faint source-region background tint on a canvas
-  function drawSrcBg(ctx, H) {{
-    SRC_SPANS.forEach(function(s) {{
-      ctx.fillStyle = s.color + '18';
-      ctx.fillRect(s.x, 0, s.w, H);
+  function drawCLines(ctx, cLines, H) {{
+    cLines.forEach(function(cl) {{
+      ctx.strokeStyle = 'rgba(59,130,246,0.18)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(0, cl.y); ctx.lineTo({CANVAS_W}, cl.y); ctx.stroke();
+      ctx.fillStyle = 'rgba(59,130,246,0.45)';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(cl.label, 2, cl.y);
     }});
   }}
 
-  // ── SOURCE INDICATOR ROW ───────────────────────────────────────────────
-  (function() {{
-    var cv = document.getElementById('cv_src');
-    if (!cv) return;
-    var ctx = cv.getContext('2d');
-    var H = cv.height;
-    ctx.fillStyle = '#060c1a';
-    ctx.fillRect(0, 0, CW, H);
-    SRC_SPANS.forEach(function(s) {{
-      ctx.fillStyle = s.color + '30';
-      ctx.fillRect(s.x, 0, s.w, H);
-      ctx.fillStyle = s.color;
-      ctx.fillRect(s.x, 0, s.w, 3);
-      if (s.w > 20) {{
-        ctx.font = 'bold 9px monospace';
-        ctx.fillStyle = s.color;
+  function drawChordBg(ctx, H) {{
+    CHORD_BG.forEach(function(cb) {{
+      ctx.fillStyle = cb.color + '18';
+      ctx.fillRect(cb.x, 0, cb.w, H);
+    }});
+  }}
+
+  function drawNotes(ctx, rects) {{
+    // Pass 1: fill using original color, opacity from velocity
+    rects.forEach(function(r) {{
+      var alpha = 0.35 + (r.v || 0.7) * 0.65;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = r.c;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.globalAlpha = 1.0;
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      if (r.w > 14 && r.h > 6) {{
+        ctx.globalAlpha = Math.min(1.0, alpha + 0.15);
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.font = 'bold ' + Math.min(r.h - 2, 10) + 'px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(s.label, s.x + Math.min(s.w / 2, 30), H / 2);
+        ctx.fillText(r.name, r.x + r.w / 2, r.y + r.h / 2);
+        ctx.globalAlpha = 1.0;
       }}
-      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-      ctx.lineWidth = 0.5;
+    }});
+    ctx.globalAlpha = 1.0;
+  }}
+
+  // ── Render functions ──────────────────────────────────────────────────
+  function renderSrc() {{
+    var cv = document.getElementById('cv_src'); if (!cv) return;
+    var ctx = cv.getContext('2d'), H = cv.height;
+    clearCanvas(ctx, cv, '#060c1a');
+    SRC_SPANS.forEach(function(s) {{
+      ctx.fillStyle = s.color + '30'; ctx.fillRect(s.x, 0, s.w, H);
+      ctx.fillStyle = s.color; ctx.fillRect(s.x, 0, s.w, 3);
+      if (s.w > 24) {{
+        ctx.font = 'bold 9px monospace'; ctx.fillStyle = s.color;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(s.label, s.x + Math.min(s.w / 2, 30), H / 2 - 2);
+      }}
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 0.5;
       ctx.strokeRect(s.x + 0.5, 0.5, s.w - 1, H - 1);
     }});
-  }})();
-
-  // ── RIGHT HAND ─────────────────────────────────────────────────────────
-  (function() {{
-    var cv = document.getElementById('cv_right');
-    if (!cv) return;
-    var ctx = cv.getContext('2d');
-    var H = cv.height;
-    ctx.fillStyle = '#0b1628';
-    ctx.fillRect(0, 0, CW, H);
-    drawSrcBg(ctx, H);
-    drawGrid(ctx, H);
-    var rects = {json.dumps(right_rects)};
-    rects.forEach(function(r) {{
-      ctx.fillStyle = r.c;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(r.x, r.y, r.w, r.h);
+    // Repeated bars: thin stripe at bottom of src row
+    REPEATED_BAR_SPANS.forEach(function(r) {{
+      ctx.fillStyle = r.color + 'cc';
+      ctx.fillRect(r.x, H - 4, r.w, 4);
     }});
-  }})();
+  }}
 
-  // ── LEFT HAND ──────────────────────────────────────────────────────────
-  (function() {{
-    var cv = document.getElementById('cv_left');
-    if (!cv) return;
-    var ctx = cv.getContext('2d');
-    var H = cv.height;
-    ctx.fillStyle = '#0b1420';
-    ctx.fillRect(0, 0, CW, H);
-    drawSrcBg(ctx, H);
-    drawGrid(ctx, H);
-    var rects = {json.dumps(left_rects)};
-    rects.forEach(function(r) {{
-      ctx.fillStyle = r.c;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(r.x, r.y, r.w, r.h);
+  function drawRepeatedBarBg(ctx, H) {{
+    REPEATED_BAR_SPANS.forEach(function(r) {{
+      ctx.fillStyle = r.color + '14';
+      ctx.fillRect(r.x, 0, r.w, H);
+      // Top border stripe (2px)
+      ctx.fillStyle = r.color + '55';
+      ctx.fillRect(r.x, 0, r.w, 2);
     }});
-  }})();
+  }}
 
-  // ── CHORDS ─────────────────────────────────────────────────────────────
-  (function() {{
-    var cv = document.getElementById('cv_chords');
-    if (!cv) return;
-    var ctx = cv.getContext('2d');
-    var H = cv.height;
-    ctx.fillStyle = '#080f1e';
-    ctx.fillRect(0, 0, CW, H);
-    var items = {json.dumps(chord_items)};
-    items.forEach(function(c) {{
-      ctx.fillStyle = c.color + '28';
+  function renderRight() {{
+    var cv = document.getElementById('cv_right'); if (!cv) return;
+    var ctx = cv.getContext('2d'), H = cv.height;
+    clearCanvas(ctx, cv, '#0b1628');
+    drawRepeatedBarBg(ctx, H);
+    drawMotifs(ctx, H, MOTIF_SPANS_RH);
+    drawChordBg(ctx, H);
+    drawBarLines(ctx, H);
+    drawCLines(ctx, RH_C_LINES, H);
+    drawNotes(ctx, RH_RECTS);
+  }}
+
+  function renderLeft() {{
+    var cv = document.getElementById('cv_left'); if (!cv) return;
+    var ctx = cv.getContext('2d'), H = cv.height;
+    clearCanvas(ctx, cv, '#0b1420');
+    drawRepeatedBarBg(ctx, H);
+    drawMotifs(ctx, H, MOTIF_SPANS_LH);
+    drawChordBg(ctx, H);
+    drawBarLines(ctx, H);
+    drawCLines(ctx, LH_C_LINES, H);
+    drawNotes(ctx, LH_RECTS);
+  }}
+
+  function renderChords() {{
+    var cv = document.getElementById('cv_chords'); if (!cv) return;
+    var ctx = cv.getContext('2d'), H = cv.height;
+    clearCanvas(ctx, cv, '#080f1e');
+    CHORD_ITEMS.forEach(function(c) {{
+      ctx.fillStyle = c.color + '22';
       ctx.fillRect(c.x, 0, c.w, H);
       ctx.fillStyle = c.color;
       ctx.fillRect(c.x, 0, c.w, 3);
-      if (c.label && c.label !== '\u2014') {{
-        // If there's an inversion label, shift chord name up slightly
-        var hasInv = c.inv && c.inv.length > 0 && c.w > 36;
-        var nameY  = hasInv ? H / 2 - 3 : H / 2 + 1;
+      if (c.label && c.label !== '\u2014' && c.w > 6) {{
+        ctx.save();
+        ctx.beginPath(); ctx.rect(c.x, 0, c.w, H); ctx.clip();
         ctx.fillStyle = c.color;
-        ctx.font = 'bold 10px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        ctx.font = 'bold ' + (c.w > 30 ? 11 : 8) + 'px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        var nameY = (c.inv && c.w > 40) ? H / 2 - 4 : H / 2 + 1;
         ctx.fillText(c.label, c.x + c.w / 2, nameY);
-        if (hasInv) {{
-          ctx.fillStyle = c.color + 'bb';
-          ctx.font = '7px monospace';
+        if (c.inv && c.w > 40) {{
+          ctx.fillStyle = c.color + 'bb'; ctx.font = '7px monospace';
           ctx.textBaseline = 'top';
-          ctx.fillText(c.inv, c.x + c.w / 2, nameY + 8);
+          ctx.fillText(c.inv, c.x + c.w / 2, nameY + 9);
         }}
+        if (c.func && c.func !== '\u2014' && c.w > 28) {{
+          ctx.fillStyle = c.color + 'aa'; ctx.font = '8px monospace';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(c.func, c.x + c.w / 2, H - 2);
+        }}
+        ctx.restore();
       }}
-      if (c.func && c.func !== '\u2014' && c.w > 28) {{
-        ctx.fillStyle = c.color + 'aa';
-        ctx.font = '8px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(c.func, c.x + c.w / 2, H - 2);
-      }}
-      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5;
       ctx.strokeRect(c.x + 0.5, 0.5, c.w - 1, H - 1);
     }});
-  }})();
+  }}
 
-}})();
+
+  // ── Motif overlay on piano rolls ─────────────────────────────────────
+  function drawMotifs(ctx, H, spans) {{
+    // Draw motif spans as bottom-edge colored bracket + very faint background
+    // Drawn FIRST (before notes) so notes are always visible on top
+    spans.forEach(function(m) {{
+      // Very faint background tint — won't obscure notes drawn later
+      ctx.fillStyle = m.color + '14';
+      ctx.fillRect(m.x, 0, m.w, H);
+      // Colored bracket at bottom edge
+      ctx.fillStyle = m.color + 'cc';
+      ctx.fillRect(m.x, H - 3, m.w, 3);
+      // Left and right tick marks
+      ctx.fillRect(m.x, H - 10, 2, 10);
+      ctx.fillRect(m.x + m.w - 2, H - 10, 2, 10);
+      // Label at bottom
+      if (m.w > 12) {{
+        ctx.fillStyle = m.color;
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(m.label, m.x + m.w / 2, H - 4);
+      }}
+    }});
+  }}
+
+  // ── Sections row ──────────────────────────────────────────────────────
+  function renderSections() {{
+    var cv = document.getElementById('cv_sections'); if (!cv) return;
+    var ctx = cv.getContext('2d'), H = cv.height;
+    clearCanvas(ctx, cv, '#060c18');
+    SECTION_SPANS.forEach(function(s) {{
+      ctx.fillStyle = s.color + '28';
+      ctx.fillRect(s.x, 0, s.w, H);
+      ctx.fillStyle = s.color;
+      ctx.fillRect(s.x, 0, s.w, 4);
+      ctx.strokeStyle = s.color + '55';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(s.x + 0.5, 0.5, s.w - 1, H - 1);
+      if (s.w > 20) {{
+        ctx.fillStyle = s.color;
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(s.label, s.x + Math.min(s.w / 2, s.x + 18), H / 2);
+      }}
+    }});
+  }}
+
+  // ── Curves row (tension / density / velocity) ─────────────────────────
+  function renderCurves() {{
+    var cv = document.getElementById('cv_curves'); if (!cv) return;
+    var ctx = cv.getContext('2d'), H = cv.height;
+    clearCanvas(ctx, cv, '#06091a');
+    var pad = 4;
+    var plotH = H - pad * 2;
+
+    function drawCurve(pts, color, label) {{
+      if (!pts.length) return;
+      ctx.beginPath();
+      pts.forEach(function(p, i) {{
+        var x = p.x, y = pad + plotH * (1 - p.v);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }});
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Fill under curve
+      ctx.lineTo(pts[pts.length-1].x, H);
+      ctx.lineTo(pts[0].x, H);
+      ctx.closePath();
+      ctx.fillStyle = color + '22';
+      ctx.fill();
+    }}
+
+    drawCurve(TENSION_PTS,  '#ef4444', 'T');
+    drawCurve(DENSITY_PTS,  '#3b82f6', 'D');
+    drawCurve(VELOCITY_PTS, '#f59e0b', 'V');
+
+    // Cadence markers
+    CADENCE_MARKS.forEach(function(c) {{
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 2]);
+      ctx.beginPath(); ctx.moveTo(c.x, 0); ctx.lineTo(c.x, H); ctx.stroke();
+      ctx.setLineDash([]);
+      if (c.x > 2) {{
+        ctx.fillStyle = c.color;
+        ctx.font = '7px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(c.type.charAt(0), c.x + 2, 2);
+      }}
+    }});
+
+    // Legend
+    var legend = [{{'c':'#ef4444','l':'Tensión'}},{{'c':'#3b82f6','l':'Densidad'}},{{'c':'#f59e0b','l':'Dinámica'}}];
+    var lx = 4;
+    legend.forEach(function(l) {{
+      ctx.fillStyle = l.c; ctx.fillRect(lx, H-10, 8, 6);
+      ctx.fillStyle = '#64748b'; ctx.font = '7px sans-serif';
+      ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
+      ctx.fillText(l.l, lx + 10, H - 1);
+      lx += 55;
+    }});
+  }}
+
+  // ── Minimap ───────────────────────────────────────────────────────────
+  function renderMinimap() {{
+    var cv = document.getElementById('cv_minimap'); if (!cv) return;
+    var ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+    clearCanvas(ctx, cv, '#060c18');
+
+    // Draw chord background as tiny bars
+    CHORD_BG.forEach(function(cb) {{
+      var x = cb.x / {CANVAS_W} * W;
+      var w = Math.max(1, cb.w / {CANVAS_W} * W);
+      ctx.fillStyle = cb.color + '55';
+      ctx.fillRect(x, 0, w, H);
+    }});
+
+    // Draw section labels
+    SECTION_SPANS.forEach(function(s) {{
+      var x = s.x / {CANVAS_W} * W;
+      var w = Math.max(1, s.w / {CANVAS_W} * W);
+      ctx.fillStyle = s.color + '40';
+      ctx.fillRect(x, 0, w, H);
+      ctx.strokeStyle = s.color + '88'; ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, 0, w, H);
+    }});
+
+    // Draw all notes as tiny dots
+    function drawMinimapNotes(rects, yOff, h) {{
+      rects.forEach(function(r) {{
+        var x = r.x / {CANVAS_W} * W;
+        var w = Math.max(0.5, r.w / {CANVAS_W} * W);
+        ctx.fillStyle = r.c;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(x, yOff + (1 - (r.y / {ROW_H})) * h, w, 1.5);
+      }});
+    }}
+    drawMinimapNotes(RH_RECTS, 0, H/2 - 2);
+    drawMinimapNotes(LH_RECTS, H/2 + 2, H/2 - 2);
+    ctx.globalAlpha = 1.0;
+
+    // Draw repeated bars in minimap
+    REPEATED_BAR_SPANS.forEach(function(r) {{
+      var x = r.x / {CANVAS_W} * W;
+      var w = Math.max(1, r.w / {CANVAS_W} * W);
+      ctx.fillStyle = r.color + '55';
+      ctx.fillRect(x, H - 5, w, 5);
+    }});
+    var scrollWrap = document.querySelector('.scroll-wrap');
+    if (scrollWrap) {{
+      var totalW = {CANVAS_W} * zoom;
+      var viewL  = scrollWrap.scrollLeft;
+      var viewW  = scrollWrap.clientWidth - {LABEL_W} - {PIANO_W};
+      var vx = viewL / totalW * W;
+      var vw = viewW / totalW * W;
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(vx, 0, vw, H);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(vx, 0, vw, H);
+    }}
+  }}
+
+  function renderAll() {{
+    renderSections();
+    renderSrc();
+    renderRight();
+    renderLeft();
+    renderChords();
+    renderCurves();
+    renderMinimap();
+  }}
+
+
+
+  // ── Tooltip hover (no visual effect on notes) ────────────────────────
+  var tooltip = document.getElementById('chord-tooltip');
+
+  function findChordAtCanvasX(canvasX) {{
+    var found = null;
+    CHORD_ITEMS.forEach(function(c) {{
+      if (canvasX >= c.x && canvasX < c.x + c.w) found = c;
+    }});
+    return found;
+  }}
+
+  function canvasXFromEvent(e, cv) {{
+    var rect  = cv.getBoundingClientRect();
+    var scaleX = cv.width / rect.width;
+    return (e.clientX - rect.left) * scaleX;
+  }}
+
+  ['cv_right', 'cv_left', 'cv_chords'].forEach(function(id) {{
+    var cv = document.getElementById(id); if (!cv) return;
+    cv.addEventListener('mousemove', function(e) {{
+      var chord = findChordAtCanvasX(canvasXFromEvent(e, cv));
+      if (chord && tooltip) {{
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX + 16) + 'px';
+        tooltip.style.top  = (e.clientY - 12) + 'px';
+        var html = '<span style="font-size:14px;font-weight:700;color:#f8fafc">' + chord.label + '</span>';
+        if (chord.inv) html += ' <span style="font-size:10px;opacity:0.6">(' + chord.inv + ')</span>';
+        if (chord.func && chord.func !== '\u2014')
+          html += '<br><span style="color:' + chord.color + ';font-size:11px">' + chord.func + '</span>';
+        if (chord.key) html += '<br><span style="font-size:9px;opacity:0.5">' + chord.key + '</span>';
+        tooltip.innerHTML = html;
+      }} else if (tooltip) {{
+        tooltip.style.display = 'none';
+      }}
+    }});
+    cv.addEventListener('mouseleave', function() {{
+      if (tooltip) tooltip.style.display = 'none';
+    }});
+  }});
+
+  // ── Double-click: reset zoom ───────────────────────────────────────────
+  scrollWrap.addEventListener('dblclick', function() {{
+    zoom = 1.0; applyZoom(); renderAll();
+    scrollWrap.scrollLeft = 0;
+  }});
+
+  // ── Init ──────────────────────────────────────────────────────────────
+  applyZoom();
+  renderAll();
+
+}}}})();
 """
+
 
     html = f"""<!DOCTYPE html>
 <html lang="es">
@@ -961,112 +1505,152 @@ def build_html(mid_path: str,
 <title>Piano Duo — {title}</title>
 <style>
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
-       background: #080f1c; color: #e2e8f0; font-size: 13px; }}
-.header {{ padding: 18px 24px 12px; border-bottom: 1px solid #1a2744; }}
-.header h1 {{ font-size: 17px; font-weight: 700; color: #f8fafc; letter-spacing: 0.01em; }}
-.header .meta {{ font-size: 11px; color: #4a6080; margin-top: 5px; }}
-.scroll-wrap {{ overflow-x: auto; }}
-.tl-outer {{ display: inline-flex; flex-direction: column; min-width: 100%; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       background: #080f1c; color: #e2e8f0; font-size: 13px; user-select: none; }}
+.header {{ padding: 16px 24px 10px; border-bottom: 1px solid #1a2744; }}
+.header h1 {{ font-size: 16px; font-weight: 700; color: #f8fafc; }}
+.header .meta {{ font-size: 11px; color: #4a6080; margin-top: 4px; }}
+.header .hint {{ font-size: 10px; color: #2a4060; margin-top: 3px; }}
+.scroll-wrap {{ overflow-x: auto; overflow-y: visible; position: relative; }}
+.tl-outer {{ display: flex; flex-direction: column; min-width: max-content; }}
 .ruler-row {{ display: flex; height: 22px; border-bottom: 1px solid #1a2744; }}
 .ruler-label {{ width: {LABEL_W}px; min-width: {LABEL_W}px; flex-shrink: 0;
-                background: #070e1a; border-right: 2px solid #1a2744; }}
-.ruler-track {{ flex: 1; position: relative; background: #070e1a;
-                min-width: {CANVAS_W}px; }}
+                background: #070e1a; border-right: 2px solid #1a2744;
+                position: sticky; left: 0; z-index: 10; }}
+.ruler-track {{ position: relative; background: #070e1a; min-width: {CANVAS_W}px; }}
 .bar-tick {{ position: absolute; top: 0; height: 100%;
              border-left: 1px solid rgba(255,255,255,0.08);
              font-size: 9px; color: #334466; padding-left: 3px;
-             line-height: 22px; user-select: none; }}
+             line-height: 22px; pointer-events: none; }}
 .tl-row {{ display: flex; border-bottom: 1px solid #1a2744; }}
-.tl-label {{ width: {LABEL_W}px; min-width: {LABEL_W}px; padding: 5px 8px 5px 14px;
+.tl-label {{ width: {LABEL_W}px; min-width: {LABEL_W}px; padding: 4px 6px 4px 12px;
              display: flex; flex-direction: column; justify-content: center;
-             border-right: 2px solid #1a2744; background: #070e1a;
-             flex-shrink: 0; }}
-.trk-name {{ font-size: 12px; font-weight: 700; color: #dde6f0; }}
-.trk-sub  {{ font-size: 9px; margin-top: 3px; opacity: 0.75; line-height: 1.4; }}
-.tl-canvas-wrap {{ flex: 1; overflow: hidden; }}
-canvas {{ display: block; }}
-.legend-row {{ display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 18px;
+             border-right: 2px solid #1a2744; background: #070e1a; flex-shrink: 0;
+             position: sticky; left: 0; z-index: 10; }}
+.piano-wrap {{ width: {PIANO_W}px; min-width: {PIANO_W}px; flex-shrink: 0;
+               border-right: 1px solid #1a2744;
+               position: sticky; left: {LABEL_W}px; z-index: 9; background: #0a1220; }}
+.tl-canvas-wrap {{ flex: 1; overflow: visible; cursor: default; min-width: {CANVAS_W}px; }}
+canvas.zoomable-canvas {{ display: block; }}
+.trk-name {{ font-size: 11px; font-weight: 700; color: #dde6f0; }}
+.trk-sub  {{ font-size: 9px; margin-top: 2px; opacity: 0.7; line-height: 1.4; }}
+.legend-row {{ display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 16px;
                border-top: 1px solid #1a2744; background: #050c18; align-items: center; }}
-.legend-item {{ display: flex; align-items: center; gap: 5px;
-                font-size: 10px; color: #64748b; }}
+.legend-item {{ display: flex; align-items: center; gap: 5px; font-size: 10px; color: #64748b; }}
 .legend-dot {{ width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }}
-.leg-title {{ font-size: 10px; color: #475569; font-weight: 700; margin-right: 2px; }}
-.divider {{ height: 3px; background: linear-gradient(to right, #1a2744, #0d1b35, #1a2744); }}
+#chord-tooltip {{
+  position: fixed; pointer-events: none; display: none; z-index: 200;
+  background: #0d1b2e; border: 1px solid #2a4060; border-radius: 7px;
+  padding: 7px 12px; line-height: 1.6; white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6); font-family: monospace;
+}}
 </style>
 </head>
 <body>
 <div class="header">
   <h1>🎹 {title}</h1>
-  <div class="meta">
-    {n_bars} compases · {bpb:.0f}/4 · Tonalidad: {key_summary}
-    · Mano derecha: {right_track['name']} · Mano izquierda: {left_track['name']}
-  </div>
+  <div class="meta">{n_bars} compases · {bpb:.0f}/4 · Tonalidad: {key_summary}
+    · RH: {right_track['name']} · LH: {left_track['name']}</div>
+  <div class="hint">🖱 Arrastrar: desplazar horizontalmente · Doble clic: reset</div>
 </div>
+
+<div id="chord-tooltip"></div>
 
 <div class="scroll-wrap">
 <div class="tl-outer">
 
   <div class="ruler-row">
     <div class="ruler-label"></div>
+    <div style="width:{PIANO_W}px;min-width:{PIANO_W}px;flex-shrink:0;background:#070e1a"></div>
     <div class="ruler-track">{bar_ticks_html}</div>
   </div>
 
-  <!-- SOURCE INDICATOR ROW -->
-  <div class="tl-row" style="height:20px">
-    <div class="tl-label" style="border-left:3px solid #475569">
-      <div class="trk-name" style="font-size:9px;color:#475569">Fuente armonía</div>
+  <!-- SECTIONS ROW -->
+  <div class="tl-row" style="height:24px">
+    <div class="tl-label" style="border-left:3px solid #8b5cf6">
+      <div class="trk-name" style="font-size:9px;color:#8b5cf6">Secciones</div>
     </div>
+    <div style="width:{PIANO_W}px;min-width:{PIANO_W}px;background:#060c18;border-right:1px solid #1a2744;flex-shrink:0;position:sticky;left:{LABEL_W}px;z-index:9"></div>
     <div class="tl-canvas-wrap">
-      <canvas id="cv_src" width="{CANVAS_W}" height="20"></canvas>
+      <canvas id="cv_sections" width="{CANVAS_W}" height="24" class="zoomable-canvas"></canvas>
     </div>
   </div>
 
-  <!-- ROW 1: RIGHT HAND -->
-  <div class="tl-row" style="height:{ROW_H_ROLL}px">
+  <!-- SOURCE ROW -->
+  <div class="tl-row" style="height:18px">
+    <div class="tl-label" style="border-left:3px solid #475569">
+      <div class="trk-name" style="font-size:8px;color:#475569">Fuente armonía</div>
+    </div>
+    <div style="width:{PIANO_W}px;min-width:{PIANO_W}px;background:#060c1a;border-right:1px solid #1a2744;flex-shrink:0"></div>
+    <div class="tl-canvas-wrap">
+      <canvas id="cv_src" width="{CANVAS_W}" height="18" class="zoomable-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- RIGHT HAND -->
+  <div class="tl-row" style="height:{ROW_H}px">
     <div class="tl-label" style="border-left:3px solid #3b82f6">
       <div class="trk-name">🎹 Mano Derecha</div>
-      <div class="trk-sub" style="color:#3b82f6">
-        {right_track['name']}<br>
-        color → posición en acorde izq.
-      </div>
+      <div class="trk-sub" style="color:#3b82f6">{right_track['name']}</div>
     </div>
+    <div class="piano-wrap">{rh_piano_svg}</div>
     <div class="tl-canvas-wrap">
-      <canvas id="cv_right" width="{CANVAS_W}" height="{ROW_H_ROLL}"></canvas>
+      <canvas id="cv_right" width="{CANVAS_W}" height="{ROW_H}" class="zoomable-canvas"></canvas>
     </div>
   </div>
 
-  <!-- ROW 2: LEFT HAND -->
-  <div class="tl-row" style="height:{ROW_H_ROLL}px">
+  <!-- LEFT HAND -->
+  <div class="tl-row" style="height:{ROW_H}px">
     <div class="tl-label" style="border-left:3px solid #22c55e">
       <div class="trk-name">🎹 Mano Izquierda</div>
-      <div class="trk-sub" style="color:#22c55e">
-        {left_track['name']}<br>
-        color → nota raíz del acorde
-      </div>
+      <div class="trk-sub" style="color:#22c55e">{left_track['name']}</div>
     </div>
+    <div class="piano-wrap">{lh_piano_svg}</div>
     <div class="tl-canvas-wrap">
-      <canvas id="cv_left" width="{CANVAS_W}" height="{ROW_H_ROLL}"></canvas>
+      <canvas id="cv_left" width="{CANVAS_W}" height="{ROW_H}" class="zoomable-canvas"></canvas>
     </div>
   </div>
 
-  <!-- ROW 3: CHORDS -->
-  <div class="tl-row" style="height:{ROW_H_CHORD}px">
+  <!-- CHORDS -->
+  <div class="tl-row" style="height:{CHORD_H}px">
     <div class="tl-label" style="border-left:3px solid #f59e0b">
       <div class="trk-name">Acordes</div>
       <div class="trk-sub" style="color:#f59e0b">función armónica</div>
     </div>
+    <div style="width:{PIANO_W}px;min-width:{PIANO_W}px;background:#080f1e;border-right:1px solid #1a2744;flex-shrink:0"></div>
     <div class="tl-canvas-wrap">
-      <canvas id="cv_chords" width="{CANVAS_W}" height="{ROW_H_CHORD}"></canvas>
+      <canvas id="cv_chords" width="{CANVAS_W}" height="{CHORD_H}" class="zoomable-canvas"></canvas>
+    </div>
+  </div>
+
+
+  <!-- CURVES ROW: tension / density / velocity / cadences -->
+  <div class="tl-row" style="height:52px">
+    <div class="tl-label" style="border-left:3px solid #ef4444">
+      <div class="trk-name" style="font-size:10px">Tensión · Densidad</div>
+      <div class="trk-sub" style="color:#ef4444">dinámica y cadencias</div>
+    </div>
+    <div style="width:{PIANO_W}px;min-width:{PIANO_W}px;background:#06091a;border-right:1px solid #1a2744;flex-shrink:0;position:sticky;left:{LABEL_W}px;z-index:9"></div>
+    <div class="tl-canvas-wrap">
+      <canvas id="cv_curves" width="{CANVAS_W}" height="52" class="zoomable-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- MINIMAP ROW -->
+  <div class="tl-row" style="height:36px">
+    <div class="tl-label" style="border-left:3px solid #475569">
+      <div class="trk-name" style="font-size:9px;color:#475569">Vista general</div>
+    </div>
+    <div style="width:{PIANO_W}px;min-width:{PIANO_W}px;background:#060c18;border-right:1px solid #1a2744;flex-shrink:0;position:sticky;left:{LABEL_W}px;z-index:9"></div>
+    <div class="tl-canvas-wrap" style="min-width:0;flex:1;overflow:hidden">
+      <canvas id="cv_minimap" width="800" height="36" style="display:block;width:100%;height:36px"></canvas>
     </div>
   </div>
 
 </div>
 </div>
 
-<div class="legend-row">
-  {legend_html}
-</div>
+<div class="legend-row">{legend_html}</div>
 
 <script>
 {js}
@@ -1076,9 +1660,6 @@ canvas {{ display: block; }}
 
     return html
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ANÁLISIS PRINCIPAL
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def _harmonic_density(notes: List[Dict], bar: int, bpb: float) -> float:
     """
@@ -1131,17 +1712,54 @@ def _parse_harmony_source(spec: Optional[str], n_bars: int) -> Optional[List[str
             result[b] = src
     return result
 
+
+def _parse_both_hands_spec(spec: Optional[str], n_bars: int) -> List[bool]:
+    """
+    Parse --both-hands-source spec into a per-bar boolean list.
+    True = use both hands combined for chord detection in that bar.
+
+    Spec format (same as --harmony-source, value is ignored):
+      '13-100'         → bars 13-100 use both hands
+      '13-100:both'    → same (value optional, any value accepted)
+      '5-8,17-24'      → two ranges
+
+    Bar numbers are 1-based.
+    """
+    result = [False] * n_bars
+    if spec is None:
+        return result
+    spec = spec.strip()
+    # Handle simple 'all' keyword
+    if spec.lower() == 'all':
+        return [True] * n_bars
+    for part in spec.split(','):
+        part = part.strip()
+        # Strip optional :value suffix
+        if ':' in part:
+            part = part.rsplit(':', 1)[0].strip()
+        if '-' in part:
+            lo, hi = part.split('-', 1)
+            lo, hi = int(lo.strip()) - 1, int(hi.strip()) - 1
+        else:
+            lo = hi = int(part.strip()) - 1
+        for b in range(max(0, lo), min(n_bars, hi + 1)):
+            result[b] = True
+    return result
+
 def harmony_source_per_bar(right_notes: List[Dict], left_notes: List[Dict],
                             n_bars: int, bpb: float,
                             spec: Optional[str] = None) -> List[str]:
     """
     Return per-bar harmony source: 'right' or 'left'.
-    If spec is given, manual ranges override; 'auto' bars are decided by
-    harmonic density comparison.
-    Smoothing: a source switch is only accepted if it persists for ≥2 bars
-    (avoids flickering on transitional bars).
+
+    Key improvement: bars where one or both tracks have no notes are marked
+    as 'inherit' and filled by propagation from the nearest non-empty bar.
+    This handles pieces where the harmony track only plays on some bars
+    (e.g. sustained chords with rests in between).
     """
     directives = _parse_harmony_source(spec, n_bars)
+
+    # First pass: compute raw decision only for bars with actual notes
     raw = []
     for b in range(n_bars):
         if directives[b] in ('right', 'left'):
@@ -1149,25 +1767,633 @@ def harmony_source_per_bar(right_notes: List[Dict], left_notes: List[Dict],
         else:
             dr = _harmonic_density(right_notes, b, bpb)
             dl = _harmonic_density(left_notes,  b, bpb)
-            raw.append('right' if dr >= dl else 'left')
+            if dr == 0 and dl == 0:
+                raw.append('inherit')          # empty bar — propagate later
+            elif dl == 0:
+                raw.append('right')            # only RH has notes
+            elif dr == 0:
+                raw.append('left')             # only LH has notes
+            else:
+                raw.append('right' if dr >= dl else 'left')
 
-    # ── Smoothing: require ≥2 consecutive bars to switch source ──────────
+    # Second pass: fill 'inherit' bars by propagating from neighbours
+    # Forward pass
+    last = 'left'
+    for b in range(n_bars):
+        if raw[b] != 'inherit':
+            last = raw[b]
+        else:
+            raw[b] = last
+    # Backward pass (fills leading inherit bars)
+    last = raw[-1] if raw else 'left'
+    for b in range(n_bars - 1, -1, -1):
+        if raw[b] == 'inherit':
+            raw[b] = last
+        else:
+            last = raw[b]
+
+    # Third pass: smoothing — require ≥2 consecutive bars to switch source
     smoothed = list(raw)
     for b in range(1, n_bars - 1):
         if directives[b] in ('right', 'left'):
-            continue   # manual override — never smooth
+            continue
         if smoothed[b] != smoothed[b - 1]:
-            # Check if next bar agrees with the switch
             if b + 1 < n_bars and smoothed[b + 1] == smoothed[b]:
                 pass   # genuine switch confirmed by next bar
             else:
-                smoothed[b] = smoothed[b - 1]   # revert isolated flip
+                smoothed[b] = smoothed[b - 1]
 
     return smoothed
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ANÁLISIS AVANZADO — motivos, cadencias, tensión, densidad, velocity
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_tension_curve(chords_per_bar: List[Dict], n_bars: int) -> List[float]:
+    """Harmonic tension per bar: T=0.0, PD=0.4, Dsec=0.7, D=1.0, Other=0.5"""
+    tension_map = {'T': 0.0, 'PD': 0.4, 'Dsec': 0.7, 'D': 1.0, 'Other': 0.5, '—': 0.0}
+    return [tension_map.get(chords_per_bar[b]['function'] if b < len(chords_per_bar) else '—', 0.3)
+            for b in range(n_bars)]
+
+def compute_density_per_bar(all_notes: List[Dict], n_bars: int, bpb: float) -> List[float]:
+    """Notes per beat per bar, normalised to [0,1]."""
+    counts = [0.0] * n_bars
+    for n in all_notes:
+        b = n['start_bar']
+        if 0 <= b < n_bars:
+            counts[b] += 1
+    max_c = max(counts) or 1.0
+    return [c / max_c for c in counts]
+
+def compute_avg_velocity_per_bar(all_notes: List[Dict], n_bars: int) -> List[float]:
+    """Average velocity per bar, normalised to [0,1]."""
+    sums   = [0.0] * n_bars
+    counts = [0]   * n_bars
+    for n in all_notes:
+        b = n['start_bar']
+        if 0 <= b < n_bars:
+            sums[b]   += n['vel']
+            counts[b] += 1
+    return [(sums[b] / counts[b] / 127.0) if counts[b] else 0.0 for b in range(n_bars)]
+
+def detect_motifs(melody_notes: List[Dict], min_len: int = 3,
+                  max_len: int = 8, min_reps: int = 2) -> List[Dict]:
+    """
+    Detect repeated melodic phrases using Re-Pair grammar compression.
+
+    Unlike the sliding-window approach, Re-Pair builds a non-overlapping
+    hierarchical grammar over the full interval sequence. Each rule that
+    appears ≥ min_reps times in the root sequence becomes a motif.
+
+    Steps:
+      1. Collapse simultaneous notes into chord events (lowest pitch).
+      2. Compute quantised intervals between consecutive events.
+      3. Run Re-Pair; collect rules that repeat ≥ min_reps times in root.
+      4. Filter dominated sub-rules (prefer longer phrases).
+      5. Map each rule occurrence back to beat positions.
+
+    Returns list of {label, color, occurrences, intervals} dicts,
+    guaranteed non-overlapping by construction.
+    """
+    if not melody_notes:
+        return []
+
+    # ── 1. Collapse simultaneous notes → take HIGHEST pitch (melody voice)
+    # The melody track may have two simultaneous notes in some bars (e.g.
+    # Canon c.9-12 has two-voice chords). We always take the highest note
+    # as the melodic representative, ignoring inner voices.
+    notes_sorted = sorted(melody_notes, key=lambda n: (n['start_beat'], -n['pitch']))
+    events: List[Dict] = []
+    i = 0
+    while i < len(notes_sorted):
+        group = [notes_sorted[i]]
+        j = i + 1
+        while j < len(notes_sorted) and abs(notes_sorted[j]['start_beat'] - notes_sorted[i]['start_beat']) < 0.05:
+            group.append(notes_sorted[j]); j += 1
+        # Take the highest pitch as the melody representative
+        rep = max(group, key=lambda n: n['pitch'])
+        events.append({
+            'start_beat': rep['start_beat'],
+            'end_beat':   rep['end_beat'],
+            'pitch':      rep['pitch'],
+            'start_bar':  rep['start_bar'],
+            'all_pitches': [rep['pitch']],   # only the melody note
+        })
+        i = j
+
+    if len(events) < min_len * min_reps:
+        return []
+
+    # ── 2. Interval sequence ──────────────────────────────────────────────
+    # Quantise to ±12 semitones; offset +12 so all values ≥ 0.
+    # IMPORTANT: skip intervals where there is a large temporal gap between
+    # consecutive events (> 2 beats) — these are cross-hand or cross-phrase
+    # leaps that are not melodic intervals and would corrupt the grammar.
+    MAX_GAP = 2.0   # beats; larger = cross-hand leap, not melodic interval
+    symbols: List[int] = []
+    beat_at: List[float] = []
+    end_at:  List[float] = []
+    for k in range(len(events)-1):
+        gap = events[k+1]['start_beat'] - events[k]['end_beat']
+        if gap > MAX_GAP:
+            continue   # skip cross-hand / cross-phrase jumps
+        iv = events[k+1]['pitch'] - events[k]['pitch']
+        symbols.append(max(-12, min(12, iv)) + 12)
+        beat_at.append(events[k]['start_beat'])
+        end_at.append(events[k+1]['end_beat'])
+
+    if len(symbols) < min_len:
+        return []
+
+    # ── 3. Re-Pair grammar ────────────────────────────────────────────────
+    rules = repair_grammar(symbols)
+    root  = rules.get('root', [])
+
+    # Expand a rule fully to a list of terminal interval symbols
+    _expand_cache: Dict[str, List[int]] = {}
+    def expand(sym):
+        if sym in _expand_cache: return _expand_cache[sym]
+        if sym not in rules or sym == 'root':
+            result = [sym] if isinstance(sym, int) else []
+        else:
+            result = []
+            for s in rules[sym]: result.extend(expand(s))
+        _expand_cache[sym] = result
+        return result
+
+    # Count how many times each rule symbol appears in root
+    root_counts: Dict = defaultdict(int)
+    for sym in root:
+        root_counts[sym] += 1
+
+    # ── 4. Collect candidate rules ────────────────────────────────────────
+    # Count appearances of every rule at ALL levels of the grammar
+    # (not just in root) — catches repeated sub-phrases within larger rules
+    from collections import Counter as _Counter
+    all_counts: Dict[str, int] = _Counter()
+
+    def count_rule(sym, depth=0):
+        if depth > 20 or not isinstance(sym, str) or sym == 'root': return
+        if sym not in rules: return
+        for s in rules[sym]:
+            if isinstance(s, str) and s != 'root':
+                all_counts[s] += 1
+                count_rule(s, depth+1)
+
+    for sym in root:
+        if isinstance(sym, str) and sym != 'root':
+            all_counts[sym] += 1
+            count_rule(sym)
+
+    candidates = []
+    for sym, count in all_counts.items():
+        if not isinstance(sym, str): continue
+        if sym == 'root': continue
+        if count < min_reps: continue
+        expanded = expand(sym)
+        if len(expanded) < min_len: continue
+        if len(expanded) > max_len * 4: continue       # skip huge rules
+        intervals = [s - 12 for s in expanded if isinstance(s, int)]
+        candidates.append((sym, count, intervals))
+
+    if not candidates:
+        return []
+
+    # ── 5. Filter dominated sub-rules ─────────────────────────────────────
+    # A rule is dominated if its expansion is a contiguous sub-sequence of
+    # a longer rule that also appears in root
+    def is_subseq(short, long):
+        ls, ll = len(short), len(long)
+        for start in range(ll - ls + 1):
+            if long[start:start+ls] == short:
+                return True
+        return False
+
+    candidates.sort(key=lambda x: (-len(x[2]), -x[1]))
+    kept = []
+    for sym, count, ivs in candidates:
+        dominated = any(is_subseq(ivs, k_ivs) and ivs != k_ivs
+                        for _, _, k_ivs in kept)
+        if not dominated:
+            kept.append((sym, count, ivs))
+
+    # ── 6. Map occurrences back to beat positions ─────────────────────────
+    # Walk the root sequence and record where each kept rule appears
+    motif_colors = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b',
+                    '#cc5de8','#20c997','#f06595','#74c0fc','#a9e34b']
+
+    # Build set of kept rule names for fast lookup
+    kept_syms = {sym for sym, _, _ in kept}
+    sym_to_ivs = {sym: ivs for sym, _, ivs in kept}
+
+    motifs: List[Dict] = []
+    for label_idx, (sym, count, ivs) in enumerate(kept):
+        occurrences = []
+
+        def find_occurrences(seq, target_sym, pos_offset=0):
+            """Walk a sequence recursively, recording where target_sym appears."""
+            pos = pos_offset
+            for s in seq:
+                s_len = len(expand(s)) if isinstance(s, str) else 1
+                if s == target_sym:
+                    if pos < len(beat_at) and pos + s_len - 1 < len(end_at):
+                        start_b = beat_at[pos]
+                        end_b   = end_at[pos + s_len - 1]
+                        pitches = [ev['pitch'] for ev in events
+                                   if start_b - 0.05 <= ev['start_beat'] <= end_b + 0.05]
+                        occurrences.append({'start_beat': start_b,
+                                            'end_beat':   end_b,
+                                            'pitches':    pitches})
+                elif isinstance(s, str) and s in rules and s != 'root':
+                    find_occurrences(rules[s], target_sym, pos)
+                pos += s_len
+
+        find_occurrences(root, sym)
+
+        if len(occurrences) >= min_reps:
+            # Deduplicate overlapping occurrences (sub-rule may appear
+            # both inside a parent rule and independently)
+            merged_occs = []
+            for occ in sorted(occurrences, key=lambda o: o['start_beat']):
+                if merged_occs and occ['start_beat'] < merged_occs[-1]['end_beat'] - 0.1:
+                    continue  # skip overlapping duplicate
+                merged_occs.append(occ)
+            if len(merged_occs) >= min_reps:
+                motifs.append({
+                    'label':       chr(65 + label_idx),
+                    'color':       motif_colors[label_idx % len(motif_colors)],
+                    'occurrences': merged_occs,
+                    'intervals':   ivs,
+                })
+
+    # Re-label sequentially
+    for i, m in enumerate(motifs):
+        m['label'] = chr(65 + i)
+
+    return motifs
+
+
+def detect_cadences(chord_timeline: List[Dict], tonic: int) -> List[Dict]:
+    """
+    Detect cadence points in the chord timeline.
+    Returns list of {beat, type, color} where type is one of:
+    'Perfecta' (V→I), 'Plagal' (IV→I), 'Rota' (V→vi), 'Semicadencia' (→V)
+    """
+    cadences = []
+    for i in range(1, len(chord_timeline)):
+        prev = chord_timeline[i-1]
+        curr = chord_timeline[i]
+        pr, cr = prev['root_pc'], curr['root_pc']
+        pt, ct = prev['ctype'],  curr['ctype']
+        beat = curr['start_beat']
+
+        is_dom  = lambda pc, ct: (pc - tonic) % 12 == 7
+        is_ton  = lambda pc, ct: (pc - tonic) % 12 == 0
+        is_sub  = lambda pc, ct: (pc - tonic) % 12 == 5
+        is_vi   = lambda pc, ct: (pc - tonic) % 12 == 9
+
+        if is_dom(pr, pt) and is_ton(cr, ct):
+            cadences.append({'beat': beat, 'type': 'Perfecta', 'color': '#22c55e'})
+        elif is_sub(pr, pt) and is_ton(cr, ct):
+            cadences.append({'beat': beat, 'type': 'Plagal', 'color': '#3b82f6'})
+        elif is_dom(pr, pt) and is_vi(cr, ct):
+            cadences.append({'beat': beat, 'type': 'Rota', 'color': '#f59e0b'})
+        elif is_ton(pr, pt) and is_dom(cr, ct):
+            cadences.append({'beat': beat, 'type': 'Semicad.', 'color': '#ef4444'})
+
+    return cadences
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RE-PAIR GRAMMAR  (adaptado de mscz2vec.py / SequiturWithCustomRules)
+# Detecta estructura jerárquica de la pieza comprimiendo pares repetidos
+# de alturas MIDI en reglas, sin depender de music21.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def repair_grammar(symbols: List[int]) -> Dict:
+    """
+    Re-Pair algorithm: compresses a sequence of MIDI pitches by repeatedly
+    replacing the most frequent adjacent pair with a new rule symbol.
+
+    Returns dict: {rule_name: [symbol, symbol], ...}  plus  'root' key
+    with the compressed root sequence.
+    """
+    if not symbols:
+        return {'root': []}
+
+    current = list(symbols)
+    rules: Dict[str, list] = {}
+    next_id = [1]
+
+    def new_rule(a, b):
+        name = f'R{next_id[0]}'; next_id[0] += 1
+        rules[name] = [a, b]
+        return name
+
+    for _ in range(200):          # cap iterations
+        pairs: Dict[tuple, int] = {}
+        for i in range(len(current) - 1):
+            p = (current[i], current[i+1])
+            pairs[p] = pairs.get(p, 0) + 1
+        if not pairs:
+            break
+        best_pair, count = max(pairs.items(), key=lambda x: x[1])
+        if count < 2:
+            break
+        rule = new_rule(*best_pair)
+        new_seq, i = [], 0
+        while i < len(current):
+            if i < len(current)-1 and (current[i], current[i+1]) == best_pair:
+                new_seq.append(rule); i += 2
+            else:
+                new_seq.append(current[i]); i += 1
+        current = new_seq
+
+    rules['root'] = current
+    return rules
+
+
+def repair_sections(melody_notes: List[Dict], n_bars: int,
+                    bpb: float) -> List[Dict]:
+    """
+    Use Re-Pair to detect structural sections.
+
+    Steps:
+    1. Build a per-bar pitch sequence (median pitch per bar, or 0 for empty).
+    2. Run Re-Pair on the sequence.
+    3. Find the top-level rules (those that appear in the root sequence ≥2×)
+       and map them back to bar ranges.
+    4. Return list of {bar, end, label, color, rule} section dicts.
+
+    This produces sections that reflect actual melodic repetition, not density.
+    """
+    if not melody_notes or n_bars < 2:
+        return [{'bar': 0, 'end': n_bars, 'label': 'A', 'color': '#3b82f6', 'rule': None}]
+
+    # ── Build bar-level pitch fingerprint ────────────────────────────────
+    # Each bar becomes its median MIDI pitch (normalised relative to bar 0 for
+    # transposition-invariance) quantised to semitone.
+    bar_pitches: Dict[int, List[int]] = defaultdict(list)
+    for n in melody_notes:
+        bar_pitches[n['start_bar']].append(n['pitch'])
+
+    # Represent each bar as a single integer (median pitch).
+    # Empty bars get -1 (treated as silence).
+    bar_symbols: List[int] = []
+    for b in range(n_bars):
+        pitches = bar_pitches.get(b, [])
+        if pitches:
+            bar_symbols.append(int(sorted(pitches)[len(pitches)//2]))
+        else:
+            bar_symbols.append(-1)
+
+    # ── Run Re-Pair ───────────────────────────────────────────────────────
+    rules = repair_grammar(bar_symbols)
+    root  = rules.get('root', bar_symbols)
+
+    # ── Map rule occurrences back to bars ─────────────────────────────────
+    # Expand each rule symbol in root back to a span of bars.
+    def rule_len(sym, rules, memo={}):
+        if sym in memo: return memo[sym]
+        if sym not in rules or sym == 'root':
+            memo[sym] = 1; return 1
+        l = sum(rule_len(s, rules, memo) for s in rules[sym])
+        memo[sym] = l; return l
+
+    # Build (bar_start, bar_end, symbol) for every element in root
+    spans = []
+    bar = 0
+    for sym in root:
+        length = rule_len(sym, rules)
+        spans.append((bar, bar + length, sym))
+        bar += length
+
+    # Count which rule symbols appear ≥2× in root
+    sym_counts: Dict = defaultdict(int)
+    for _, _, sym in spans:
+        sym_counts[sym] += 1
+
+    # Repeated symbols (rules that appear multiple times) → structural sections
+    # Unique/single symbols → merge with neighbours
+    MIN_SECTION = max(4, n_bars // 8)
+
+    labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    colors = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6',
+              '#06b6d4','#ec4899','#84cc16','#f97316','#a855f7']
+
+    # ── Group consecutive terminal (non-rule) spans ───────────────────────
+    # Individual bar-level terminals are often too short alone but form
+    # meaningful sections when consecutive (e.g. a bridge passage).
+    grouped_spans = []
+    i = 0
+    while i < len(spans):
+        start, end, sym = spans[i]
+        if isinstance(sym, str):
+            grouped_spans.append(spans[i])
+            i += 1
+        else:
+            # Collect consecutive terminal spans
+            j = i + 1
+            while j < len(spans) and not isinstance(spans[j][2], str):
+                j += 1
+            # Merge all terminals from i to j-1 into one span
+            # Use the most common terminal value as representative symbol
+            from collections import Counter as _C
+            term_syms = [spans[k][2] for k in range(i, j)]
+            rep_sym = _C(term_syms).most_common(1)[0][0]
+            grouped_spans.append((start, spans[j-1][1], f'T{rep_sym}'))
+            i = j
+
+    spans = grouped_spans
+
+    # Assign a stable label to each unique rule symbol (by first appearance)
+    sym_label: Dict = {}
+    label_idx = 0
+    sections = []
+
+    for start, end, sym in spans:
+        if sym not in sym_label:
+            sym_label[sym] = label_idx % len(labels)
+            label_idx += 1
+        li   = sym_label[sym]
+        sections.append({
+            'bar':   start,
+            'end':   min(end, n_bars),
+            'label': labels[li],
+            'color': colors[li % len(colors)],
+            'rule':  sym,
+        })
+
+    # Merge sections that are too short into their neighbours,
+    # but ONLY if they are consecutive with no different section between them.
+    # This keeps A ... B ... A as three separate sections, not one A.
+    merged = []
+    for s in sections:
+        size = s['end'] - s['bar']
+        if merged and size < MIN_SECTION:
+            # Short section: absorb into previous
+            merged[-1]['end'] = s['end']
+        else:
+            merged.append(dict(s))
+
+    # Final pass: collapse only DIRECTLY adjacent same-label sections
+    # BUT keep them separate if both are full-size (genuine repetitions)
+    final = []
+    for s in merged:
+        size = s['end'] - s['bar']
+        if (final and final[-1]['label'] == s['label']
+                and size < MIN_SECTION):
+            # Only merge if this section is too small to stand alone
+            final[-1]['end'] = s['end']
+        else:
+            final.append(s)
+
+    # Reassign labels sequentially by first appearance in the final result.
+    # This avoids gaps like A-B-B-G when intermediate sections were merged away.
+    seen_rules: Dict = {}
+    next_label = 0
+    for s in final:
+        rule_key = s.get('rule')
+        if rule_key not in seen_rules:
+            seen_rules[rule_key] = next_label
+            next_label += 1
+        li = seen_rules[rule_key]
+        s['label'] = labels[li % len(labels)]
+        s['color'] = colors[li % len(colors)]
+
+    return final if final else [{'bar': 0, 'end': n_bars,
+                                  'label': 'A', 'color': '#3b82f6', 'rule': None}]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REPEATED MEASURES  (adaptado de mscz2vec.py / identify_repeated_measures)
+# Detecta compases cuyo patrón melódico relativo se repite en otro lugar
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def detect_repeated_bars(melody_notes: List[Dict], n_bars: int,
+                          bpb: float) -> Dict[int, Dict]:
+    """
+    Find bars whose melodic contour (relative pitch sequence) repeats
+    elsewhere in the piece.
+
+    Normalisation: intervals between consecutive notes within the bar
+    (transposition-invariant, like mscz2vec's normalize_pitches_by_first_note).
+
+    Returns dict: bar_index → {group, color, bars_in_group}
+    Only bars that share a pattern with at least one other bar are included.
+    """
+    from collections import defaultdict
+
+    group_colors = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b',
+                    '#cc5de8','#20c997','#f06595','#74c0fc','#a9e34b',
+                    '#fb923c','#34d399','#60a5fa','#f472b6','#a3e635']
+
+    # Build per-bar note sequence sorted by onset
+    bar_notes: Dict[int, List[Dict]] = defaultdict(list)
+    for n in melody_notes:
+        bar_notes[n['start_bar']].append(n)
+
+    # Fingerprint each bar: tuple of quantised intervals (semitones, capped ±12)
+    # For bars with < 3 notes, combine with the next bar to get a richer fingerprint,
+    # but only if the combined fingerprint has >= 4 intervals (avoids trivial matches).
+    MIN_NOTES = 3
+    MIN_COMBINED_IVS = 4
+    fingerprints: Dict[int, tuple] = {}
+    for b in range(n_bars):
+        notes = sorted(bar_notes.get(b, []), key=lambda n: n['start_beat'])
+        if len(notes) < MIN_NOTES:
+            next_notes = sorted(bar_notes.get(b+1, []), key=lambda n: n['start_beat'])
+            combined = notes + next_notes
+            if len(combined) >= MIN_NOTES + 1:
+                ivs = tuple(max(-12, min(12, combined[i+1]['pitch'] - combined[i]['pitch']))
+                            for i in range(len(combined)-1))
+                fingerprints[b] = ivs if len(ivs) >= MIN_COMBINED_IVS else ()
+            else:
+                fingerprints[b] = ()
+            continue
+        ivs = tuple(max(-12, min(12, notes[i+1]['pitch'] - notes[i]['pitch']))
+                    for i in range(len(notes)-1))
+        fingerprints[b] = ivs
+
+    # Group bars by fingerprint
+    fp_groups: Dict[tuple, List[int]] = defaultdict(list)
+    for b, fp in fingerprints.items():
+        if fp:   # skip empty bars
+            fp_groups[fp].append(b)
+
+    # Keep only groups with ≥2 members (actual repetitions)
+    result: Dict[int, Dict] = {}
+    group_idx = 0
+    for fp, bars in sorted(fp_groups.items(), key=lambda x: -len(x[1])):
+        if len(bars) < 2:
+            continue
+        color = group_colors[group_idx % len(group_colors)]
+        for b in bars:
+            result[b] = {
+                'group': group_idx,
+                'color': color,
+                'bars_in_group': bars,
+                'fingerprint': fp,
+            }
+        group_idx += 1
+        if group_idx >= len(group_colors):
+            break   # limit to palette size
+
+    return result
+
+
+def detect_sections(chords_per_bar: List[Dict], density: List[float],
+                    n_bars: int, bpb: float,
+                    motifs: List[Dict] = None,
+                    repair: List[Dict] = None) -> List[Dict]:
+    """
+    Section detection. Priority:
+    1. Re-Pair grammar sections — melodic structure from note repetition
+    2. Motif recurrence boundaries — fallback
+    3. Equal division — last resort
+    """
+    if n_bars < 4:
+        return [{'bar': 0, 'end': n_bars, 'label': 'A', 'color': '#3b82f6'}]
+
+    MIN_SECTION = max(4, n_bars // 8)
+    labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    colors = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6',
+              '#06b6d4','#ec4899','#84cc16']
+
+    if repair and len(repair) >= 2:
+        return repair
+
+    if motifs:
+        boundaries = sorted(set(
+            int(occ['start_beat'] / bpb)
+            for m in motifs for occ in m['occurrences']
+        ) | {0})
+        merged = [boundaries[0]]
+        for b in boundaries[1:]:
+            if b - merged[-1] >= MIN_SECTION:
+                merged.append(b)
+        if len(merged) >= 2:
+            return [{'bar': merged[i],
+                     'end': merged[i+1] if i+1 < len(merged) else n_bars,
+                     'label': labels[i % len(labels)],
+                     'color': colors[i % len(colors)]}
+                    for i in range(len(merged))]
+
+    n_divs = max(2, min(4, n_bars // max(MIN_SECTION, 1)))
+    step = n_bars // n_divs
+    return [{'bar': i*step,
+             'end': (i+1)*step if i < n_divs-1 else n_bars,
+             'label': labels[i % len(labels)],
+             'color': colors[i % len(colors)]}
+            for i in range(n_divs)]
+
 def analyze(mid_path: str, right_idx: int, left_idx: int,
             arp_window: float = 1.0, key_window_bars: int = 8,
-            harmony_source_spec: Optional[str] = None) -> str:
+            harmony_source_spec: Optional[str] = None,
+            voicing_order: bool = True,
+            single_key: bool = False,
+            arp_fusion: bool = True,
+            both_hands_spec: Optional[str] = None) -> str:
     print(f"  Cargando MIDI: {mid_path}")
     mid = mido.MidiFile(mid_path)
     print(f"  Pistas en el archivo: {len(mid.tracks)}")
@@ -1195,20 +2421,25 @@ def analyze(mid_path: str, right_idx: int, left_idx: int,
     global_tonic, global_mode = detect_key(all_notes)
     print(f"  Tonalidad global: {ROOT_NOTE_NAMES[global_tonic]} {global_mode}")
 
-    keys_per_bar = detect_key_per_bar(all_notes, n_bars, bpb, key_window_bars)
-    changes = []
-    prev = None
-    for b, k in enumerate(keys_per_bar):
-        lbl = f"{ROOT_NOTE_NAMES[k[0]]} {k[1]}"
-        if lbl != prev:
-            changes.append((b + 1, lbl))
-            prev = lbl
-    if len(changes) > 1:
-        print(f"  Modulaciones detectadas ({len(changes)} regiones):")
-        for bar, lbl in changes:
-            print(f"    compás {bar}: {lbl}")
+    if single_key:
+        # Force the global key throughout — no modulation detection
+        keys_per_bar = [(global_tonic, global_mode)] * n_bars
+        print(f"  Tonalidad única forzada: {ROOT_NOTE_NAMES[global_tonic]} {global_mode}")
     else:
-        print(f"  Sin modulaciones detectadas (ventana={key_window_bars} compases)")
+        keys_per_bar = detect_key_per_bar(all_notes, n_bars, bpb, key_window_bars)
+        changes = []
+        prev = None
+        for b, k in enumerate(keys_per_bar):
+            lbl = f"{ROOT_NOTE_NAMES[k[0]]} {k[1]}"
+            if lbl != prev:
+                changes.append((b + 1, lbl))
+                prev = lbl
+        if len(changes) > 1:
+            print(f"  Modulaciones detectadas ({len(changes)} regiones):")
+            for bar, lbl in changes:
+                print(f"    compás {bar}: {lbl}")
+        else:
+            print(f"  Sin modulaciones detectadas (ventana={key_window_bars} compases)")
 
     # ── Fuente armónica dinámica por compás ───────────────────────────────
     src_per_bar = harmony_source_per_bar(
@@ -1240,18 +2471,62 @@ def analyze(mid_path: str, right_idx: int, left_idx: int,
         [n for n in left_track['notes']  if n['start_bar'] in rh_harmony_bars] +
         [n for n in right_track['notes'] if n['start_bar'] in lh_harmony_bars]
     )
+    # Parse --both-hands-source spec
+    both_hands_bars = _parse_both_hands_spec(both_hands_spec, n_bars)
+    if any(both_hands_bars):
+        bh_count = sum(both_hands_bars)
+        print(f"  Ambas manos como fuente armónica en {bh_count} compases")
+
     print(f"  Construyendo timeline de acordes (bar-aligned, arp_window={arp_window})...")
     chord_timeline = build_chord_timeline(harmony_notes, arp_window=arp_window, bpb=bpb,
-                                          bass_notes=other_notes)
+                                          bass_notes=other_notes, arp_fusion=arp_fusion,
+                                          both_hands_bars=both_hands_bars)
     print(f"  {len(chord_timeline)} eventos de acorde detectados")
 
     # Acordes por compas (fila 3)
     chords_per_bar = compute_chords_per_bar(all_notes, n_bars, bpb, keys_per_bar)
+
+    # ── Advanced analysis ─────────────────────────────────────────────────
+    print("  Analizando tensión, densidad, motivos, cadencias...")
+    tension      = compute_tension_curve(chords_per_bar, n_bars)
+    density      = compute_density_per_bar(all_notes, n_bars, bpb)
+    avg_velocity = compute_avg_velocity_per_bar(all_notes, n_bars)
+
+    # Motifs from all melody notes across the whole piece
+    melody_notes = (
+        [n for n in right_track['notes'] if src_per_bar[n['start_bar']] == 'left']  +
+        [n for n in left_track['notes']  if src_per_bar[n['start_bar']] == 'right']
+    )
+    motifs    = detect_motifs(melody_notes, min_len=3, max_len=8)
+    cadences  = detect_cadences(chord_timeline, global_tonic)
+
+    # ── Re-Pair structural analysis ───────────────────────────────────────
+    print("  Analizando estructura con Re-Pair...")
+    repair   = repair_sections(melody_notes, n_bars, bpb)
+    sections = detect_sections(chords_per_bar, density, n_bars, bpb,
+                                motifs=motifs, repair=repair)
+
+    # ── Repeated bars ─────────────────────────────────────────────────────
+    repeated_bars = detect_repeated_bars(melody_notes, n_bars, bpb)
+
+    print(f"  {len(motifs)} motivos, {len(cadences)} cadencias, "
+          f"{len(sections)} secciones, {len(repeated_bars)} compases repetidos")
+
+    # Per-note velocity for color modulation
+    for n in right_track['notes'] + left_track['notes']:
+        n['vel_norm'] = round(n['vel'] / 127.0, 3)
+
     print("  Generando HTML...")
     html = build_html(mid_path, right_track, left_track,
                       chord_timeline, chords_per_bar,
                       global_tonic, global_mode, keys_per_bar,
-                      src_per_bar, n_bars)
+                      src_per_bar, n_bars,
+                      tension=tension, density=density,
+                      avg_velocity=avg_velocity, motifs=motifs,
+                      cadences=cadences, sections=sections,
+                      repeated_bars=repeated_bars,
+                      voicing_order=voicing_order,
+                      both_hands_bars=both_hands_bars)
     return html
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1410,6 +2685,22 @@ def main():
                         help=('Fuente armónica por sección. Ejemplos: '
                               '"left", "right", "1-4:right,5-12:left". '
                               'Sin especificar → detección automática.'))
+    parser.add_argument('--both-hands-source', default=None, dest='both_hands_source',
+                        help=('Compases donde ambas manos contribuyen al acorde. '
+                              'Ejemplos: "13-100", "5-8,17-24". '
+                              'En esos compases se combinan las notas de ambas manos '
+                              'para la detección de acordes. Desactivado por defecto.'))
+    parser.add_argument('--no-arp-fusion', action='store_false', dest='arp_fusion',
+                        default=True,
+                        help='Desactivar fusión de bajo+acorde y deduplicación de repeticiones')
+    parser.add_argument('--single-key', action='store_true', default=False,
+                        help='Usar una única tonalidad global (sin detección de modulaciones)')
+    parser.add_argument('--voicing-order', action='store_true', default=True,
+                        dest='voicing_order',
+                        help='Color melody notes by ascending pitch order of chord notes (default)')
+    parser.add_argument('--theoretical-order', action='store_false',
+                        dest='voicing_order',
+                        help='Color melody notes by theoretical interval order (root=blue, 3rd=yellow, 5th=green)')
     parser.add_argument('--test', action='store_true',
                         help='Genera MIDI sintético de prueba y lo analiza')
     args = parser.parse_args()
@@ -1431,7 +2722,11 @@ def main():
     html = analyze(mid_path, args.right, args.left,
                    arp_window=args.arp_window,
                    key_window_bars=args.key_window,
-                   harmony_source_spec=args.harmony_source)
+                   harmony_source_spec=args.harmony_source,
+                   voicing_order=args.voicing_order,
+                   single_key=args.single_key,
+                   arp_fusion=args.arp_fusion,
+                   both_hands_spec=args.both_hands_source)
 
     with open(_ensure_parent(out_path), 'w', encoding='utf-8') as f:
         f.write(html)

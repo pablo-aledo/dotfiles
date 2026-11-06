@@ -10,7 +10,7 @@ Fundamento
 La suite tiene más de 150 ficheros .py autocontenidos. Quien los usa (una
 persona o un agente) tiene que adivinar qué herramienta hace qué, con qué
 flags y qué produce, y los errores típicos son afirmar que una opción no
-existe cuando sí existe, o confundir versiones (fingering_v3 ... v6).
+existe cuando sí existe, o confundir versiones (las distintas versiones de fingering).
 Esta herramienta lee las cabeceras y los argparse SIN EJECUTAR nada (solo
 análisis estático con ast) y construye un índice buscable. Además detecta
 inconsistencias entre herramientas (lint).
@@ -1863,7 +1863,7 @@ DEEP_RECIPES = [
                    "--latent-dim", "64", "--n-dis", "2", "--cpu"], "files": ["m/checkpoint.pt"]},
          {"args": ["generate", "--model-dir", "m", "--output-dir", "g", "--n", "1", "--cpu"], "files": ["g/*"]},
      ]},
-    {"tool": "remi_diffusion_v2", "needs": ["torch", "numpy"],
+    {"tool": "remi_diffusion", "needs": ["torch", "numpy"],
      "why": "un modelo entrenado con --model-dir relativo debe cargarse desde otro directorio",
      "steps": [
          {"args": ["train", "{corpus}", "--model-dir", "runs/m", "--small", "--epochs", "1", "--seed", "1"],
@@ -1878,7 +1878,7 @@ DEEP_RECIPES = [
          {"args": ["train", "--data-dir", "data", "--model-dir", "model", "--epochs", "1", "--nz", "32",
                    "--base-ch", "32", "--cpu"], "json": [("model/meta.json", "pitch_lo", 36)], "timeout": 300},
      ]},
-    {"tool": "cycle_gan_style_transfer_v3", "needs": ["numpy", "sklearn", "music21"],
+    {"tool": "cycle_gan_style_transfer", "needs": ["numpy", "sklearn", "music21"],
      "why": "entrenamiento simbólico con valores por defecto (dimensión 61440) sin agotar la memoria",
      "steps": [
          {"args": ["train", "--domain-a", "{A}", "--domain-b", "{B}", "--model", "cg.pkl", "--iters", "2"],

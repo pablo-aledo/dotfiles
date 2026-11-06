@@ -1,112 +1,141 @@
 #!/usr/bin/env python3
 r"""
-remi_diffusion.py — Remi Diffusion: masked Diffusion Language Model aplicado a
-composición de piano pop
-(versión 1).
+remi_diffusion.py — Remi Diffusion: masked/Uniform Diffusion LM aplicado a
+composicion de piano pop
+(versión 2).
 
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
 ────────────────────────────────────────────────────────────────────────────
-IDEA:
-  remi.py genera con un Transformer-XL AUTORREGRESIVO (izq→der, sin
-  corrección de errores). Este módulo usa el MISMO esquema de tokens
-  REMI, pero sustituye la generación autorregresiva por DIFUSIÓN
-  ENMASCARADA (MDLM) sobre bloques de un compás cada uno ("block
-  diffusion"), con guidance sin clasificador (D-CFG) sobre progresiones
-  de acordes/tonalidad y un sampler con remasking (ReMDM) para corregir
-  errores durante el muestreo.
+NOVEDADES RESPECTO A v1 (remi_diffusion.py):
+
+1. ARQUITECTURA ENCODER-DECODER (antes: un unico Transformer bidireccional)
+   Un encoder pesado procesa la historia (compases ya generados, siempre
+   limpios) con atencion BLOCK-CAUSAL: bidireccional dentro de cada
+   compas, causal entre compases. Un decoder ligero hace cross-attention
+   a esa memoria para denoisar el compas actual (canvas). Como en Gemma
+   Diffusion: "heavy encoder... lightweight decoder".
+
+2. KV-CACHE REAL entre compases (antes: se reprocesaba toda la historia
+   en CADA paso de denoising de CADA compas -- muy ineficiente). Ahora:
+     - El encoder cachea claves/valores por capa; al anadir un compas
+       nuevo solo se calculan SUS tokens, nunca se recalculan los
+       compases anteriores (igual que el KV-cache autorregresivo, pero
+       por bloques en vez de por token).
+     - La memoria para cross-attention del decoder se recalcula UNA VEZ
+       por compas (no en cada paso de denoising).
+     - Ventana deslizante (--history-bars) con expulsion de los
+       compases mas antiguos del cache cuando se supera el limite.
+
+3. UNIFORM-STATE DIFFUSION (UDLM), seleccionable con --noise-type:
+     - 'mask'    (MDLM, como v1): el forward process reemplaza tokens por
+       [MASK]; el sampler des-enmascara + remasking (ReMDM).
+     - 'uniform' (UDLM, default en v2): el forward process reemplaza
+       tokens por tokens ALEATORIOS del vocabulario (nunca hay [MASK]);
+       el sampler mantiene un estado "comprometido/no comprometido" por
+       posicion y puede "renoisar" (re-aleatorizar) posiciones ya
+       comprometidas para corregir errores -- segun el articulo, esto da
+       MEJOR CONTROLABILIDAD que MDLM, relevante para el guidance por
+       acordes que es el objetivo central de esta herramienta.
 
   Referencia: Kuleshov Group, "How to Build a Diffusion Language Model"
-  (2026) — https://kuleshov-group.github.io/blog/blog/2026/
+  (2026) -- https://kuleshov-group.github.io/blog/blog/2026/
              how-to-build-a-diffusion-language-model/
+  Secciones: "Architectures: Encoder, Decoder, and Encoder-Decoder",
+  "Block Diffusion for Flexible-Length Generation", "Uniform State
+  Diffusion".
 
-ARQUITECTURA (v1, simplificada respecto al artículo):
-  • Un único Transformer bidireccional (no encoder-decoder separado)
-    procesa  [historia clara] + [token de condición] + [canvas ruidoso]
-    con atención bidireccional completa; la pérdida solo se calcula
-    sobre las posiciones del canvas. El split encoder/decoder pesado/
-    ligero de Gemma Diffusion queda como optimización futura (v2) —
-    aquí se prioriza corrección y legibilidad sobre velocidad.
-  • Block diffusion: unidad de bloque = 1 compás (frontera natural
-    marcada por el token Bar de REMI). Cada bloque se difunde
-    condicionado en los compases ya generados (historia, sin ruido).
-  • Canvas de longitud fija: cada compás se aplana a --canvas-len
-    tokens REMI (Position/Velocity/NoteOn/Duration/Chord), rellenando
-    con PAD si sobra espacio y truncando (con aviso) si falta.
-  • Guidance D-CFG: el primer token del bloque es el token de acorde
-    objetivo (Chord_X:Y, ya definido en remi.py). Durante entrenamiento
-    se sustituye por NULL_COND con probabilidad --cond-dropout, así el
-    mismo modelo aprende la rama condicional y la no-condicional.
-  • Forward process: enmascara tokens del canvas con schedule
-    α_t = 1 − t (lineal, como en el ELBO simplificado del artículo).
-  • Sampler: infilling + remasking (ReMDM) iterativo, con CFG combinando
-    logits condicionados y no condicionados vía --guidance-scale.
-
-COMPATIBILIDAD:
-  Usa el mismo vocab_chord.json que remi.py (--chord), extendido con
-  3 tokens especiales (PAD_None, MASK_None, NULL_COND_None) añadidos al
-  final. Si cargas un vocab.json de remi.py sin esos tokens, se extiende
-  automáticamente (y se re-guarda) la primera vez.
+LO QUE v2 NO CAMBIA: mismo esquema de tokens REMI, mismo vocabulario
+(compatible con vocab_chord.json de remi.py y v1), mismo canvas de
+longitud fija por compas, misma guidance D-CFG por acordes, misma
+reparacion gramatical greedy tras el sampler.
 
 ────────────────────────────────────────────────────────────────────────────
 Modos de uso
 ────────────────────────────────────────────────────────────────────────────
-  convert   — MIDI(s) → tokens REMI+chord (idéntico a remi.py --chord)
-  train     — Entrena el Transformer de difusión enmascarada por bloques
-  generate  — Genera piano pop desde cero guiado por una progresión
-  continue  — Continúa un MIDI de prompt con una progresión objetivo
-  inspect   — Diagnóstico: bloques/canvas de un MIDI o corpus
+  convert, train, generate, continue, inspect  (identicos a v1)
 
 ────────────────────────────────────────────────────────────────────────────
 Opciones
 ────────────────────────────────────────────────────────────────────────────
-OPCIONES COMUNES DE TRAIN:
-  --canvas-len N        Tokens por compás en el canvas [default: 48]
-  --history-bars N      Compases de historia máx. que ve el modelo [default: 8]
-  --d-model N           Dimensión del modelo [default: 512]
-  --n-layer N           Capas del Transformer [default: 8]
-  --n-head N            Cabezas de atención [default: 8]
-  --cond-dropout F      Prob. de sustituir el acorde por NULL_COND [default: 0.15]
-  --epochs N            Épocas máximas [default: 300]
-  --batch-size N        Tamaño de batch [default: 8]
-  --lr F                Learning rate [default: 2e-4]
-  --patience N          Early stopping [default: 30]
-  --resume              Reanudar desde checkpoint
-  --small               Modelo reducido: 4 capas, d=256 (~CPU-friendly)
-
-── OPCIONES COMUNES DE GENERATE / CONTINUE ──
-  --chords "X:q Y:q …"  Progresión objetivo (se repite/cicla para cubrir --bars)
-  --bars N               Compases a generar [default: 16]
-  --steps N               Pasos de denoising por compás [default: 20]
-  --guidance-scale F      Fuerza de D-CFG, 0=sin guidance [default: 3.0]
-  --remask-max F          Fracción máx. de tokens ya rellenados que se
-                           re-enmascaran por paso (ReMDM) [default: 0.15]
-  --temperature F         Temperatura de muestreo [default: 1.0]
-  --topk N                Top-k al muestrear cada posición [default: 0 (off)]
-  --seed N                Semilla [default: 42]
-
-── Otras opciones del parser ──
   convert
+    input INPUT                 MIDI o directorio de MIDIs
+    --vocab VOCAB               Ruta del vocabulario JSON
+    --output OUTPUT             Guardar tokens en JSON
     --verbose
 
   train
+    data_dir DATA_DIR           Directorio con MIDIs de entrenamiento
+    --model-dir MODEL_DIR       (obligatorio)
+    --vocab VOCAB
+    --canvas-len CANVAS_LEN     (defecto CANVAS_LEN_DEFAULT)
+    --history-bars HISTORY_BARS
+                                (defecto HISTORY_BARS_DEFAULT)
+    --d-model D_MODEL           (defecto 512)
+    --n-layer-enc N_LAYER_ENC   Capas del encoder (pesado, procesa la
+                                historia) [6] (defecto 6)
+    --n-layer-dec N_LAYER_DEC   Capas del decoder (ligero, denoisa el compás
+                                actual) [2] (defecto 2)
+    --n-head N_HEAD             (defecto 8)
+    --noise-type NOISE_TYPE     'mask'=MDLM (como v1), 'uniform'=UDLM (mejor
+                                controlabilidad según el artículo) [uniform]
+                                (defecto uniform; valores: mask|uniform)
+    --cond-dropout COND_DROPOUT
+                                Prob. de sustituir el acorde por NULL_COND
+                                (CFG training) [0.15] (defecto 0.15)
+    --epochs EPOCHS             (defecto 300)
+    --batch-size BATCH_SIZE     (defecto 8)
+    --lr LR                     (defecto 0.0002)
+    --patience PATIENCE         (defecto 30)
+    --resume
+    --small                     Modelo reducido: enc=3/dec=1 capas, d=256
+                                (CPU-friendly)
+    --seed SEED                 (defecto 42)
     --verbose
 
   generate
+    --model-dir MODEL_DIR       (obligatorio)
+    --chords CHORDS             Progresión objetivo, ej. "C:maj G:maj A:min
+                                F:maj" (se cicla para cubrir --bars; sin este
+                                flag, sin guidance)
+    --bars BARS                 (defecto 16)
+    --steps STEPS               Pasos de denoising por compás (defecto 20)
+    --guidance-scale GUIDANCE_SCALE
+                                (defecto 3.0)
+    --remask-max REMASK_MAX     (defecto 0.15)
+    --temperature TEMPERATURE   (defecto 1.0)
+    --topk TOPK                 (defecto 0)
     --repair-grammar            Reparar gramática REMI del canvas generado
                                 [on]
     --no-repair-grammar         Desactivar la reparación gramatical (para
                                 depuración)
+    --output OUTPUT
+    --seed SEED                 (defecto 42)
     --verbose
 
   continue
+    prompt PROMPT               MIDI de prompt
+    --model-dir MODEL_DIR       (obligatorio)
+    --chords CHORDS
+    --bars BARS                 (defecto 16)
+    --steps STEPS               (defecto 20)
+    --guidance-scale GUIDANCE_SCALE
+                                (defecto 3.0)
+    --remask-max REMASK_MAX     (defecto 0.15)
+    --temperature TEMPERATURE   (defecto 1.0)
+    --topk TOPK                 (defecto 0)
     --repair-grammar            Reparar gramática REMI del canvas generado
                                 [on]
     --no-repair-grammar         Desactivar la reparación gramatical (para
                                 depuración)
+    --output OUTPUT
+    --seed SEED                 (defecto 42)
     --verbose
 
   inspect
+    --input INPUT               (obligatorio)
+    --vocab VOCAB
+    --canvas-len CANVAS_LEN     (defecto CANVAS_LEN_DEFAULT)
     --bars-show BARS_SHOW       (defecto 8)
     --verbose
 
@@ -132,15 +161,17 @@ data_dir       dir   io=in required  # Directorio con MIDIs de entrenamiento
 --canvas-len   int   default=48
 --history-bars int   default=8 min=0 unit=compases
 --d-model      int   default=512
---n-layer      int   default=8 min=0
+--n-layer-enc  int   default=6 min=0  # Capas del encoder (pesado, procesa la historia) [6]
+--n-layer-dec  int   default=2 min=0  # Capas del decoder (ligero, denoisa el compás actual) [2]
 --n-head       int   default=8 min=0
+--noise-type   enum  default=uniform values=mask|uniform  # 'mask'=MDLM (como v1), 'uniform'=UDLM…
 --cond-dropout float default=0.15  # Prob. de sustituir el acorde por NULL_COND (CFG training) [0.15]
 --epochs       int   default=300 min=0 unit=épocas
 --batch-size   int   default=8 min=0
 --lr           float default=0.0002
 --patience     int   default=30
 --resume       bool  default=false
---small        bool  default=false  # Modelo reducido: 4 capas, d=256 (CPU-friendly)
+--small        bool  default=false  # Modelo reducido: enc=3/dec=1 capas, d=256 (CPU-friendly)
 --seed         int   default=42
 --verbose      bool  default=false
 [generate]
@@ -183,24 +214,34 @@ prompt              file  io=in ext=mid required  # MIDI de prompt
 ────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
-  # Preparar corpus (idéntico esquema que remi.py, con acordes obligatorio)
   python remi_diffusion.py convert corpus/ --vocab vocab_chord.json
 
-  # Entrenar
-  python remi_diffusion.py train corpus/ --model-dir diff_model/ \
-      --epochs 300 --batch-size 8 --canvas-len 48 --lr 2e-4
+  python remi_diffusion.py train corpus/ --model-dir diff_v2/ \
+      --noise-type uniform --epochs 300 --canvas-len 48
 
-  # Generar desde cero con progresión de acordes objetivo
-  python remi_diffusion.py generate --model-dir diff_model/ \
-      --chords "C:maj G:maj A:min F:maj" --bars 16 \
-      --guidance-scale 3.0 --steps 20 --output nueva.mid
+  python remi_diffusion.py generate --model-dir diff_v2/ \
+      --chords "C:maj G:maj A:min F:maj" --bars 16 --guidance-scale 3.0
 
-  # Continuar un MIDI existente con nueva progresión
-  python remi_diffusion.py continue prompt.mid --model-dir diff_model/ \
-      --chords "D:min G:dom C:maj" --bars 8 --guidance-scale 4.0
+  python remi_diffusion.py continue prompt.mid --model-dir diff_v2/ \
+      --chords "D:min G:dom C:maj" --bars 8
 
-  # Diagnóstico: ver cómo quedan los bloques/canvas de un MIDI
-  python remi_diffusion.py inspect --input prompt.mid --canvas-len 48
+  OPCIONES NUEVAS EN v2 (respecto a v1):
+    --noise-type {mask,uniform}   Tipo de proceso de difusion [uniform]
+    --n-layer-enc N                Capas del encoder (pesado) [6]
+    --n-layer-dec N                Capas del decoder (ligero) [2]
+    (--n-layer de v1 ya no existe; se sustituye por los dos anteriores)
+
+  OPCIONES COMUNES (heredadas de v1):
+    --canvas-len N, --history-bars N, --d-model N, --n-head N,
+    --cond-dropout F, --epochs N, --batch-size N, --lr F, --patience N,
+    --resume, --small, --chords, --bars N, --steps N, --guidance-scale F,
+    --remask-max F, --temperature F, --topk N,
+    --repair-grammar/--no-repair-grammar, --seed N
+
+── Más modos ──
+
+  # Diagnóstico de bloques/canvas de un MIDI
+  python remi_diffusion.py inspect --input entrada.mid
 
 ────────────────────────────────────────────────────────────────────────────
 Dependencias
@@ -255,6 +296,8 @@ CHORD_OUTSIDERS2 = {'maj': [1, 3, 6, 8, 10],  'min': [1, 4, 6, 9, 11],
 SPECIAL_TOKENS = ['PAD_None', 'MASK_None', 'NULL_COND_None']
 
 CANVAS_LEN_DEFAULT   = 48
+MAX_POS_BUFFER       = 20000  # buffer sinusoidal generoso; sin parámetros
+                               # aprendidos, es válido para cualquier longitud
 HISTORY_BARS_DEFAULT = 8
 
 
@@ -571,7 +614,12 @@ def load_vocab(path):
 
 
 def _resolve_vocab_path(cfg, model_dir):
-    """Ruta del vocabulario de un modelo entrenado, robusta al cwd (ver v2)."""
+    """Ruta del vocabulario de un modelo entrenado, robusta al cwd.
+
+    model_config.json puede contener una ruta relativa al cwd del entrenamiento
+    (versiones antiguas). Se prueba: tal cual si es absoluta/existe, y si no,
+    <model_dir>/<basename> (donde train deja vocab_chord.json por defecto).
+    """
     v = cfg['vocab']
     if os.path.isabs(v) and os.path.exists(v):
         return v
@@ -812,85 +860,278 @@ def repair_canvas_grammar(canvas, word2event, pad_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  MODELO: TRANSFORMER BIDIRECCIONAL DE DIFUSIÓN ENMASCARADA POR BLOQUES
+#  MODELO: ENCODER-DECODER DE DIFUSIÓN POR BLOQUES, CON KV-CACHE
 # ══════════════════════════════════════════════════════════════════════════════
+#
+#  ENCODER (pesado): procesa la historia (compases ya generados, siempre
+#  limpios) con atención BLOCK-CAUSAL — bidireccional dentro de cada compás,
+#  causal entre compases. Esto es lo que permite un KV-cache real: las claves/
+#  valores de un compás ya procesado NUNCA cambian al añadir compases
+#  posteriores, así que se computan una sola vez en toda la generación.
+#
+#  DECODER (ligero): procesa [COND, canvas_ruidoso] del compás actual con
+#  auto-atención bidireccional (se recalcula en cada paso de denoising, ya
+#  que el canvas cambia) + cross-attention a la memoria del encoder (los
+#  estados finales de la historia — se recalcula una vez por compás, no en
+#  cada paso de denoising, porque la memoria no cambia durante el denoising
+#  de un compás).
 
-def _build_model(n_token, d_model=512, n_layer=8, n_head=8, d_ff=2048,
-                  dropout=0.1, max_len=4096):
-    """
-    Transformer bidireccional (encoder-only, sin máscara causal).
-    Secuencia de entrada por ejemplo de entrenamiento:
-        [historia clara (N_hist tokens)] + [COND] + [canvas ruidoso (canvas_len)]
-    La pérdida se calcula solo sobre las posiciones del canvas.
-    forward(x) -> logits (B, T, n_token)
-    """
+def _build_model(n_token, d_model=512, n_layer_enc=6, n_layer_dec=2, n_head=8,
+                  d_ff=2048, dropout=0.1, max_len=8192):
     import torch
     import torch.nn as nn
+    import torch.nn.functional as F
+
+    d_head = d_model // n_head
 
     class SinPosEmb(nn.Module):
-        def __init__(self, d_model, max_len):
+        def __init__(self):
             super().__init__()
-            pos  = torch.arange(max_len).unsqueeze(1).float()
-            div  = torch.exp(-math.log(10000.0) *
-                              torch.arange(0, d_model, 2).float() / d_model)
+            pos = torch.arange(max_len).unsqueeze(1).float()
+            div = torch.exp(-math.log(10000.0) *
+                             torch.arange(0, d_model, 2).float() / d_model)
             pe = torch.zeros(max_len, d_model)
             pe[:, 0::2] = torch.sin(pos * div)
             pe[:, 1::2] = torch.cos(pos * div)
             self.register_buffer('pe', pe)
 
-        def forward(self, length):
-            return self.pe[:length]
+        def forward(self, offset, length):
+            return self.pe[offset:offset + length]
 
-    class BlockDiffusionTransformer(nn.Module):
+    class MultiHeadAttnKV(nn.Module):
+        """Atención multi-cabeza con soporte opcional de KV-cache incremental.
+
+        - Sin cache (modo entrenamiento, secuencia completa de una vez):
+          forward(x_q, x_kv, attn_mask=mask) con mask booleano (B|1,1,Tq,Tk),
+          True = permitido.
+        - Con cache (modo generación, procesa solo tokens NUEVOS de x_kv):
+          forward(x_q, x_kv_new, cache=cache_dict) concatena las K/V nuevas
+          a las cacheadas, sin necesidad de máscara (los tokens nuevos deben
+          ver todo el pasado + a sí mismos, exactamente lo que da la
+          concatenación).
+        """
+        def __init__(self):
+            super().__init__()
+            self.q_proj = nn.Linear(d_model, d_model)
+            self.k_proj = nn.Linear(d_model, d_model)
+            self.v_proj = nn.Linear(d_model, d_model)
+            self.out_proj = nn.Linear(d_model, d_model)
+            self.dropout = dropout
+
+        def forward(self, x_q, x_kv, attn_mask=None, cache=None):
+            B, Tq, _ = x_q.shape
+            q = self.q_proj(x_q).view(B, Tq, n_head, d_head).transpose(1, 2)
+            k_new = self.k_proj(x_kv).view(B, x_kv.size(1), n_head, d_head).transpose(1, 2)
+            v_new = self.v_proj(x_kv).view(B, x_kv.size(1), n_head, d_head).transpose(1, 2)
+            if cache is not None:
+                if cache.get('k') is not None:
+                    k = torch.cat([cache['k'], k_new], dim=2)
+                    v = torch.cat([cache['v'], v_new], dim=2)
+                else:
+                    k, v = k_new, v_new
+                cache['k'], cache['v'] = k, v
+            else:
+                k, v = k_new, v_new
+            drop_p = self.dropout if self.training else 0.0
+            out = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask,
+                                                  dropout_p=drop_p)
+            out = out.transpose(1, 2).contiguous().view(B, Tq, d_model)
+            return self.out_proj(out)
+
+    class FFN(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.net = nn.Sequential(nn.Linear(d_model, d_ff), nn.GELU(),
+                                      nn.Dropout(dropout), nn.Linear(d_ff, d_model))
+
+        def forward(self, x):
+            return self.net(x)
+
+    class EncoderLayer(nn.Module):
+        """Auto-atención block-causal (con cache opcional) + FFN, pre-LN."""
+        def __init__(self):
+            super().__init__()
+            self.ln1 = nn.LayerNorm(d_model)
+            self.attn = MultiHeadAttnKV()
+            self.ln2 = nn.LayerNorm(d_model)
+            self.ffn = FFN()
+            self.drop = nn.Dropout(dropout)
+
+        def forward(self, x, attn_mask=None, cache=None):
+            h = self.ln1(x)
+            x = x + self.drop(self.attn(h, h, attn_mask=attn_mask, cache=cache))
+            x = x + self.drop(self.ffn(self.ln2(x)))
+            return x
+
+    class DecoderLayer(nn.Module):
+        """Auto-atención bidireccional (sin cache, canvas cambia cada paso) +
+        cross-attention a la memoria del encoder (con cache opcional, la
+        memoria no cambia durante el denoising de un compás) + FFN."""
+        def __init__(self):
+            super().__init__()
+            self.ln1 = nn.LayerNorm(d_model)
+            self.self_attn = MultiHeadAttnKV()
+            self.ln2 = nn.LayerNorm(d_model)
+            self.cross_attn = MultiHeadAttnKV()
+            self.ln3 = nn.LayerNorm(d_model)
+            self.ffn = FFN()
+            self.drop = nn.Dropout(dropout)
+
+        def forward(self, x, memory, cross_cache=None, memory_key_padding_mask=None):
+            h = self.ln1(x)
+            x = x + self.drop(self.self_attn(h, h))
+            h = self.ln2(x)
+            if cross_cache is not None and cross_cache.get('k') is not None:
+                # Memoria ya proyectada y cacheada: reusar K/V, solo proyectar Q.
+                B, Tq, _ = h.shape
+                q = self.cross_attn.q_proj(h).view(B, Tq, n_head, d_head).transpose(1, 2)
+                k, v = cross_cache['k'], cross_cache['v']
+                out = F.scaled_dot_product_attention(q, k, v)
+                out = out.transpose(1, 2).contiguous().view(B, Tq, d_model)
+                cross_out = self.cross_attn.out_proj(out)
+            else:
+                cache_slot = cross_cache if cross_cache is not None else None
+                mask = None
+                if memory_key_padding_mask is not None:
+                    # (B, Tk) True=pad -> (B,1,1,Tk) aditivo booleano invertido
+                    mask = (~memory_key_padding_mask).unsqueeze(1).unsqueeze(1)
+                cross_out = self.cross_attn(h, memory, attn_mask=mask, cache=cache_slot)
+            x = x + self.drop(cross_out)
+            x = x + self.drop(self.ffn(self.ln3(x)))
+            return x
+
+    class EncoderDecoderBlockDiffusion(nn.Module):
         def __init__(self):
             super().__init__()
             self.tok_emb = nn.Embedding(n_token, d_model)
-            self.pos_emb = SinPosEmb(d_model, max_len)
-            self.drop    = nn.Dropout(dropout)
-            layer = nn.TransformerEncoderLayer(
-                d_model=d_model, nhead=n_head, dim_feedforward=d_ff,
-                dropout=dropout, batch_first=True, activation='gelu')
-            self.encoder = nn.TransformerEncoder(layer, num_layers=n_layer)
-            self.norm    = nn.LayerNorm(d_model)
-            self.head    = nn.Linear(d_model, n_token)
+            self.pos_emb = SinPosEmb()
+            self.drop = nn.Dropout(dropout)
+            self.enc_layers = nn.ModuleList(EncoderLayer() for _ in range(n_layer_enc))
+            self.dec_layers = nn.ModuleList(DecoderLayer() for _ in range(n_layer_dec))
+            self.enc_norm = nn.LayerNorm(d_model)
+            self.dec_norm = nn.LayerNorm(d_model)
+            self.head = nn.Linear(d_model, n_token)
+            self.n_layer_enc, self.n_layer_dec = n_layer_enc, n_layer_dec
 
-        def forward(self, x, key_padding_mask=None):
-            # x: (B, T) ids.  key_padding_mask: (B, T) bool, True = ignorar.
-            h = self.drop(self.tok_emb(x) + self.pos_emb(x.size(1)).unsqueeze(0))
-            h = self.encoder(h, src_key_padding_mask=key_padding_mask)
-            h = self.norm(h)
-            return self.head(h)
+        # ── Modo entrenamiento: secuencia completa de una vez, sin cache ──
+        def forward_train(self, hist_ids, hist_block_causal_mask, dec_ids,
+                           hist_key_padding_mask=None):
+            """
+            hist_ids: (B, Th)              dec_ids: (B, Td)
+            hist_block_causal_mask: (B, 1, Th, Th) booleano, True=permitido
+            Devuelve logits (B, Td, n_token) para las posiciones del decoder.
+            """
+            h = self.drop(self.tok_emb(hist_ids) +
+                           self.pos_emb(0, hist_ids.size(1)).unsqueeze(0))
+            for layer in self.enc_layers:
+                h = layer(h, attn_mask=hist_block_causal_mask)
+            memory = self.enc_norm(h)
 
-    return BlockDiffusionTransformer()
+            d = self.drop(self.tok_emb(dec_ids) +
+                           self.pos_emb(hist_ids.size(1), dec_ids.size(1)).unsqueeze(0))
+            for layer in self.dec_layers:
+                d = layer(d, memory, memory_key_padding_mask=hist_key_padding_mask)
+            d = self.dec_norm(d)
+            return self.head(d)
+
+        # ── Modo generación: procesa SOLO tokens nuevos, extiende el cache ──
+        def encode_incremental(self, new_block_ids, enc_cache, pos_offset):
+            """new_block_ids: (1, L) tokens del compás recién finalizado.
+            enc_cache: lista de dicts {'k':...,'v':...} (uno por capa),
+            se actualiza in-place. Devuelve los estados finales (1, L, D)
+            de ESTE bloque (para añadir a la memoria acumulada)."""
+            h = self.drop(self.tok_emb(new_block_ids) +
+                           self.pos_emb(pos_offset, new_block_ids.size(1)).unsqueeze(0))
+            for i, layer in enumerate(self.enc_layers):
+                h = layer(h, attn_mask=None, cache=enc_cache[i])
+            return self.enc_norm(h)
+
+        def decode_step(self, dec_ids, memory, cross_caches, pos_offset):
+            """dec_ids: (1, Ld) [COND, canvas_ruidoso] del compás actual.
+            memory: (1, Th_total, D) estados acumulados de toda la historia.
+            cross_caches: lista de dicts (uno por capa decoder); en la
+            PRIMERA llamada de un compás deben venir vacíos ({}), así se
+            proyecta y cachea la memoria; en llamadas siguientes del mismo
+            compás (pasos de denoising sucesivos) se reutiliza sin
+            recalcular la proyección K/V de la memoria."""
+            d = self.drop(self.tok_emb(dec_ids) +
+                           self.pos_emb(pos_offset, dec_ids.size(1)).unsqueeze(0))
+            for i, layer in enumerate(self.dec_layers):
+                d = layer(d, memory, cross_cache=cross_caches[i])
+            d = self.dec_norm(d)
+            return self.head(d)
+
+        def new_encoder_cache(self):
+            return [{'k': None, 'v': None} for _ in range(self.n_layer_enc)]
+
+        def new_cross_cache(self):
+            return [{'k': None, 'v': None} for _ in range(self.n_layer_dec)]
+
+    return EncoderDecoderBlockDiffusion()
+
+
+def build_block_causal_mask(block_ids, device):
+    """block_ids: (B, T) LongTensor con el índice de bloque de cada token
+    (los tokens de historia de un mismo compás comparten índice). Devuelve
+    una máscara (B, 1, T, T) booleana: True = la posición i puede atender
+    a la posición j (block_ids[j] <= block_ids[i], es decir: presente y
+    pasado, nunca futuro)."""
+    import torch
+    bi = block_ids.unsqueeze(2)   # (B, T, 1)
+    bj = block_ids.unsqueeze(1)   # (B, 1, T)
+    mask = (bj <= bi).unsqueeze(1)  # (B, 1, T, T)
+    return mask.to(device)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PROCESO DE DIFUSIÓN ENMASCARADA  (forward / schedule / pérdida)
+#  PROCESOS DE DIFUSIÓN: MASKED (MDLM) Y UNIFORM-STATE (UDLM)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def alpha_t(t):
-    """Schedule lineal α_t = 1 - t.  t=0 → limpio, t=1 → todo enmascarado."""
+    """Schedule lineal α_t = 1 - t.  t=0 → limpio, t=1 → todo ruido."""
     return 1.0 - t
 
 
-def forward_mask(canvas, t, mask_id, pad_id, rng):
-    """
-    Aplica el forward process de MDLM a un canvas (lista de ints).
-    Cada token no-PAD se enmascara independientemente con prob. (1 - alpha_t(t)).
-    Los PAD nunca se enmascaran (no aportan señal) pero tampoco cuentan en
-    la pérdida — se excluyen aparte.
-    Devuelve (canvas_ruidoso, mask_positions_bool_list).
-    """
-    noisy, masked = [], []
-    p_mask = 1.0 - alpha_t(t)
+def _canvas_content_ids(word2event):
+    """Ids de tokens que pueden aparecer legítimamente en un canvas (excluye
+    PAD/MASK/NULL_COND y Chord_*, que nunca aparecen en el canvas — el acorde
+    va aparte, como token de condición)."""
+    return [w for w, name in word2event.items()
+            if name.startswith(('Position_', 'Note Velocity_', 'Note On_',
+                                 'Note Duration_', 'Tempo Class_', 'Tempo Value_'))]
+
+
+def forward_mask(canvas, t, mask_id, pad_id, rng, **_ignored):
+    """Forward process de MDLM (absorbing-state): cada token no-PAD se
+    reemplaza por MASK independientemente con prob. (1 - alpha_t(t)).
+    Devuelve (canvas_ruidoso, corrupted_bool_list)."""
+    noisy, corrupted = [], []
+    p = 1.0 - alpha_t(t)
     for w in canvas:
         if w == pad_id:
-            noisy.append(w); masked.append(False)
-        elif rng.random() < p_mask:
-            noisy.append(mask_id); masked.append(True)
+            noisy.append(w); corrupted.append(False)
+        elif rng.random() < p:
+            noisy.append(mask_id); corrupted.append(True)
         else:
-            noisy.append(w); masked.append(False)
-    return noisy, masked
+            noisy.append(w); corrupted.append(False)
+    return noisy, corrupted
+
+
+def forward_uniform(canvas, t, content_ids, pad_id, rng, **_ignored):
+    """Forward process de UDLM (uniform-state): cada token no-PAD se
+    reemplaza por un token ALEATORIO del vocabulario de contenido
+    (nunca hay MASK) independientemente con prob. (1 - alpha_t(t)).
+    Devuelve (canvas_ruidoso, corrupted_bool_list)."""
+    noisy, corrupted = [], []
+    p = 1.0 - alpha_t(t)
+    for w in canvas:
+        if w == pad_id:
+            noisy.append(w); corrupted.append(False)
+        elif rng.random() < p:
+            noisy.append(rng.choice(content_ids)); corrupted.append(True)
+        else:
+            noisy.append(w); corrupted.append(False)
+    return noisy, corrupted
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -976,11 +1217,11 @@ def cmd_train(args):
     import torch.nn as nn
 
     print("═" * 65)
-    print("  REMI DIFFUSION — TRAIN")
+    print("  REMI DIFFUSION v2 — TRAIN")
     print("═" * 65)
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f"  Device: {device}")
+    print(f"  Device: {device}  |  noise_type: {args.noise_type}")
 
     model_dir = Path(args.model_dir); model_dir.mkdir(parents=True, exist_ok=True)
     vocab_path = args.vocab or str(model_dir / 'vocab_chord.json')
@@ -992,6 +1233,7 @@ def cmd_train(args):
     n_token = len(event2word)
     pad_id, mask_id = _sp(word2event, 'PAD'), _sp(word2event, 'MASK')
     null_cond_id = _sp(word2event, 'NULL_COND')
+    content_ids = _canvas_content_ids(word2event)
 
     print(f"\n[1/4] Cargando y tokenizando corpus de {args.data_dir}…")
     all_words = _load_token_files(args.data_dir, event2word, verbose=args.verbose)
@@ -1002,12 +1244,16 @@ def cmd_train(args):
         print("  ERROR: no hay ejemplos de entrenamiento. Revisa --data-dir.")
         sys.exit(1)
 
-    d_model, n_layer, n_head = (256, 4, 4) if args.small else (args.d_model, args.n_layer, args.n_head)
-    print(f"\n[2/4] Construyendo modelo (d_model={d_model}, n_layer={n_layer}, "
-          f"n_head={n_head})…")
-    max_seq = args.canvas_len * (args.history_bars + 1) + args.history_bars + 2
-    model = _build_model(n_token, d_model=d_model, n_layer=n_layer, n_head=n_head,
-                          max_len=max_seq).to(device)
+    if args.small:
+        d_model, n_layer_enc, n_layer_dec, n_head = 256, 3, 1, 4
+    else:
+        d_model, n_layer_enc, n_layer_dec, n_head = (
+            args.d_model, args.n_layer_enc, args.n_layer_dec, args.n_head)
+    print(f"\n[2/4] Construyendo modelo encoder-decoder (d_model={d_model}, "
+          f"n_layer_enc={n_layer_enc}, n_layer_dec={n_layer_dec}, n_head={n_head})…")
+    model = _build_model(n_token, d_model=d_model, n_layer_enc=n_layer_enc,
+                          n_layer_dec=n_layer_dec, n_head=n_head,
+                          max_len=MAX_POS_BUFFER).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"  Parámetros: {n_params / 1e6:.1f}M")
 
@@ -1025,58 +1271,83 @@ def cmd_train(args):
         print(f"  Reanudado desde época {start_epoch}")
 
     cfg = {
-        'n_token': n_token, 'd_model': d_model, 'n_layer': n_layer, 'n_head': n_head,
+        'arch': 'v2', 'n_token': n_token, 'd_model': d_model,
+        'n_layer_enc': n_layer_enc, 'n_layer_dec': n_layer_dec, 'n_head': n_head,
         'canvas_len': args.canvas_len, 'history_bars': args.history_bars,
-        'vocab': os.path.abspath(vocab_path), 'max_seq': max_seq,
+        'vocab': os.path.abspath(vocab_path), 'noise_type': args.noise_type,
     }
     with open(model_dir / 'model_config.json', 'w') as f:
         json.dump(cfg, f, indent=2)
 
     print(f"\n[3/4] Entrenando ({args.epochs} épocas máx., patience={args.patience})…")
     rng = random.Random(args.seed)
+    forward_noise = forward_mask if args.noise_type == 'mask' else forward_uniform
+    noise_extra = dict(mask_id=mask_id) if args.noise_type == 'mask' else dict(content_ids=content_ids)
 
     def sample_batch(bs):
-        """Construye un batch: para cada ejemplo, elige un compás objetivo
-        al azar, toma hasta --history-bars compases previos como historia
-        limpia, aplica forward-masking al canvas objetivo con t~U(0,1), y
-        aplica cond-dropout (D-CFG) sobre el token de condición."""
-        seqs, targets, loss_masks, pad_masks = [], [], [], []
+        """Construye un batch: para cada ejemplo, elige un compás objetivo al
+        azar, toma hasta --history-bars compases previos como historia limpia
+        (con su propio índice de bloque, para la máscara block-causal del
+        encoder), aplica el forward process (mask o uniform) al canvas
+        objetivo con t~U(0,1), y aplica cond-dropout (D-CFG)."""
+        hist_seqs, hist_blockids, dec_seqs, dec_targets, dec_lossmasks, ts = \
+            [], [], [], [], [], []
         for _ in range(bs):
             blocks = examples[rng.randrange(len(examples))]
             i = rng.randrange(len(blocks))
             hist_blocks = blocks[max(0, i - args.history_bars):i]
-            hist_tokens = []
-            for hb in hist_blocks:
-                hist_tokens.append(hb['cond'] if hb['cond'] is not None else null_cond_id)
-                hist_tokens.extend(hb['canvas'])
+
+            h_tokens, h_blockids = [], []
+            for bidx, hb in enumerate(hist_blocks):
+                cond_h = hb['cond'] if hb['cond'] is not None else null_cond_id
+                h_tokens.append(cond_h); h_blockids.append(bidx)
+                h_tokens.extend(hb['canvas']); h_blockids.extend([bidx] * len(hb['canvas']))
+            if not h_tokens:  # sin historia (primer compás de la pieza): 1 token neutro
+                h_tokens, h_blockids = [null_cond_id], [0]
 
             cond = blocks[i]['cond'] if blocks[i]['cond'] is not None else null_cond_id
             if rng.random() < args.cond_dropout:
                 cond = null_cond_id
 
-            t = rng.random() * 0.999 + 0.001  # evitar t=0 exacto (1/t indefinido)
-            noisy_canvas, mask_flags = forward_mask(
-                blocks[i]['canvas'], t, mask_id, pad_id, rng)
+            t = rng.random() * 0.999 + 0.001
+            noisy_canvas, corrupted = forward_noise(
+                blocks[i]['canvas'], t, pad_id=pad_id, rng=rng, **noise_extra)
 
-            seq = hist_tokens + [cond] + noisy_canvas
-            tgt = [pad_id] * len(hist_tokens) + [cond] + blocks[i]['canvas']
-            lm  = [False] * len(hist_tokens) + [False] + mask_flags
-            seqs.append(seq); targets.append(tgt); loss_masks.append((lm, t))
+            dec_seq = [cond] + noisy_canvas
+            dec_tgt = [cond] + blocks[i]['canvas']
+            dec_lm  = [False] + corrupted
 
-        maxlen = max(len(s) for s in seqs)
-        x  = torch.full((bs, maxlen), pad_id, dtype=torch.long)
-        y  = torch.full((bs, maxlen), pad_id, dtype=torch.long)
-        lm = torch.zeros((bs, maxlen), dtype=torch.bool)
-        pm = torch.ones((bs, maxlen), dtype=torch.bool)  # True = padding (ignorar)
-        ts = torch.ones((bs,), dtype=torch.float)
-        for b, (seq, tgt, (mflags, t)) in enumerate(zip(seqs, targets, loss_masks)):
-            L = len(seq)
-            x[b, :L] = torch.tensor(seq)
-            y[b, :L] = torch.tensor(tgt)
-            lm[b, :L] = torch.tensor(mflags)
-            pm[b, :L] = False
-            ts[b] = t
-        return x.to(device), y.to(device), lm.to(device), pm.to(device), ts.to(device)
+            hist_seqs.append(h_tokens); hist_blockids.append(h_blockids)
+            dec_seqs.append(dec_seq); dec_targets.append(dec_tgt)
+            dec_lossmasks.append(dec_lm); ts.append(t)
+
+        Hmax = max(len(s) for s in hist_seqs)
+        Dmax = max(len(s) for s in dec_seqs)
+        hist_x = torch.full((bs, Hmax), pad_id, dtype=torch.long)
+        hist_bid = torch.full((bs, Hmax), -1, dtype=torch.long)
+        hist_pad_mask = torch.ones((bs, Hmax), dtype=torch.bool)  # True = pad
+        dec_x = torch.full((bs, Dmax), pad_id, dtype=torch.long)
+        dec_y = torch.full((bs, Dmax), pad_id, dtype=torch.long)
+        dec_lm = torch.zeros((bs, Dmax), dtype=torch.bool)
+        ts_t = torch.ones((bs,), dtype=torch.float)
+        for b in range(bs):
+            Lh = len(hist_seqs[b])
+            hist_x[b, :Lh] = torch.tensor(hist_seqs[b])
+            hist_bid[b, :Lh] = torch.tensor(hist_blockids[b])
+            hist_pad_mask[b, :Lh] = False
+            Ld = len(dec_seqs[b])
+            dec_x[b, :Ld] = torch.tensor(dec_seqs[b])
+            dec_y[b, :Ld] = torch.tensor(dec_targets[b])
+            dec_lm[b, :Ld] = torch.tensor(dec_lossmasks[b])
+            ts_t[b] = ts[b]
+        # Posiciones de padding del historial: nunca deben ser atendibles ni
+        # atender (se marcan con block_id muy alto para que la máscara
+        # block-causal las excluya de facto; ya están fuera de rango del
+        # resto igualmente al ser pad_id, pero por seguridad las aislamos).
+        hist_bid[hist_pad_mask] = 10**6
+        block_mask = build_block_causal_mask(hist_bid, device)
+        return (hist_x.to(device), block_mask, dec_x.to(device), dec_y.to(device),
+                dec_lm.to(device), ts_t.to(device), hist_pad_mask.to(device))
 
     steps_per_epoch = max(1, len(examples) // args.batch_size)
     ce = nn.CrossEntropyLoss(reduction='none')
@@ -1086,18 +1357,16 @@ def cmd_train(args):
         epoch_loss = 0.0
         t0 = time.time()
         for step in range(steps_per_epoch):
-            x, y, lm, pm, ts = sample_batch(args.batch_size)
-            logits = model(x, key_padding_mask=pm)  # (B, T, V)
+            hist_x, block_mask, dec_x, dec_y, dec_lm, ts_t, hist_pad = sample_batch(args.batch_size)
+            logits = model.forward_train(hist_x, block_mask, dec_x,
+                                          hist_key_padding_mask=hist_pad)  # True=PAD
             flat_logits = logits.reshape(-1, n_token)
-            flat_y      = y.reshape(-1)
-            flat_lm     = lm.reshape(-1)
+            flat_y      = dec_y.reshape(-1)
+            flat_lm     = dec_lm.reshape(-1)
             if flat_lm.sum() == 0:
                 continue
             losses = ce(flat_logits[flat_lm], flat_y[flat_lm])
-            # Ponderación 1/t del ELBO simplificado (por ejemplo del batch)
-            t_per_tok = ts.unsqueeze(1).expand_as(lm)[lm.bool()] if False else None
-            # (aplicamos 1/t a nivel de ejemplo, expandido por posiciones enmascaradas)
-            t_expand = ts.view(-1, 1).expand(lm.size(0), lm.size(1)).reshape(-1)[flat_lm]
+            t_expand = ts_t.view(-1, 1).expand_as(dec_lm).reshape(-1)[flat_lm]
             weighted = losses / t_expand.clamp(min=1e-3)
             loss = weighted.mean()
 
@@ -1141,8 +1410,16 @@ def _load_model_for_inference(model_dir, device):
         sys.exit(1)
     with open(cfg_path) as f:
         cfg = json.load(f)
-    model = _build_model(cfg['n_token'], d_model=cfg['d_model'], n_layer=cfg['n_layer'],
-                          n_head=cfg['n_head'], max_len=cfg['max_seq']).to(device)
+    if cfg.get('arch') != 'v2':
+        print(f"  ERROR: '{model_dir}' contiene un modelo v1 (arquitectura antigua). "
+              f"Usa remi_diffusion.py (v1) para este modelo, o re-entrena con v2.")
+        sys.exit(1)
+    # Buffer de posiciones generoso: la generación puede recorrer muchos más
+    # tokens que los vistos durante una ventana de entrenamiento; el embedding
+    # sinusoidal (sin parámetros aprendidos) es válido para cualquier longitud.
+    model = _build_model(cfg['n_token'], d_model=cfg['d_model'],
+                          n_layer_enc=cfg['n_layer_enc'], n_layer_dec=cfg['n_layer_dec'],
+                          n_head=cfg['n_head'], max_len=MAX_POS_BUFFER).to(device)
     ck = torch.load(model_dir / 'model.pt', map_location=device)
     model.load_state_dict(ck['model'])
     model.eval()
@@ -1162,39 +1439,33 @@ def _parse_chords(chord_str, event2word):
     return ids
 
 
-def sample_block(model, history_tokens, cond_id, null_cond_id, canvas_len,
-                  mask_id, pad_id, n_token, device, steps=20, guidance_scale=3.0,
-                  remask_max=0.15, temperature=1.0, topk=0, rng=None):
-    """
-    Genera un compás (canvas_len tokens) mediante denoising iterativo con
-    remasking (ReMDM) y D-CFG.  Devuelve la lista final de ids del canvas.
-    """
+def sample_block_mask(model, memory, cond_id, null_cond_id, canvas_len, pad_id, mask_id,
+                       n_token, device, pos_offset, steps, guidance_scale, remask_max,
+                       temperature, topk, rng):
+    """Sampler MDLM (absorbing-state): denoising iterativo con remasking
+    (ReMDM) + D-CFG, sobre la memoria (ya codificada) de la historia."""
     import torch
     import torch.nn.functional as F
 
-    rng = rng or random.Random()
     canvas = [mask_id] * canvas_len
     is_masked = [True] * canvas_len
+    cross_cache = model.new_cross_cache()
 
-    def build_seq(cond):
-        return history_tokens + [cond] + canvas
-
-    hist_len = len(history_tokens)
+    def dec_logits(cond):
+        dec = torch.tensor([[cond] + canvas], device=device)
+        with torch.no_grad():
+            return model.decode_step(dec, memory, cross_cache, pos_offset)[0, 1:]
 
     for step in range(steps):
-        t = 1.0 - step / steps           # nivel de ruido actual (antes de este paso)
-        s = 1.0 - (step + 1) / steps     # nivel de ruido tras este paso
-        s = max(s, 0.0)
+        t = 1.0 - step / steps
+        s = max(1.0 - (step + 1) / steps, 0.0)
 
-        seq_cond   = torch.tensor([build_seq(cond_id)], device=device)
-        seq_uncond = torch.tensor([build_seq(null_cond_id)], device=device)
-        with torch.no_grad():
-            logits_cond   = model(seq_cond)[0, hist_len + 1:]    # (canvas_len, V)
-            if guidance_scale != 0:
-                logits_uncond = model(seq_uncond)[0, hist_len + 1:]
-                logits = logits_uncond + guidance_scale * (logits_cond - logits_uncond)
-            else:
-                logits = logits_cond
+        logits_cond = dec_logits(cond_id)
+        if guidance_scale != 0:
+            logits_uncond = dec_logits(null_cond_id)
+            logits = logits_uncond + guidance_scale * (logits_cond - logits_uncond)
+        else:
+            logits = logits_cond
 
         logits = logits / max(temperature, 1e-4)
         if topk and topk > 0:
@@ -1205,46 +1476,99 @@ def sample_block(model, history_tokens, cond_id, null_cond_id, canvas_len,
         probs = F.softmax(logits, dim=-1)
         x0_pred = torch.multinomial(probs, num_samples=1).squeeze(-1).tolist()
 
-        # Reverse process: des-enmascarar cada posición aún enmascarada con
-        # prob. (alpha_s - alpha_t) / (1 - alpha_t)  [MDLM]
         a_t, a_s = alpha_t(t), alpha_t(s)
         denom = max(1.0 - a_t, 1e-6)
         p_unmask = (a_s - a_t) / denom if a_t < 1.0 else 1.0
         p_unmask = min(max(p_unmask, 0.0), 1.0)
-
-        # Fracción de remasking decreciente (ReMDM): más agresiva al
-        # principio, se apaga cerca del final para converger.
         p_remask = remask_max * s
 
         for j in range(canvas_len):
             if canvas[j] == pad_id and not is_masked[j]:
-                continue  # PAD original, nunca se toca
+                continue
             if is_masked[j]:
                 if rng.random() < p_unmask or step == steps - 1:
-                    canvas[j] = x0_pred[j]
-                    is_masked[j] = False
+                    canvas[j] = x0_pred[j]; is_masked[j] = False
             else:
                 if rng.random() < p_remask:
-                    canvas[j] = mask_id
-                    is_masked[j] = True
+                    canvas[j] = mask_id; is_masked[j] = True
 
-    # Barrido final: cualquier MASK residual se rellena con la predicción x0
     if any(is_masked):
-        seq_cond = torch.tensor([build_seq(cond_id)], device=device)
-        with torch.no_grad():
-            logits = model(seq_cond)[0, hist_len + 1:]
-        preds = logits.argmax(dim=-1).tolist()
+        preds = dec_logits(cond_id).argmax(dim=-1).tolist()
         for j in range(canvas_len):
             if is_masked[j]:
                 canvas[j] = preds[j]
+    return canvas
 
+
+def sample_block_uniform(model, memory, cond_id, null_cond_id, canvas_len, pad_id,
+                          content_ids, n_token, device, pos_offset, steps, guidance_scale,
+                          remask_max, temperature, topk, rng):
+    """Sampler UDLM (uniform-state): el canvas nunca contiene [MASK]. Cada
+    posición no comprometida recibe un token aleatorio fresco en cada paso;
+    con probabilidad p_commit se fija a la predicción x0 del modelo (deja de
+    tocarse); posiciones ya comprometidas pueden "renoisarse" (volver a
+    aleatorizarse) para permitir corrección de errores — igual que el
+    esquema descrito para Gemma Diffusion en el artículo."""
+    import torch
+    import torch.nn.functional as F
+
+    canvas = [rng.choice(content_ids) for _ in range(canvas_len)]
+    committed = [False] * canvas_len
+    cross_cache = model.new_cross_cache()
+
+    def dec_logits(cond):
+        dec = torch.tensor([[cond] + canvas], device=device)
+        with torch.no_grad():
+            return model.decode_step(dec, memory, cross_cache, pos_offset)[0, 1:]
+
+    for step in range(steps):
+        t = 1.0 - step / steps
+        s = max(1.0 - (step + 1) / steps, 0.0)
+
+        logits_cond = dec_logits(cond_id)
+        if guidance_scale != 0:
+            logits_uncond = dec_logits(null_cond_id)
+            logits = logits_uncond + guidance_scale * (logits_cond - logits_uncond)
+        else:
+            logits = logits_cond
+
+        logits = logits / max(temperature, 1e-4)
+        if topk and topk > 0:
+            topv, topi = torch.topk(logits, k=min(topk, n_token), dim=-1)
+            filt = torch.full_like(logits, float('-inf'))
+            filt.scatter_(-1, topi, topv)
+            logits = filt
+        probs = F.softmax(logits, dim=-1)
+        x0_pred = torch.multinomial(probs, num_samples=1).squeeze(-1).tolist()
+
+        a_t, a_s = alpha_t(t), alpha_t(s)
+        denom = max(1.0 - a_t, 1e-6)
+        p_commit = (a_s - a_t) / denom if a_t < 1.0 else 1.0
+        p_commit = min(max(p_commit, 0.0), 1.0)
+        p_renoise = remask_max * s
+
+        for j in range(canvas_len):
+            if not committed[j]:
+                if rng.random() < p_commit or step == steps - 1:
+                    canvas[j] = x0_pred[j]; committed[j] = True
+                else:
+                    canvas[j] = rng.choice(content_ids)
+            else:
+                if rng.random() < p_renoise:
+                    canvas[j] = rng.choice(content_ids); committed[j] = False
+
+    if not all(committed):
+        preds = dec_logits(cond_id).argmax(dim=-1).tolist()
+        for j in range(canvas_len):
+            if not committed[j]:
+                canvas[j] = preds[j]
     return canvas
 
 
 def _generate_common(args, prompt_blocks=None):
     import torch
 
-    torch.manual_seed(args.seed)  # sample_block usa torch.multinomial (RNG global)
+    torch.manual_seed(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model, cfg = _load_model_for_inference(args.model_dir, device)
     event2word, word2event = load_vocab(_resolve_vocab_path(cfg, args.model_dir))
@@ -1253,6 +1577,8 @@ def _generate_common(args, prompt_blocks=None):
     canvas_len   = cfg['canvas_len']
     history_bars = cfg['history_bars']
     n_token      = cfg['n_token']
+    noise_type   = cfg.get('noise_type', 'uniform')
+    content_ids  = _canvas_content_ids(word2event)
 
     if args.chords:
         try:
@@ -1264,23 +1590,45 @@ def _generate_common(args, prompt_blocks=None):
         chord_ids = [null_cond_id]
     rng = random.Random(args.seed)
 
+    max_hist_tokens = max(history_bars, 1) * (canvas_len + 1)
+    enc_cache = model.new_encoder_cache()
+    state = {'memory': None, 'pos': 0}
+
+    def add_to_history(tokens_1d):
+        toks = torch.tensor([tokens_1d], device=device)
+        with torch.no_grad():
+            out = model.encode_incremental(toks, enc_cache, state['pos'])
+        state['pos'] += toks.size(1)
+        state['memory'] = out if state['memory'] is None else torch.cat([state['memory'], out], dim=1)
+        if state['memory'].size(1) > max_hist_tokens:
+            excess = state['memory'].size(1) - max_hist_tokens
+            state['memory'] = state['memory'][:, excess:]
+            for lc in enc_cache:
+                lc['k'] = lc['k'][:, :, excess:, :]
+                lc['v'] = lc['v'][:, :, excess:, :]
+
     blocks = list(prompt_blocks) if prompt_blocks else []
     n_prompt_bars = len(blocks)
+    for hb in (blocks[-history_bars:] if history_bars > 0 else []):
+        cond_h = hb['cond'] if hb['cond'] is not None else null_cond_id
+        add_to_history([cond_h] + list(hb['canvas']))
+    if state['memory'] is None:
+        add_to_history([null_cond_id])  # semilla neutra, igual que en entrenamiento
 
     for i in range(args.bars):
         cond_id = chord_ids[i % len(chord_ids)]
-        hist_blocks = blocks[-history_bars:] if history_bars > 0 else []
-        history_tokens = []
-        for hb in hist_blocks:
-            history_tokens.append(hb['cond'] if hb['cond'] is not None else null_cond_id)
-            history_tokens.extend(hb['canvas'])
+        pos_for_block = state['pos']
 
-        canvas = sample_block(
-            model, history_tokens, cond_id, null_cond_id, canvas_len,
-            mask_id, pad_id, n_token, device,
-            steps=args.steps, guidance_scale=args.guidance_scale,
-            remask_max=args.remask_max, temperature=args.temperature,
-            topk=args.topk, rng=rng)
+        if noise_type == 'mask':
+            canvas = sample_block_mask(
+                model, state['memory'], cond_id, null_cond_id, canvas_len, pad_id, mask_id,
+                n_token, device, pos_for_block, args.steps, args.guidance_scale,
+                args.remask_max, args.temperature, args.topk, rng)
+        else:
+            canvas = sample_block_uniform(
+                model, state['memory'], cond_id, null_cond_id, canvas_len, pad_id,
+                content_ids, n_token, device, pos_for_block, args.steps,
+                args.guidance_scale, args.remask_max, args.temperature, args.topk, rng)
 
         if args.repair_grammar:
             raw_used = sum(1 for w in canvas if w != pad_id)
@@ -1293,8 +1641,9 @@ def _generate_common(args, prompt_blocks=None):
             tag = ""
 
         blocks.append({'cond': cond_id, 'canvas': canvas})
+        add_to_history([cond_id] + list(canvas))
         print(f"  Compás {i+1}/{args.bars} generado (acorde objetivo: "
-              f"{word2event[cond_id]}){tag}")
+              f"{word2event[cond_id]}, noise_type={noise_type}){tag}")
 
     words = blocks_to_words(blocks, word2event)
     return words, word2event, n_prompt_bars
@@ -1302,7 +1651,7 @@ def _generate_common(args, prompt_blocks=None):
 
 def cmd_generate(args):
     print("═" * 65)
-    print("  REMI DIFFUSION — GENERATE")
+    print("  REMI DIFFUSION v2 — GENERATE")
     print("═" * 65)
     words, word2event, _ = _generate_common(args)
     output = args.output or 'generated.mid'
@@ -1313,9 +1662,8 @@ def cmd_generate(args):
 
 def cmd_continue(args):
     print("═" * 65)
-    print("  REMI DIFFUSION — CONTINUE")
+    print("  REMI DIFFUSION v2 — CONTINUE")
     print("═" * 65)
-    device = 'cuda'
     import torch
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model, cfg = _load_model_for_inference(args.model_dir, device)
@@ -1335,7 +1683,7 @@ def cmd_continue(args):
 
 def cmd_inspect(args):
     print("═" * 65)
-    print("  REMI DIFFUSION — INSPECT")
+    print("  REMI DIFFUSION v2 — INSPECT")
     print("═" * 65)
     vocab_path = args.vocab or 'vocab_chord.json'
     if os.path.exists(vocab_path):
@@ -1374,14 +1722,15 @@ def build_parser():
     p.set_defaults(func=cmd_convert)
 
     # ── train ────────────────────────────────────────────────────────────────
-    p = sub.add_parser('train', help='Entrenar el Transformer de difusión enmascarada',
+    p = sub.add_parser('train', help='Entrenar el modelo encoder-decoder de difusión por bloques',
                         formatter_class=argparse.RawDescriptionHelpFormatter,
                         description=textwrap.dedent("""\
-                            Entrena el modelo de block diffusion sobre un corpus de MIDIs.
-                            Cada paso: elige una pieza y un compás al azar, arma la historia
-                            (compases previos, limpios) + condición de acorde (con dropout
-                            para D-CFG) + canvas objetivo enmascarado con t~U(0,1); pérdida
-                            de cross-entropy ponderada por 1/t (ELBO simplificado de MDLM).
+                            Entrena el modelo encoder-decoder de block diffusion (v2) sobre un
+                            corpus de MIDIs. Cada paso: elige una pieza y un compás al azar,
+                            arma la historia (compases previos, limpios, con máscara block-
+                            causal en el encoder) + condición de acorde (con dropout para
+                            D-CFG) + canvas objetivo corrompido con t~U(0,1) (mask o uniform
+                            según --noise-type); pérdida de cross-entropy ponderada por 1/t.
                         """))
     p.add_argument('data_dir', help='Directorio con MIDIs de entrenamiento')
     p.add_argument('--model-dir', required=True, dest='model_dir')
@@ -1389,8 +1738,15 @@ def build_parser():
     p.add_argument('--canvas-len', type=int, default=CANVAS_LEN_DEFAULT, dest='canvas_len')
     p.add_argument('--history-bars', type=int, default=HISTORY_BARS_DEFAULT, dest='history_bars')
     p.add_argument('--d-model', type=int, default=512, dest='d_model')
-    p.add_argument('--n-layer', type=int, default=8, dest='n_layer')
+    p.add_argument('--n-layer-enc', type=int, default=6, dest='n_layer_enc',
+                   help='Capas del encoder (pesado, procesa la historia) [6]')
+    p.add_argument('--n-layer-dec', type=int, default=2, dest='n_layer_dec',
+                   help='Capas del decoder (ligero, denoisa el compás actual) [2]')
     p.add_argument('--n-head', type=int, default=8, dest='n_head')
+    p.add_argument('--noise-type', choices=['mask', 'uniform'], default='uniform',
+                   dest='noise_type',
+                   help="'mask'=MDLM (como v1), 'uniform'=UDLM (mejor "
+                        "controlabilidad según el artículo) [uniform]")
     p.add_argument('--cond-dropout', type=float, default=0.15, dest='cond_dropout',
                    help='Prob. de sustituir el acorde por NULL_COND (CFG training) [0.15]')
     p.add_argument('--epochs', type=int, default=300)
@@ -1399,7 +1755,7 @@ def build_parser():
     p.add_argument('--patience', type=int, default=30)
     p.add_argument('--resume', action='store_true')
     p.add_argument('--small', action='store_true',
-                   help='Modelo reducido: 4 capas, d=256 (CPU-friendly)')
+                   help='Modelo reducido: enc=3/dec=1 capas, d=256 (CPU-friendly)')
     p.add_argument('--seed', type=int, default=42)
     p.add_argument('--verbose', action='store_true')
     p.set_defaults(func=cmd_train)

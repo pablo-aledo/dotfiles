@@ -1,113 +1,179 @@
 #!/usr/bin/env python3
 r"""
 cycle_gan_style_transfer.py — Transferencia de estilo bidireccional entre dos
-corpus MIDI, inspirada en CycleGAN y sin redes neuronales
-(versión 2.0: espacio de rasgos = piano roll multi-rol aplanado + PCA opcional).
+corpus MIDI con CycleGAN: backend simbólico (sin GPU) y backend neural (torch)
+(versión 3.1; la descripción del parser aún dice «v3.0»).
 
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
 ────────────────────────────────────────────────────────────────────────────
-CycleGAN aprende dos mapeos, G: A→B y F: B→A, y dos discriminadores D_A y D_B,
-con una pérdida de ciclo que obliga a F(G(a)) ≈ a y G(F(b)) ≈ b. Aquí ese
-marco se adapta al dominio MIDI sin redes neuronales:
+Implementa el marco CycleGAN (Zhu et al., 2017) sobre MIDI en dos modos que se
+eligen en tiempo de ejecución con --backend:
 
-  · G (estilo A → estilo B) y F (B → A): regresión Ridge o KNN sobre piano
-    rolls aplanados (con PCA opcional), aprendidas por iteraciones alternadas.
-  · D_A y D_B: distancia de Mahalanobis al centroide de cada dominio.
-  · Pérdida de ciclo   ‖F(G(a)) − a‖₂ (y la simétrica en B).
-  · Pérdida de identidad ‖G(b) − b‖₂ (y ‖F(a) − a‖₂), que evita que el mapeo
-    altere lo que ya pertenece al dominio destino.
+SIMBÓLICO (defecto, sin GPU)
+  G, F    Regresión Ridge o KNN en el espacio de piano roll centroide (centroide
+          temporal por rol, opcionalmente reducido con PCA).
+  D_A, D_B  Distancia de Mahalanobis al centroide de cada corpus.
+  Entrenamiento iterativo alternado con pares de vecinos más cercanos y
+  refinamiento con datos pseudo-ciclados. Modelo en un único .pkl.
 
-Cambio respecto a v1: en v1 el espacio de rasgos era un vector de 22
-estadísticas (DNA comprimido); en v2 es el piano roll, que conserva la
-estructura temporal concreta (qué suena en qué posición del compás) en vez de
-promedios globales.
+NEURAL (requiere torch)
+  G_A2B, G_B2A  ResNet de N bloques (defecto 9):
+                Stem(conv7+IN+ReLU) → Down×2 → ResBlock×N → Up×2 → Head(conv7+σ);
+                ResBlock = ReflectionPad + Conv + IN + ReLU + Dropout(0.05) + skip.
+  D_A, D_B      PatchGAN de 4 capas (campo receptivo ~70×70).
+  Pérdida       LSGAN (MSE contra 1/0) + λ_cycle·L1 + λ_identity·L1.
+  Estabilización: ReplayBuffer de 50 muestras para el discriminador; LR con
+  decaimiento lineal en la segunda mitad; parada temprana y checkpoint del mejor
+  val_cycle. Modelo en model_config.json + checkpoint.pt / best_model.pt.
 
-Representación: cada MIDI se convierte a un roll (n_compases, resolución,
-n_pitch) por rol (melody, counterpoint, accompaniment, bass, percussion). Se
-promedia sobre los compases (centroide temporal, por rol), se concatenan los
-roles y se aplana a un vector de n_roles × resolución × n_pitch dimensiones,
-reducible con PCA a --pca-dim. Resolución por defecto 48 ticks por compás;
-rango de pitch por defecto 128 (completo), o N notas centradas en Do central.
+DATOS (ambos backends)
+  MIDI → RoleAssigner → PianoRollConverter → rolls por rol. Cinco roles:
+  melody, counterpoint, accompaniment, bass, percussion. Resolución configurable
+  (defecto 96 ticks por compás). Rango de pitch recortable, centrado en Do
+  central (MIDI 60).
 
-Generación: el vector transformado se proyecta de vuelta a parámetros DNA
-(densidad rítmica, registro, complejidad armónica…) y con ellos se regenera una
-pieza completa a partir de la melodía original, mezclada según --intensity.
+GENERACIÓN (simbólico)
+  El vector transformado se proyecta de vuelta a parámetros DNA mediante
+  roll_vector_to_dna_overrides (densidad rítmica, registro, complejidad
+  armónica, tensión por pitch-classes disonantes). La melodía original se
+  escala, se ajusta a la nueva tonalidad y se mezcla con melodía generada según
+  --intensity. Pipeline completo: melodía + acompañamiento + bajo + contrapunto
+  + percusión + ornamentación + humanización. El neural devuelve directamente
+  el roll generado, binarizado por umbral y convertido a MIDI.
 
 ────────────────────────────────────────────────────────────────────────────
 Modos de uso (subcomandos)
 ────────────────────────────────────────────────────────────────────────────
-  train      Aprende G y F desde dos carpetas de MIDIs y guarda el modelo (.pkl).
-  transform  Aplica G (AtoB) o F (BtoA) a un MIDI y genera un MIDI nuevo, con
-             el vector interpolado entre original y transformado según
-             --intensity (0 = sin cambio, 1 = transformación total).
-  cycle      Aplica G y luego F al mismo MIDI, escribe ambos MIDIs
-             intermedios e informa de la pérdida de ciclo en el espacio de rasgos.
-  analyze    Sitúa un MIDI entre los dos dominios: distancia y probabilidad de
-             pertenencia a A y B, posición relativa (% A / % B), los 10
-             primeros componentes del vector (original, A→B y B→A) y la pérdida
-             de ciclo puntual.
+  prepare       MIDI corpus → .npz (solo para --backend neural), en paralelo con
+                ThreadPoolExecutor.
+  train         Aprende G y F desde dos corpus: MIDIs directos (simbólico) o
+                carpetas de .npz (neural).
+  transform     Aplica G (AtoB) o F (BtoA) a un MIDI. El simbólico genera un MIDI
+                completo vía DNA; el neural devuelve un roll directo.
+  cycle         Aplica G y luego F al mismo MIDI, genera ambos MIDIs
+                intermedios y reporta ‖F(G(a)) − a‖₂ en el espacio de rasgos.
+                Sin midi_dna_unified solo mide la pérdida de ciclo y las
+                posiciones D_A/D_B, sin generar MIDI.
+  analyze       Posición de un MIDI en el espacio A/B: distancias D_A/D_B,
+                probabilidades de pertenencia, pérdida de ciclo puntual y los
+                10 primeros componentes del vector transformado.
+  style-corpus  Aplica el generador a todo un corpus y reporta la densidad media
+                de activación; detecta colapso de modo (> 0.3) o falta de
+                convergencia (< 0.005). Guarda un JSON con estadísticas.
+  round-trip    MIDI → piano roll → MIDI sin modelo: diagnóstico del parser
+                antes de entrenar. Acepta la config de un model_dir si existe.
+  inspect       Inspecciona .npz (formas, densidad por rol) y/o el historial de
+                pérdidas (history.json) y la config (model_config.json) de un
+                entrenamiento neural.
 
 ────────────────────────────────────────────────────────────────────────────
 Entradas y salidas
 ────────────────────────────────────────────────────────────────────────────
-  train      Entrada: --domain-a y --domain-b (carpetas de MIDIs).
-             Salida : modelo .pkl en --model (defecto cycle_gan.pkl) y pérdidas
-             finales de ciclo e identidad de ambos mapeos.
-  transform  Entrada: un MIDI y --model. Salida: --output (defecto
-             <entrada>_cgan_<dirección>.mid); con --export-fingerprint, además
-             el fingerprint JSON del resultado. Informa de D_A/D_B del resultado.
-  cycle      Entrada: un MIDI y --model. Salida: --output-ab (defecto
-             <entrada>_ab.mid) y --output-aba (defecto <entrada>_aba.mid).
-  analyze    Entrada: un MIDI y --model. Salida: informe por consola.
+  Simbólico : train escribe el modelo en --model (defecto cycle_gan_v3.pkl);
+              transform, cycle, analyze y style-corpus lo leen con --model.
+  Neural    : train escribe en --model-dir (defecto model_neural) los ficheros
+              model_config.json (hiperparámetros y config de datos),
+              checkpoint.pt (último, para --resume), best_model.pt (mejor
+              val_cycle) e history.json (pérdidas por época); transform y
+              style-corpus lo leen con --model-dir.
+  transform : MIDI de salida en --output (defecto <entrada>_cganv3_…); con
+              --export-fingerprint (simbólico), además el fingerprint DNA.
+  cycle     : <entrada>_ab.mid y <entrada>_aba.mid (o --output-ab / --output-aba).
+  style-corpus : JSON de estadísticas (defecto corpus_stats_….json).
+  round-trip: MIDI reconstruido (defecto roundtrip.mid).
 
 ────────────────────────────────────────────────────────────────────────────
 Opciones
 ────────────────────────────────────────────────────────────────────────────
-  train
-    --domain-a DIR         Carpeta con MIDIs del dominio A (obligatorio).
-    --domain-b DIR         Carpeta con MIDIs del dominio B (obligatorio).
-    --model FILE           Modelo a guardar (defecto cycle_gan.pkl).
-    --resolution N         Ticks por compás (defecto 48).
-    --pitch-range N        Notas MIDI activas centradas en Do central (defecto
-                           128 = completo).
-    --disable-roles ROL…   Roles a ignorar: melody, counterpoint, accompaniment,
-                           bass, percussion.
-    --pca-dim N            Reducir con PCA a N dimensiones (0 = sin PCA).
-    --solver S             ridge (defecto) | knn.
-    --alpha F              Regularización de Ridge (defecto 1.0).
-    --k-neighbors N        Vecinos del solver KNN (defecto 5).
-    --lambda-cycle F       Peso de la pérdida de ciclo (defecto 10.0).
-    --lambda-identity F    Peso de la pérdida de identidad (defecto 5.0).
-    --iters N              Iteraciones de refinamiento alternado (defecto 100).
+  prepare
+    --input-dir DIR        Carpeta con MIDIs fuente (obligatorio).
+    --output-dir DIR       Carpeta destino de .npz (obligatorio).
+    --resolution N         Ticks por compás (defecto 96).
+    --window-bars N        Compases por ventana (defecto 4).
+    --disable-roles ROL…   Excluir roles del roll.
+    --pitch-range N        Notas centradas en MIDI 60 (p. ej. 48, 64, 128).
+  train — comunes
+    --backend B            symbolic (defecto) | neural.
+    --domain-a DIR         Dominio A: carpeta de MIDIs (simbólico) o de .npz
+                           (neural).     --domain-b DIR   Ídem para el dominio B.
+    --lambda-cycle F       Peso de ciclo (defecto 10.0).
+    --lambda-identity F    Peso de identidad (defecto 5.0).
     --verbose              Muestra las pérdidas por iteración.
+  train — simbólico
+    --model FILE           Salida .pkl (defecto cycle_gan_v3.pkl).
+    --resolution N         Ticks por compás (defecto 96).
+    --pitch-range N        Notas en el roll (defecto 128).
+    --disable-roles ROL…   Excluir roles.
+    --pca-dim N            Reducción PCA (0 = sin PCA, defecto). Si hay menos
+                           muestras que componentes se recorta con un AVISO.
+    --solver S             ridge (defecto) | knn.
+    --alpha F              Regularización Ridge (defecto 1.0).
+    --k-neighbors N        Vecinos para KNN (defecto 5).
+    --iters N              Iteraciones alternadas (defecto 100).
+  train — neural
+    --model-dir DIR        Directorio del modelo (defecto model_neural).
+    --epochs N             Épocas (defecto 200).    --batch-size N   (defecto 4).
+    --lr F                 Learning rate de Adam (defecto 2e-4).
+    --n-res-blocks N       Bloques ResNet en G (defecto 9).
+    --base-ch N            Canales base de G y D (defecto 64).
+    --patience N           Parada temprana (defecto 40).
+    --resume               Reanuda desde el checkpoint.
   transform
-    input                  MIDI de entrada.
-    --model FILE           Modelo entrenado (.pkl; obligatorio).
+    input                  MIDI de entrada (obligatorio).
+    --backend B            symbolic (defecto) | neural.
+    --model FILE           Modelo .pkl (simbólico).
+    --model-dir DIR        Directorio del modelo (neural).
     --direction D          AtoB (defecto) | BtoA.
     --intensity F          0.0 = sin cambio … 1.0 = total (defecto 1.0).
     --output FILE          MIDI de salida.
-    --bars N               Compases de salida (defecto: automático).
-    --candidates N         Candidatos a evaluar (defecto 3).
-    --no-percussion        No genera percusión.
-    --export-fingerprint   Exporta el fingerprint del resultado.
+    --bars N               Compases de salida (defecto: automático desde la entrada).
+    --candidates N         Candidatos a evaluar, simbólico (defecto 3).
+    --no-percussion        Sin percusión (simbólico).
+    --export-fingerprint   Exporta el fingerprint DNA (simbólico).
     --seed N               Semilla aleatoria (defecto 42).
-    --verbose              Detalle de la transformación.
+    --bpm F                Tempo del MIDI de salida, neural (defecto 120).
+    --threshold F          Umbral fijo de binarización, neural.
+    --threshold-pct F      Percentil del umbral adaptativo (defecto 99.0).
+    --palette FILE         JSON con la paleta de instrumentos, neural.
+    --verbose              Detalle del proceso.
   cycle
     input                  MIDI de entrada.
-    --model FILE           Modelo entrenado (obligatorio).
+    --model FILE           Modelo simbólico .pkl (obligatorio).
+    --backend B            Aceptado pero ignorado: cycle es siempre simbólico.
     --direction D          Primera dirección: AtoB (defecto) | BtoA.
     --intensity F          Intensidad (defecto 1.0).
     --output-ab FILE       Salida tras G.     --output-aba FILE   Salida tras F∘G.
-    --bars N               Compases de salida (defecto: automático).
+    --bars N               Compases de salida.
     --candidates N         Candidatos a evaluar (defecto 2).
-    --no-percussion        Sin percusión.
-    --seed N               Semilla (defecto 42; la segunda pasada usa seed + 100).
+    --no-percussion        Sin percusión.     --seed N   Semilla (defecto 42).
     --verbose              Detalle.
   analyze
     input                  MIDI a analizar.
-    --model FILE           Modelo entrenado (obligatorio).
-    --verbose              Detalle de la extracción.
+    --model FILE           Modelo simbólico .pkl (obligatorio).
+    --backend B            Aceptado pero ignorado: analyze es siempre simbólico.
+    --verbose              Detalle.
+  style-corpus
+    --input-dir DIR        Carpeta con MIDIs a analizar (obligatorio).
+    --backend B            symbolic (defecto) | neural.
+    --model FILE           Modelo .pkl (simbólico).
+    --model-dir DIR        Directorio del modelo (neural; obligatorio con neural).
+    --direction D          a2b (defecto) | b2a.
+    --output FILE          JSON de estadísticas.
+  round-trip
+    --input FILE           MIDI de entrada (obligatorio).
+    --model-dir DIR        Toma la config del modelo si existe (la resolución
+                           indicada por el usuario tiene prioridad).
+    --resolution N         Ticks por compás (defecto 96).
+    --disable-roles ROL…   Excluir roles.
+    --output FILE          MIDI de salida (defecto roundtrip.mid).
+    --bpm F                Tempo de salida (defecto 120).
+  inspect
+    --what W [W …]         npz (defecto) | loss_curve.
+    --data-dir DIR         Carpeta de .npz (para npz).
+    --model-dir DIR        Directorio del modelo (para loss_curve y su config).
+    --file NOMBRE.npz      Fichero .npz dentro de --data-dir (defecto: el primero,
+                           por orden alfabético; se inspecciona solo uno).
 
 ────────────────────────────────────────────────────────────────────────────
 Parámetros (spec)
@@ -119,24 +185,42 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 --check spec-vs-code».
 
 @params v1
+[prepare]
+--input-dir     dir   io=in required
+--output-dir    dir   io=out required
+--resolution    int   default=96 min=0
+--window-bars   int   default=4 min=0 unit=compases
+--disable-roles list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--pitch-range   int
 [train]
---domain-a        str   required
---domain-b        str   required
---model           file  default=cycle_gan.pkl io=in ext=pkl
---resolution      int   default=48 min=0
---pitch-range     int    # Notas MIDI centradas en C4 (None = 128 completo)
+--backend         enum  default=symbolic values=symbolic|neural
+--domain-a        str
+--domain-b        str
+--model           file  default=cycle_gan_v3.pkl io=in ext=pkl
+--resolution      int   default=96 min=0
+--pitch-range     int
 --disable-roles   list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
---pca-dim         int   default=0  # Reducir con PCA (0 = sin PCA)
+--pca-dim         int   default=0
 --solver          enum  default=ridge values=ridge|knn
 --alpha           float default=1.0 typical=0..1
 --k-neighbors     int   default=5
 --lambda-cycle    float default=10.0
 --lambda-identity float default=5.0
 --iters           int   default=100 min=0
+--model-dir       dir   default=model_neural io=in
+--epochs          int   default=200 min=0 unit=épocas
+--batch-size      int   default=4 min=0
+--lr              float default=0.0002
+--n-res-blocks    int   default=9 min=0
+--base-ch         int   default=64
+--patience        int   default=40
+--resume          bool  default=false
 --verbose         bool  default=false
 [transform]
-input                file  io=in ext=mid required  # MIDI de entrada
---model              file  io=in required
+input                file  io=in required
+--backend            enum  default=symbolic values=symbolic|neural
+--model              file  io=in
+--model-dir          dir   io=in
 --direction          enum  default=AtoB values=AtoB|BtoA
 --intensity          float default=1.0 typical=0..1
 --output             file  io=out
@@ -145,10 +229,15 @@ input                file  io=in ext=mid required  # MIDI de entrada
 --no-percussion      bool  default=false
 --export-fingerprint bool  default=false
 --seed               int   default=42
+--bpm                float default=120.0 unit=BPM
+--threshold          float
+--threshold-pct      float default=99.0 unit=%
+--palette            file  io=in
 --verbose            bool  default=false
 [cycle]
-input           file  io=in ext=mid required  # MIDI de entrada
+input           file  io=in required
 --model         file  io=in required
+--backend       enum  default=symbolic values=symbolic|neural
 --direction     enum  default=AtoB values=AtoB|BtoA
 --intensity     float default=1.0 typical=0..1
 --output-ab     file  io=out
@@ -159,55 +248,171 @@ input           file  io=in ext=mid required  # MIDI de entrada
 --seed          int   default=42
 --verbose       bool  default=false
 [analyze]
-input     file  io=in ext=mid required  # MIDI a analizar
+input     file  io=in required
 --model   file  io=in required
+--backend enum  default=symbolic values=symbolic|neural
 --verbose bool  default=false
+[style-corpus]
+--input-dir dir   io=in required
+--backend   enum  default=symbolic values=symbolic|neural
+--model     file  io=in
+--model-dir dir   io=in
+--direction enum  default=a2b values=a2b|b2a
+--output    file  io=out
+[round-trip]
+--input         file  io=in required
+--model-dir     dir   io=in
+--resolution    int   default=96 min=0
+--disable-roles list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--output        file  default=roundtrip.mid io=out ext=mid
+--bpm           float default=120.0 unit=BPM
+[inspect]
+--what      list  of=enum values=npz|loss_curve
+--data-dir  dir   io=in
+--model-dir dir   io=in
+--file      file  io=in ext=npz
 @end
 
 ────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
-  # Entrenar con dos corpus:
-  python cycle_gan_style_transfer.py train \
-      --domain-a corpus_tango/ --domain-b corpus_epico/ \
-      --model tango2epico.cgan.pkl
+  ── Backend simbólico (CPU, rápido) ──────────────────────────────────────────
 
-  # Con PCA y resolución reducida (menos memoria):
+  # Entrenamiento mínimo (carpetas de MIDIs):
   python cycle_gan_style_transfer.py train \
-      --domain-a tango/ --domain-b epico/ --model t2e.cgan.pkl \
+      --domain-a corpus/tango/ --domain-b corpus/epico/ --model tango2epico.pkl
+
+  # Con reducción de dimensión y solo melodía + bajo:
+  python cycle_gan_style_transfer.py train \
+      --domain-a corpus/tango/ --domain-b corpus/epico/ --model tango2epico.pkl \
       --resolution 16 --pitch-range 48 --pca-dim 64 \
-      --lambda-cycle 10.0 --lambda-identity 5.0 --iters 200 --verbose
+      --disable-roles counterpoint accompaniment percussion \
+      --lambda-cycle 10 --lambda-identity 0.5 --iters 200 --verbose
 
-  # Solo melodía y bajo, con el solver KNN:
+  # Solver KNN:
   python cycle_gan_style_transfer.py train \
-      --domain-a tango/ --domain-b epico/ --model t2e_knn.cgan.pkl \
-      --solver knn --k-neighbors 7 \
-      --disable-roles counterpoint accompaniment percussion
+      --domain-a corpus/tango/ --domain-b corpus/epico/ --model t2e_knn.pkl \
+      --solver knn --k-neighbors 7
 
-  # Transformar A→B con intensidad total, y parcial:
+  # Transferir con intensidad parcial:
   python cycle_gan_style_transfer.py transform entrada.mid \
-      --model t2e.cgan.pkl --direction AtoB --output salida.mid
+      --model tango2epico.pkl --direction AtoB --intensity 0.7 \
+      --output resultado.mid --candidates 5 --seed 123
+
+  # Dirección inversa (épico → tango), sin percusión y con fingerprint:
   python cycle_gan_style_transfer.py transform entrada.mid \
-      --model t2e.cgan.pkl --intensity 0.6 --output salida.mid
+      --model tango2epico.pkl --direction BtoA --output inverso.mid \
+      --no-percussion --export-fingerprint
 
-  # Dirección inversa, más candidatos, sin percusión y con fingerprint:
+  # Verificar la consistencia de ciclo:
+  python cycle_gan_style_transfer.py cycle entrada.mid --model tango2epico.pkl \
+      --direction AtoB --output-ab ab.mid --output-aba aba.mid --verbose
+
+  # Posición de un MIDI en el espacio A/B:
+  python cycle_gan_style_transfer.py analyze entrada.mid --model tango2epico.pkl
+
+  # Estadísticas del generador sobre un corpus:
+  python cycle_gan_style_transfer.py style-corpus \
+      --input-dir corpus/test/ --model tango2epico.pkl --direction a2b --output stats.json
+
+  ── Backend neural (CPU lento / GPU recomendada) ─────────────────────────────
+
+  # 1. Preparar corpus (una vez por corpus):
+  python cycle_gan_style_transfer.py prepare \
+      --input-dir corpus/tango/ --output-dir data/tango/ \
+      --resolution 48 --pitch-range 64 --window-bars 4
+  python cycle_gan_style_transfer.py prepare \
+      --input-dir corpus/epico/ --output-dir data/epico/ \
+      --resolution 48 --pitch-range 64 --window-bars 4
+
+  # 2. Diagnosticar el parser antes de entrenar:
+  python cycle_gan_style_transfer.py round-trip \
+      --input corpus/tango/pieza.mid --output prueba_rt.mid --bpm 120
+
+  # 3. Inspeccionar los .npz generados:
+  python cycle_gan_style_transfer.py inspect \
+      --what npz --data-dir data/tango/ --file pieza.npz
+
+  # 4. Entrenar (n-res-blocks 6 = más rápido en CPU):
+  python cycle_gan_style_transfer.py train --backend neural \
+      --domain-a data/tango/ --domain-b data/epico/ --model-dir model_t2e/ \
+      --epochs 200 --batch-size 4 --n-res-blocks 6 --base-ch 32 --lr 2e-4 \
+      --patience 40 --lambda-cycle 10 --lambda-identity 0.5
+
+  # 4b. Reanudar un entrenamiento interrumpido:
+  python cycle_gan_style_transfer.py train --backend neural \
+      --domain-a data/tango/ --domain-b data/epico/ --model-dir model_t2e/ \
+      --epochs 200 --resume
+
+  # 5. Curva de pérdida y configuración del modelo:
+  python cycle_gan_style_transfer.py inspect --what loss_curve --model-dir model_t2e/
+
+  # 6. Transferir (neural):
   python cycle_gan_style_transfer.py transform entrada.mid \
-      --model t2e.cgan.pkl --direction BtoA --candidates 5 --bars 32 \
-      --no-percussion --export-fingerprint --seed 7
+      --backend neural --model-dir model_t2e/ --direction AtoB \
+      --output resultado_neural.mid --bpm 120 --threshold-pct 97
 
-  # Comprobar la consistencia de ciclo A→B→A:
-  python cycle_gan_style_transfer.py cycle entrada.mid --model t2e.cgan.pkl \
-      --output-ab ab.mid --output-aba aba.mid --verbose
+  # 7. Densidad de salida sobre un corpus:
+  python cycle_gan_style_transfer.py style-corpus --backend neural \
+      --model-dir model_t2e/ --input-dir corpus/test/ --direction a2b --output stats.json
 
-  # Ver dónde cae un MIDI entre los dos dominios:
-  python cycle_gan_style_transfer.py analyze entrada.mid --model t2e.cgan.pkl
+  ── MIDI vacío con transform neural ──────────────────────────────────────────
+  El diagnóstico del compás 0 muestra mean / max / umbral / notas activas.
+  Soluciones, por orden de preferencia: (1) bajar --threshold-pct (99 → 97 → 95);
+  (2) fijar --threshold 0.3 (umbral absoluto); (3) entrenar más épocas o con más
+  datos; (4) ejecutar round-trip para comprobar que el corpus no está vacío.
+  El fallback simbólico trabaja con rolls binarizados, donde 97.0 es más
+  apropiado que el 99.0 del CLI (pensado para rolls continuos del neural).
 
 ────────────────────────────────────────────────────────────────────────────
-Dependencias y relación con otras versiones
+Clases principales
 ────────────────────────────────────────────────────────────────────────────
-midi_dna_unified.py (mismo directorio), mido, numpy, scikit-learn. Sucesor con
-backend neural opcional: cycle_gan_style_transfer_v3.py. Versión neural
-independiente: cyclegan_composer.py.
+  RoleAssigner            Asigna roles (melody/cp/acc/bass/perc) por perfil.
+  PianoRollConverter      Notas MIDI → (n_bars, resolution, 128).
+  MidiRollDataset         Dataset de ventanas .npz (carga perezosa) para DataLoader.
+  SymbolicDiscriminator   Distancia de Mahalanobis al centroide del corpus.
+  FeatureMapper           G o F simbólico: Ridge/KNN en el espacio de rasgos.
+  CycleGANSymbolic        Modelo simbólico completo (G, F, D_A, D_B, PCA).
+  ReplayBuffer            Buffer de 50 muestras para estabilizar D neural.
+  CycleTrainer            Bucle de entrenamiento neural con callbacks.
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Obligatorias : mido, numpy, midi_dna_unified.py (mismo directorio; sin él, cycle
+                 solo mide en el espacio de rasgos).
+  Simbólico    : scikit-learn (sklearn.linear_model, .decomposition).
+  Neural       : torch (torch.nn, torch.nn.functional, torch.nn.utils).
+  Opcional     : music21 (ajuste a escala y tonalidad en el DNA).
+  Otras versiones: cycle_gan_style_transfer.py (v2, solo simbólico) y
+  cyclegan_composer.py (neural independiente).
+
+────────────────────────────────────────────────────────────────────────────
+Historial de correcciones (v3.1 sobre v3.0)
+────────────────────────────────────────────────────────────────────────────
+   1  Eliminada _ticks_per_bar (devolvía tpb·4, 4/4 fijo y sin uso).
+   2  _rolls_to_midi asumía 4/4: ahora usa cfg['ts_num'] (defecto 4), que
+      _midi_to_rolls devuelve y los llamadores inyectan; cmd_round_trip lo lee
+      de _infer_time_sig_from_midi. Afectaba a piezas en 3/4 (vals criollo).
+   3  cmd_cycle sin guarda HAS_DNA: ahora tiene fallback en feature space.
+   4  threshold_pct 99.0 (backend neural, rolls continuos); en el fallback
+      simbólico, con rolls binarizados, 97.0 es más apropiado (comentado).
+   5  MidiRollDataset cargaba todos los .npz en RAM: ahora es perezoso (solo
+      metadatos en __init__, arrays en __getitem__).
+   6  _nearest_neighbor_pairs era O(n²) en Python: usa sklearn pairwise_distances
+      si está disponible (10-100× más rápido), con fallback en Python puro.
+   7  _extract_palette_from_midi podía asignar el canal 9 a no-percusión: ahora
+      está reservado y la percusión GM siempre lo obtiene.
+   8  cmd_round_trip ignoraba --resolution al cargar la config de model_dir: ahora
+      la del usuario tiene prioridad.
+   9  _prepare_one_midi no guardaba ts_num en los metadatos del .npz: ahora sí.
+  10  _cmd_transform_neural procesaba compás a compás: ahora un único forward pass
+      con el batch completo (~32× más rápido en GPU con 32 compases).
+  11  extract_raw_melody sesgaba hacia soprano: nuevo criterio 0.5·pitch_medio +
+      0.3·rango_pitch + 0.2·(1 − densidad_relativa).
+  12  El recorte silencioso de n_components en PCA emite ahora un AVISO.
+  13  torch.load con weights_only=False explícito (DeprecationWarning en PyTorch
+      ≥ 2.0) en _load_neural_models y CycleTrainer.load_checkpoint.
 """
 
 import sys
@@ -219,11 +424,13 @@ import argparse
 import random
 import copy
 import math
+import textwrap
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-# ── Importar ecosistema ───────────────────────────────────────────────────────
+# ── Ecosistema DNA ────────────────────────────────────────────────────────────
 try:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import midi_dna_unified as dna_mod
@@ -237,9 +444,11 @@ try:
         _quarter_to_ticks, INSTRUMENT_RANGES,
     )
     from music21 import pitch as m21pitch, key as m21key
+    HAS_DNA = True
 except ImportError as e:
-    print(f"ERROR: {e}\nmidi_dna_unified.py no encontrado en el mismo directorio.")
-    sys.exit(1)
+    HAS_DNA = False
+    print(f"AVISO: midi_dna_unified no disponible ({e}). "
+          "Backend simbólico y generación DNA desactivados.")
 
 try:
     from sklearn.linear_model import Ridge
@@ -249,23 +458,25 @@ try:
     HAS_SKLEARN = True
 except ImportError:
     HAS_SKLEARN = False
-    print("AVISO: scikit-learn no encontrado. Solver 'ridge'/'knn' y PCA no disponibles.")
+    print("AVISO: scikit-learn no encontrado. Backend simbólico limitado.")
+
+try:
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    import torch.nn.utils as nn_utils
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
 
 import mido
 
+
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONSTANTES DE PIANO ROLL  (tomadas de diffusion_composer_v4.py)
+#  CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
 ROLES = ['melody', 'counterpoint', 'accompaniment', 'bass', 'percussion']
-
-ROLE_RANGES = {
-    'melody':        (60, 96),
-    'counterpoint':  (52, 84),
-    'accompaniment': (48, 84),
-    'bass':          (28, 55),
-    'percussion':    (0,  127),
-}
 
 GM_ROLE_HINTS = {
     43: 'bass', 42: 'bass', 58: 'bass', 70: 'bass',
@@ -276,9 +487,18 @@ GM_ROLE_HINTS = {
     88: 'accompaniment', 89: 'accompaniment',
 }
 
-PITCH_CLASSES  = 128
-MIDI_CENTER    = 60   # Do central
-TICKS_PER_BAR  = 48   # resolución por defecto
+PITCH_CLASSES       = 128
+MIDI_CENTER         = 60
+TICKS_PER_BAR       = 96   # FIX: 48 era demasiado bajo; notas < 1 beat generaban rolls vacíos
+WINDOW_BARS_DEFAULT = 4
+
+DEFAULT_PALETTE = {
+    'melody':        {'program': 0,  'channel': 0, 'velocity': 80},
+    'counterpoint':  {'program': 40, 'channel': 1, 'velocity': 70},
+    'accompaniment': {'program': 48, 'channel': 2, 'velocity': 65},
+    'bass':          {'program': 43, 'channel': 3, 'velocity': 75},
+    'percussion':    {'program': 0,  'channel': 9, 'velocity': 90},
+}
 
 
 def _ensure_parent(path):
@@ -293,11 +513,10 @@ def _ensure_parent(path):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  UTILIDADES DE RANGO DE PITCH  (de diffusion_composer_v4.py)
+#  UTILIDADES DE PITCH Y TIEMPO
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _pitch_range(n):
-    """Devuelve (pitch_lo, pitch_hi) centrado en Do central, o None si n es None."""
     if n is None:
         return None
     half = n // 2
@@ -306,26 +525,28 @@ def _pitch_range(n):
     lo   = max(0, hi - n + 1)
     return (lo, hi)
 
-
 def _crop_pitch(roll, pitch_lo, pitch_hi):
-    """roll shape: (..., 128) → (..., pitch_hi - pitch_lo + 1)"""
     return roll[..., pitch_lo: pitch_hi + 1]
 
-
 def _pad_pitch(roll, pitch_lo, n_full=128):
-    """roll shape: (..., n_crop) → (..., 128)"""
-    n_crop = roll.shape[-1]
-    suffix = n_full - pitch_lo - n_crop
+    n_crop     = roll.shape[-1]
+    suffix     = n_full - pitch_lo - n_crop
     pad_widths = [(0, 0)] * (roll.ndim - 1) + [(pitch_lo, suffix)]
     return np.pad(roll, pad_widths, mode='constant')
 
+def _fmt_time(seconds):
+    s = int(seconds)
+    if s >= 3600: return f"{s//3600}h {(s%3600)//60}m {s%60:02d}s"
+    if s >= 60:   return f"{s//60}m {s%60:02d}s"
+    return f"{s}s"
+
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  EXTRACCIÓN DE NOTAS POR STREAM  (de diffusion_composer_v4.py)
+#  EXTRACCIÓN DE NOTAS POR STREAM
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _extract_note_lists(mid):
-    """Retorna dict {(track_idx, channel): [(start_tick, end_tick, note, vel, prog)]}"""
+    """→ {(track_idx, channel): [(start_tick, end_tick, note, vel, prog)]}"""
     active = {}
     result = {}
     for ti, track in enumerate(mid.tracks):
@@ -344,14 +565,12 @@ def _extract_note_lists(mid):
                 else:
                     if key in active:
                         st, vel, pr = active.pop(key)
-                        stream_key  = (ti, ch)
-                        result.setdefault(stream_key, []).append(
+                        result.setdefault((ti, ch), []).append(
                             (st, abs_tick, msg.note, vel, pr))
     return result
 
-
 # ══════════════════════════════════════════════════════════════════════════════
-#  ASIGNADOR DE ROLES  (de diffusion_composer_v4.py)
+#  ASIGNADOR DE ROLES
 # ══════════════════════════════════════════════════════════════════════════════
 
 class RoleAssigner:
@@ -359,8 +578,7 @@ class RoleAssigner:
         note_lists = _extract_note_lists(mid)
         if not note_lists:
             return {}
-        profiles = self._build_profiles(note_lists, mid)
-        return self._resolve_roles(profiles)
+        return self._resolve_roles(self._build_profiles(note_lists, mid))
 
     def _build_profiles(self, note_lists, mid):
         tpb_raw   = mid.ticks_per_beat
@@ -369,9 +587,8 @@ class RoleAssigner:
         for (ti, ch), notes in note_lists.items():
             if not notes:
                 continue
-            pitches   = [n[2] for n in notes]
-            durations = [n[1] - n[0] for n in notes]
-            program   = notes[0][4]
+            pitches     = [n[2] for n in notes]
+            program     = notes[0][4]
             pitch_mean  = sum(pitches) / len(pitches)
             pitch_range = max(pitches) - min(pitches)
             density     = len(notes) / max(total_dur / tpb_raw, 1)
@@ -380,7 +597,6 @@ class RoleAssigner:
                 'key': (ti, ch), 'channel': ch, 'program': program,
                 'pitch_mean': pitch_mean, 'pitch_range': pitch_range,
                 'density': density, 'polyphony': polyphony,
-                'n_notes': len(notes),
             })
         return profiles
 
@@ -390,14 +606,11 @@ class RoleAssigner:
             return 1.0
         events = []
         for (st, en, *_) in notes:
-            events.append((st, 1))
-            events.append((en, -1))
+            events.append((st, 1)); events.append((en, -1))
         events.sort()
-        current = 0
-        samples = []
+        current = 0; samples = []
         for _, delta in events:
-            current += delta
-            samples.append(max(current, 0))
+            current += delta; samples.append(max(current, 0))
         return sum(samples) / len(samples) if samples else 1.0
 
     def _resolve_roles(self, profiles):
@@ -413,23 +626,19 @@ class RoleAssigner:
                 unassigned.append(p)
 
         remaining_roles = [r for r in ROLES if r != 'percussion']
-
         if len(unassigned) == 1:
-            p  = unassigned[0]
-            pm = p['pitch_mean']
+            p  = unassigned[0]; pm = p['pitch_mean']
             if pm >= 60:   role = 'melody'
             elif pm >= 52: role = 'counterpoint'
             elif pm >= 44: role = 'accompaniment'
             else:          role = 'bass'
             assigned[role] = p['key']
             return assigned
-
         if not unassigned:
             return assigned
 
         def norm(lst, key):
-            vals = [p[key] for p in lst]
-            lo, hi = min(vals), max(vals)
+            vals = [p[key] for p in lst]; lo, hi = min(vals), max(vals)
             span = hi - lo or 1
             return {p['key']: (p[key] - lo) / span for p in lst}
 
@@ -440,73 +649,353 @@ class RoleAssigner:
 
         def score(p, role):
             k = p['key']
-            hint_bonus = 0.25 if GM_ROLE_HINTS.get(p['program']) == role else 0.0
+            hint = 0.25 if GM_ROLE_HINTS.get(p['program']) == role else 0.0
             if role == 'melody':
-                return 0.40 * n_pm[k] + 0.35 * n_pr[k] + 0.15 * (1 - n_poly[k]) + hint_bonus
+                return 0.40*n_pm[k] + 0.35*n_pr[k] + 0.15*(1-n_poly[k]) + hint
             elif role == 'counterpoint':
-                mid_pm = abs(n_pm[k] - 0.65)
-                return 0.30 * (1 - mid_pm) + 0.25 * n_pr[k] + 0.20 * (1 - n_poly[k]) + hint_bonus
+                return 0.30*(1-abs(n_pm[k]-0.65)) + 0.25*n_pr[k] + 0.20*(1-n_poly[k]) + hint
             elif role == 'accompaniment':
-                mid_pm = abs(n_pm[k] - 0.50)
-                return 0.40 * n_poly[k] + 0.25 * (1 - mid_pm) + 0.15 * n_dens[k] + hint_bonus
+                return 0.40*n_poly[k] + 0.25*(1-abs(n_pm[k]-0.50)) + 0.15*n_dens[k] + hint
             elif role == 'bass':
-                return 0.50 * (1 - n_pm[k]) + 0.25 * (1 - n_pr[k]) + hint_bonus
+                return 0.50*(1-n_pm[k]) + 0.25*(1-n_pr[k]) + hint
             return 0.0
 
         pairs = [(score(p, r), r, p['key']) for p in unassigned for r in remaining_roles]
         pairs.sort(key=lambda x: -x[0])
-        taken_keys  = set()
-        taken_roles = set()
+        taken_keys = set(); taken_roles = set()
         for sc, role, key in pairs:
             if role not in taken_roles and key not in taken_keys:
-                assigned[role] = key
-                taken_roles.add(role)
-                taken_keys.add(key)
+                assigned[role] = key; taken_roles.add(role); taken_keys.add(key)
         return assigned
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PIANO ROLL CONVERTER  (de diffusion_composer_v4.py)
+#  PIANO ROLL CONVERTER
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PianoRollConverter:
-    def __init__(self, resolution=TICKS_PER_BAR):
-        self.resolution = resolution
+    def __init__(self, resolution=TICKS_PER_BAR, window_bars=WINDOW_BARS_DEFAULT):
+        self.resolution  = resolution
+        self.window_bars = window_bars
 
-    def notes_to_roll(self, notes, tpb_raw, n_bars):
+    def notes_to_roll(self, notes, tpbar, n_bars):
+        """[(start_tick, end_tick, note, vel, prog)] → (n_bars, resolution, 128)
+
+        tpbar : ticks por compás (ya calculado por el llamador, p.ej. tpb * ts_num).
+                NO se multiplica internamente por 4; el llamador es responsable de
+                pasar el valor correcto según el compás real del MIDI.
         """
-        Convierte lista de (start_tick, end_tick, note, vel, prog) a
-        piano roll de shape (n_bars, resolution, PITCH_CLASSES) con valores en {0, 1}.
-        """
-        roll = np.zeros((n_bars, self.resolution, PITCH_CLASSES), dtype=np.float32)
-        ticks_per_internal = tpb_raw * 4 / self.resolution
+        roll               = np.zeros((n_bars, self.resolution, PITCH_CLASSES), dtype=np.float32)
+        ticks_per_internal = tpbar / self.resolution          # FIX: era tpbar*4/res
         for start, end, pitch, vel, prog in notes:
-            bar_s  = int(start / (tpb_raw * 4))
-            bar_e  = int(end   / (tpb_raw * 4))
-            tick_s = int((start % (tpb_raw * 4)) / ticks_per_internal)
-            tick_e = int((end   % (tpb_raw * 4)) / ticks_per_internal)
-            if bar_s >= n_bars:
-                continue
+            bar_s  = int(start / tpbar)                       # FIX: era start/(tpbar*4)
+            bar_e  = int(end   / tpbar)                       # FIX: era end/(tpbar*4)
+            tick_s = int((start % tpbar) / ticks_per_internal) # FIX: era (start%(tpbar*4))/…
+            tick_e = int((end   % tpbar) / ticks_per_internal) # FIX: era (end%(tpbar*4))/…
+            if bar_s >= n_bars: continue
             if bar_s == bar_e:
-                roll[bar_s, tick_s:min(tick_e, self.resolution), pitch] = 1.0
+                roll[bar_s, tick_s:min(tick_e + 1, self.resolution), pitch] = 1.0
             else:
                 roll[bar_s, tick_s:, pitch] = 1.0
                 for b in range(bar_s + 1, min(bar_e, n_bars)):
                     roll[b, :, pitch] = 1.0
                 if bar_e < n_bars:
-                    roll[bar_e, :tick_e, pitch] = 1.0
+                    roll[bar_e, :max(tick_e, 1), pitch] = 1.0
         return roll
+
+    def roll_to_windows(self, roll):
+        """(n_bars, res, pitch) → (n_windows, window_bars, res, pitch)"""
+        n_bars = roll.shape[0]
+        if n_bars < self.window_bars:
+            return np.zeros((0, self.window_bars, self.resolution, PITCH_CLASSES),
+                            dtype=np.float32)
+        return np.stack([roll[i: i + self.window_bars]
+                         for i in range(n_bars - self.window_bars + 1)], axis=0)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  EXTRACCIÓN DE MELODÍA (para el motor de generación, igual que v1)
+#  UMBRAL ADAPTATIVO Y CONVERSIÓN ROLLS → MIDI
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _adaptive_threshold(roll, percentile=99.0):
+    """
+    Binarización robusta:
+    · >90% celdas cerca de 0 → percentil sobre toda la distribución.
+    · Si no → percentil sobre valores activos (>0.001).
+    """
+    flat           = roll.flatten()
+    frac_near_zero = float((flat < 0.01).mean())
+    if frac_near_zero > 0.90:
+        return max(float(np.percentile(flat, percentile)), 1e-4)
+    nonzero = flat[flat > 0.001]
+    if len(nonzero) == 0:
+        return 0.5
+    return float(np.percentile(nonzero, percentile))
+
+
+def _rolls_to_midi(bars_per_role, cfg, palette, output_path,
+                   bpm=120.0, threshold=None, threshold_pct=99.0):
+    """
+    Convierte {rol: (n_bars, res, n_pitch)} a un fichero MIDI.
+    Respeta el compás real del MIDI fuente vía cfg['ts_num'] (default 4).
+    """
+    resolution = cfg['resolution']
+    ts_num     = cfg.get('ts_num', 4)          # FIX: usar compás real, no asumir 4/4
+    tpb        = 480
+    ticks_tick = (tpb * ts_num) / resolution   # FIX: era (tpb*4)/resolution
+    pitch_lo   = cfg.get('pitch_lo', 0)
+    pitch_hi   = cfg.get('pitch_hi', 127)
+    do_expand  = (pitch_lo, pitch_hi) != (0, 127)
+
+    mid = mido.MidiFile(ticks_per_beat=tpb)
+    t0  = mido.MidiTrack()
+    t0.append(mido.MetaMessage('set_tempo', tempo=int(60_000_000 / bpm), time=0))
+    mid.tracks.append(t0)
+
+    n_notes_total = 0
+
+    for role in cfg['roles']:
+        if role not in bars_per_role:
+            continue
+        roll = bars_per_role[role]
+        if do_expand:
+            roll = _pad_pitch(roll, pitch_lo, n_full=128)
+
+        thr    = threshold if threshold is not None else _adaptive_threshold(roll, threshold_pct)
+        pal    = palette.get(role, {})
+        prog   = int(pal.get('program', 0))
+        ch     = int(pal.get('channel', 0))
+        vel    = int(pal.get('velocity', 80))
+        binary = (roll > thr).astype(np.float32)
+
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+        track.append(mido.Message('program_change', program=prog, channel=ch, time=0))
+
+        events          = []
+        n_bars_r, res_r, _ = binary.shape
+        for bar in range(n_bars_r):
+            for tick in range(res_r):
+                abs_t = int((bar * res_r + tick) * ticks_tick)
+                for pitch in range(128):
+                    cur  = binary[bar, tick, pitch] > 0
+                    prev = (binary[bar, tick-1, pitch] > 0 if tick > 0
+                            else (binary[bar-1, -1, pitch] > 0 if bar > 0 else False))
+                    if cur and not prev:
+                        events.append((abs_t, 'on',  pitch)); n_notes_total += 1
+                    elif not cur and prev:
+                        events.append((abs_t, 'off', pitch))
+
+        events.sort(key=lambda e: e[0])
+        prev_t = 0
+        for abs_t, etype, pitch in events:
+            delta = abs_t - prev_t
+            if etype == 'on':
+                track.append(mido.Message('note_on',  note=pitch, velocity=vel,
+                                          channel=ch, time=delta))
+            else:
+                track.append(mido.Message('note_off', note=pitch, velocity=0,
+                                          channel=ch, time=delta))
+            prev_t = abs_t
+
+    mid.save(_ensure_parent(output_path))
+    return n_notes_total
+
+
+def _extract_palette_from_midi(midi_path, role_map):
+    """
+    Extrae la paleta real (program, channel, velocity_mean) del MIDI fuente
+    para cada rol asignado por RoleAssigner. Devuelve dict compatible con
+    _rolls_to_midi.
+    """
+    mid        = mido.MidiFile(midi_path)
+    note_lists = _extract_note_lists(mid)
+
+    # Mapa (track_idx, channel) → program
+    prog_map = {}
+    for ti, track in enumerate(mid.tracks):
+        for msg in track:
+            if msg.type == 'program_change':
+                prog_map[(ti, msg.channel)] = msg.program
+
+    # Canales ya usados para evitar colisiones en la salida
+    # FIX: ch_counter arranca en 0 y siempre salta el canal 9 (percusión GM)
+    used_channels = {9}   # reservar el 9 de entrada; se libera solo para percusión real
+    palette       = {}
+    ch_counter    = 0
+
+    for role, stream_key in role_map.items():
+        ti, ch_orig = stream_key
+        prog  = prog_map.get(stream_key, DEFAULT_PALETTE.get(role, {}).get('program', 0))
+        # Velocidad media de las notas de este stream
+        notes = note_lists.get(stream_key, [])
+        vel   = int(sum(n[3] for n in notes) / len(notes)) if notes else 80
+        vel   = max(40, min(110, vel))
+
+        if ch_orig == 9:
+            # Percusión: siempre canal 9
+            out_ch = 9
+            used_channels.add(9)
+        elif ch_orig not in used_channels:
+            out_ch = ch_orig
+            used_channels.add(out_ch)
+        else:
+            # Canal original ya ocupado: asignar el siguiente libre (nunca el 9)
+            while ch_counter in used_channels:
+                ch_counter += 1
+            out_ch = ch_counter
+            used_channels.add(out_ch)
+            ch_counter += 1
+
+        palette[role] = {'program': prog, 'channel': out_ch, 'velocity': vel}
+
+    return palette
+
+
+def _infer_bpm_from_midi(midi_path):
+    """Lee el primer set_tempo del MIDI y devuelve BPM."""
+    try:
+        mid = mido.MidiFile(midi_path)
+        for track in mid.tracks:
+            for msg in track:
+                if msg.type == 'set_tempo':
+                    return round(60_000_000 / msg.tempo, 2)
+    except Exception:
+        pass
+    return 120.0
+
+
+def _infer_time_sig_from_midi(midi_path):
+    """Lee el primer time_signature y devuelve beats_per_bar."""
+    try:
+        mid = mido.MidiFile(midi_path)
+        for track in mid.tracks:
+            for msg in track:
+                if msg.type == 'time_signature':
+                    return msg.numerator, msg.denominator
+    except Exception:
+        pass
+    return 4, 4
+
+
+def _midi_to_rolls(midi_path, cfg):
+    """MIDI → {rol: (n_bars, resolution, n_pitch)}.
+    Usa el compás real del MIDI (time_signature) en lugar de asumir 4/4."""
+    mid         = mido.MidiFile(midi_path)
+    resolution  = cfg['resolution']
+    window_bars = cfg.get('window_bars', WINDOW_BARS_DEFAULT)
+    note_lists  = _extract_note_lists(mid)
+    if not note_lists:
+        raise ValueError(f"No se encontraron notas en {midi_path}")
+
+    tpb = mid.ticks_per_beat
+
+    # Detectar compás real para calcular ticks por compás
+    ts_num = 4
+    for track in mid.tracks:
+        for msg in track:
+            if msg.type == 'time_signature':
+                ts_num = msg.numerator
+                break
+
+    tpbar      = tpb * ts_num          # ticks por compás según el compás real
+    max_tick   = max((n[1] for nl in note_lists.values() for n in nl), default=0)
+    total_bars = max(1, int(max_tick / tpbar) + 1)
+
+    active_roles = cfg.get('roles', ROLES)
+    pitch_lo     = cfg.get('pitch_lo', 0)
+    pitch_hi     = cfg.get('pitch_hi', 127)
+    do_crop      = (pitch_lo, pitch_hi) != (0, 127)
+
+    role_map = RoleAssigner().assign(mid)
+    conv     = PianoRollConverter(resolution=resolution, window_bars=window_bars)
+    rolls    = {}
+    for role, stream_key in role_map.items():
+        if role not in active_roles:
+            continue
+        roll = conv.notes_to_roll(note_lists[stream_key], tpbar, total_bars)
+        if do_crop:
+            roll = _crop_pitch(roll, pitch_lo, pitch_hi)
+        rolls[role] = roll
+    # ts_num se pasa al llamador via cfg modificado para que _rolls_to_midi
+    # calcule ticks_tick correctamente. El llamador debe añadirlo al cfg.
+    return rolls, ts_num
+
+
+def _load_palette(palette_path, cfg):
+    if palette_path is None:
+        return DEFAULT_PALETTE
+    try:
+        with open(palette_path) as f:
+            return json.load(f)
+    except Exception:
+        return DEFAULT_PALETTE
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  DATASET PARA BACKEND NEURAL
+# ══════════════════════════════════════════════════════════════════════════════
+
+class MidiRollDataset:
+    """Dataset de ventanas de piano roll leídas desde .npz.
+
+    Lazy loading: los arrays se cargan solo cuando se accede a __getitem__,
+    no en __init__. Esto evita agotar RAM con corpus grandes.
+    """
+
+    def __init__(self, data_dir, roles=None):
+        self.roles   = roles or ROLES
+        self.samples = []   # (path, window_idx, meta)
+        self.n_pitch = None
+
+        for path in sorted(Path(data_dir).glob('*.npz')):
+            try:
+                # Solo leer metadatos en __init__, no los arrays
+                with np.load(str(path), allow_pickle=True) as data:
+                    meta = json.loads(str(data['meta_json'][0]))
+                if self.n_pitch is None:
+                    self.n_pitch = meta.get('n_pitch', PITCH_CLASSES)
+                for i in range(meta['n_windows']):
+                    self.samples.append((str(path), i, meta))
+            except Exception:
+                continue
+
+        if self.n_pitch is None:
+            self.n_pitch = PITCH_CLASSES
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        path, widx, meta = self.samples[idx]
+        resolution = meta['resolution']
+        # ts_num guardado por _prepare_one_midi; disponible para uso futuro
+        x_parts    = []
+        # FIX: lazy load — abrir el npz solo al acceder al item
+        with np.load(path, allow_pickle=True) as data:
+            for role in self.roles:
+                key = f'roll_{role}'
+                if key in data:
+                    x_parts.append(data[key][widx][-1].copy())
+                else:
+                    x_parts.append(np.zeros((resolution, self.n_pitch), dtype=np.float32))
+        if HAS_TORCH:
+            return torch.tensor(np.stack(x_parts, axis=0))
+        return np.stack(x_parts, axis=0)
+
+
+def _collate_fn(batch):
+    if HAS_TORCH:
+        return torch.stack(batch)
+    return np.stack(batch)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  EXTRACCIÓN DE MELODÍA (para motor DNA)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def extract_raw_melody(midi_path, verbose=False):
-    """
-    Extrae la línea melódica del MIDI como lista de
-    (offset_beats, pitch_midi, duration_beats, velocity).
-    """
+    """→ ([(offset_beats, pitch, dur_beats, vel)], tempo_bpm, (ts_num, ts_den))"""
     try:
         mid = mido.MidiFile(midi_path)
     except Exception as e:
@@ -516,7 +1005,7 @@ def extract_raw_melody(midi_path, verbose=False):
     tempo_us = 500_000
     ts_num, ts_den = 4, 4
     notes_by_channel = {}
-    pending = {}
+    pending          = {}
 
     for track in mid.tracks:
         abs_ticks = 0
@@ -542,48 +1031,49 @@ def extract_raw_melody(midi_path, verbose=False):
     if not notes_by_channel:
         raise RuntimeError(f"No se encontraron notas en {midi_path}")
 
-    def _mean_pitch(notes):
-        return sum(p for _, p, _, _ in notes) / len(notes) if notes else 0
+    # FIX: criterio combinado en lugar de solo pitch_mean.
+    # Pondera: pitch_mean (0.5) + pitch_range (0.3) + densidad_inversa (0.2).
+    # La melodía tiende a estar en el registro agudo, tener buen rango y
+    # no ser el canal más denso (ese suele ser el acompañamiento).
+    all_notes_flat = [(p, d) for notes in notes_by_channel.values()
+                      for _, p, d, _ in notes]
+    if all_notes_flat:
+        global_max_pitch = max(p for p, _ in all_notes_flat)
+        global_density   = sum(1 for _ in all_notes_flat)
+    else:
+        global_max_pitch = 127
+        global_density   = 1
 
-    melody_ch = max(notes_by_channel.keys(),
-                    key=lambda ch: _mean_pitch(notes_by_channel[ch]))
+    def _melody_score(ch):
+        notes = notes_by_channel[ch]
+        if not notes: return 0.0
+        pitches = [p for _, p, _, _ in notes]
+        pm    = sum(pitches) / len(pitches) / 127.0          # pitch medio norm.
+        pr    = (max(pitches) - min(pitches)) / 127.0        # rango norm.
+        dens  = len(notes) / max(global_density, 1)          # densidad relativa
+        return 0.5 * pm + 0.3 * pr + 0.2 * (1.0 - dens)     # mayor pitch, más rango, menos denso
+
+    melody_ch = max(notes_by_channel, key=_melody_score)
     melody = sorted(notes_by_channel[melody_ch], key=lambda x: x[0])
-
     if verbose:
         print(f"    Melodía: {len(melody)} notas | ch={melody_ch} | "
               f"{tempo_bpm:.1f} BPM | {ts_num}/{ts_den}")
-
     return melody, tempo_bpm, (ts_num, ts_den)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONVERSIÓN MIDI → VECTOR PIANO ROLL
+#  VECTORIZACIÓN MIDI → PIANO ROLL CENTROIDE (backend simbólico)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def midi_to_roll_vector(midi_path: str,
-                        resolution: int = TICKS_PER_BAR,
-                        active_roles: list = None,
-                        pitch_lo: int = None,
-                        pitch_hi: int = None,
-                        verbose: bool = False) -> np.ndarray:
+def midi_to_roll_vector(midi_path, resolution=TICKS_PER_BAR,
+                        active_roles=None, pitch_lo=None, pitch_hi=None,
+                        verbose=False):
     """
-    Convierte un MIDI a un vector de piano roll concatenado y aplanado.
-
-    Flujo:
-      1. Extraer note_lists por stream.
-      2. Asignar roles con RoleAssigner.
-      3. Construir roll (n_bars, resolution, n_pitch) por rol.
-      4. Calcular centroide temporal: mean sobre el eje de compases
-         → (resolution, n_pitch) por rol.
-      5. Concatenar todos los roles → (n_roles, resolution, n_pitch).
-      6. Aplanar → vector 1D de longitud n_roles × resolution × n_pitch.
-
-    El centroide temporal captura el "ritmo e interválica promedios" del MIDI
-    sin depender de su longitud, manteniendo estructura interna del compás.
+    Centroide temporal por rol concatenado y aplanado.
+    Shape: (n_roles × resolution × n_pitch,)
     """
     if active_roles is None:
         active_roles = ROLES
-
     n_pitch = (pitch_hi - pitch_lo + 1) if pitch_lo is not None else PITCH_CLASSES
 
     try:
@@ -596,252 +1086,222 @@ def midi_to_roll_vector(midi_path: str,
         raise RuntimeError(f"No se encontraron notas en {midi_path}")
 
     tpb_raw   = mid.ticks_per_beat
-    tpbar     = tpb_raw * 4
+    # FIX: leer el compás real en lugar de asumir siempre 4/4
+    ts_num = 4
+    for track in mid.tracks:
+        for msg in track:
+            if msg.type == 'time_signature':
+                ts_num = msg.numerator
+                break
+    tpbar     = tpb_raw * ts_num
     all_ticks = max((n[1] for nl in note_lists.values() for n in nl), default=0)
     n_bars    = max(1, int(all_ticks / tpbar) + 1)
 
     role_map = RoleAssigner().assign(mid)
     conv     = PianoRollConverter(resolution=resolution)
 
-    # Un slot por rol activo, incluso si no hay datos (roll de ceros)
     centroid_parts = []
+    active_mask    = []   # FIX: registrar qué roles tienen datos reales
     for role in active_roles:
         stream_key = role_map.get(role)
         if stream_key and stream_key in note_lists:
-            notes = note_lists[stream_key]
-            roll  = conv.notes_to_roll(notes, tpbar, n_bars)
+            roll     = conv.notes_to_roll(note_lists[stream_key], tpbar, n_bars)
             if pitch_lo is not None:
                 roll = _crop_pitch(roll, pitch_lo, pitch_hi)
-            # Centroide temporal: media sobre compases → (resolution, n_pitch)
             centroid = roll.mean(axis=0)
+            has_data = True
         else:
             centroid = np.zeros((resolution, n_pitch), dtype=np.float32)
+            has_data = False
         centroid_parts.append(centroid)
+        active_mask.append(has_data)
 
-    # Concatenar roles y aplanar
-    # shape: (n_roles, resolution, n_pitch) → 1D
     vec = np.concatenate([c.flatten() for c in centroid_parts]).astype(np.float32)
-
     if verbose:
-        n_active = sum(1 for r in active_roles if role_map.get(r))
+        n_active = sum(active_mask)
         print(f"    Roll: {n_bars} compases | {n_active}/{len(active_roles)} roles | "
               f"vector {len(vec)}D")
-
     return vec
 
 
-def roll_vector_dim(n_roles: int, resolution: int, n_pitch: int) -> int:
-    """Dimensión del vector de piano roll para los parámetros dados."""
+def roll_vector_dim(n_roles, resolution, n_pitch):
     return n_roles * resolution * n_pitch
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  DISCRIMINADORES SIMBÓLICOS (Mahalanobis en espacio de piano roll / PCA)
+#  DISCRIMINADORES SIMBÓLICOS (Mahalanobis)
 # ══════════════════════════════════════════════════════════════════════════════
 
+MAX_FULL_COV_DIM = 4096   # por encima, covarianza diagonal (evita OOM)
+
+
 class SymbolicDiscriminator:
-    """
-    D_X: mide distancia de un vector de piano roll al centroide del dominio X.
-    Idéntico en interfaz a v1, pero opera sobre el espacio de rolls (o PCA).
-    """
+    def __init__(self, name):
+        self.name = name; self.centroid = None
+        self.inv_cov = None; self.scaler = None
 
-    def __init__(self, name: str):
-        self.name     = name
-        self.centroid = None
-        self.inv_cov  = None
-        self.scaler   = None
-
-    def fit(self, features: np.ndarray):
-        """features: (N, D)"""
+    def fit(self, features):
         if HAS_SKLEARN:
             self.scaler = StandardScaler()
             fs = self.scaler.fit_transform(features)
         else:
             fs = features
         self.centroid = np.mean(fs, axis=0)
+        D = fs.shape[1]
+        if D > MAX_FULL_COV_DIM:
+            # np.cov + pinv son O(D^2) en memoria (D=61440 -> ~30 GB por matriz,
+            # OOM con los valores por defecto). Con características ya
+            # estandarizadas, la norma euclídea equivale a Mahalanobis diagonal.
+            print(f"  AVISO: dimensión {D} > {MAX_FULL_COV_DIM}: se usa covarianza "
+                  f"diagonal en {self.name} (usa --pca-dim, --resolution o "
+                  f"--pitch-range para reducirla).")
+            self.inv_cov = None
+            return
         try:
-            cov = np.cov(fs.T)
-            self.inv_cov = np.linalg.pinv(cov)
+            self.inv_cov = np.linalg.pinv(np.cov(fs.T))
         except Exception:
             self.inv_cov = None
 
-    def score(self, feat: np.ndarray) -> float:
-        if self.centroid is None:
-            return 1.0
+    def score(self, feat):
+        if self.centroid is None: return 1.0
         if HAS_SKLEARN and self.scaler:
             f = self.scaler.transform(feat.reshape(1, -1)).flatten()
         else:
             f = feat
         diff = f - self.centroid
         if self.inv_cov is not None:
-            dist = float(np.sqrt(np.maximum(diff @ self.inv_cov @ diff, 0.0)))
-        else:
-            dist = float(np.linalg.norm(diff))
-        return dist
+            return float(np.sqrt(np.maximum(diff @ self.inv_cov @ diff, 0.0)))
+        return float(np.linalg.norm(diff))
 
-    def domain_probability(self, feat: np.ndarray) -> float:
-        d = self.score(feat)
-        return float(np.exp(-d * 0.5))
+    def domain_probability(self, feat):
+        return float(np.exp(-self.score(feat) * 0.5))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  GENERADORES G y F  (regresión en espacio de piano roll / PCA)
+#  GENERADORES SIMBÓLICOS G y F  (Ridge / KNN)
 # ══════════════════════════════════════════════════════════════════════════════
 
 class FeatureMapper:
-    """
-    G o F en el CycleGAN simbólico.
-    Opera sobre vectores de piano roll (posiblemente reducidos con PCA).
-    """
+    def __init__(self, name, solver='ridge', alpha=1.0, k=5):
+        self.name = name; self.solver = solver
+        self.alpha = alpha; self.k = k
+        self.model = None; self.scaler_in = None; self.scaler_out = None
 
-    def __init__(self, name: str, solver: str = 'ridge',
-                 alpha: float = 1.0, k: int = 5):
-        self.name    = name
-        self.solver  = solver
-        self.alpha   = alpha
-        self.k       = k
-        self.model   = None
-        self.scaler_in  = None
-        self.scaler_out = None
-
-    def fit(self, X: np.ndarray, Y: np.ndarray):
-        """X: (N, D) source features  |  Y: (N, D) target features"""
+    def fit(self, X, Y):
         if not HAS_SKLEARN:
             self._mean_dst = np.mean(Y, axis=0)
             self._mean_src = np.mean(X, axis=0)
             return
-
         self.scaler_in  = StandardScaler().fit(X)
         self.scaler_out = StandardScaler().fit(Y)
         Xs = self.scaler_in.transform(X)
         Ys = self.scaler_out.transform(Y)
-
-        if self.solver == 'knn':
-            self.model = KNeighborsRegressor(n_neighbors=min(self.k, len(X)))
-        else:
-            self.model = Ridge(alpha=self.alpha)
+        self.model = (KNeighborsRegressor(n_neighbors=min(self.k, len(X)))
+                      if self.solver == 'knn' else Ridge(alpha=self.alpha))
         self.model.fit(Xs, Ys)
 
-    def transform(self, feat: np.ndarray) -> np.ndarray:
+    def transform(self, feat):
         if not HAS_SKLEARN or self.model is None:
             if hasattr(self, '_mean_dst'):
-                delta = self._mean_dst - self._mean_src
-                return np.clip(feat + delta, 0.0, 1.0)
+                return np.clip(feat + (self._mean_dst - self._mean_src), 0.0, 1.0)
             return feat.copy()
-
         f_in  = self.scaler_in.transform(feat.reshape(1, -1))
         f_out = self.model.predict(f_in)[0]
         return self.scaler_out.inverse_transform(f_out.reshape(1, -1))[0]
 
-    def cycle_loss(self, feats_a: np.ndarray, mapper_back: "FeatureMapper") -> float:
-        losses = []
-        for f in feats_a:
-            ab  = self.transform(f)
-            aba = mapper_back.transform(ab)
-            losses.append(np.linalg.norm(aba - f))
-        return float(np.mean(losses))
+    def cycle_loss(self, feats_a, mapper_back):
+        return float(np.mean([np.linalg.norm(mapper_back.transform(self.transform(f)) - f)
+                               for f in feats_a]))
 
-    def identity_loss(self, feats_dst: np.ndarray) -> float:
-        losses = []
-        for f in feats_dst:
-            gf = self.transform(f)
-            losses.append(np.linalg.norm(gf - f))
-        return float(np.mean(losses))
+    def identity_loss(self, feats_dst):
+        return float(np.mean([np.linalg.norm(self.transform(f) - f) for f in feats_dst]))
+
+
+def _nearest_neighbor_pairs(src, dst):
+    """
+    Para cada vector en src, devuelve el índice del más cercano en dst.
+    Usa sklearn.metrics.pairwise_distances cuando está disponible (O(n·m) vectorizado),
+    con fallback a Python puro para el caso sin sklearn.
+    """
+    if HAS_SKLEARN:
+        from sklearn.metrics import pairwise_distances
+        dmat = pairwise_distances(src, dst, metric='euclidean')
+        return dmat.argmin(axis=1).tolist()
+    # Fallback Python puro
+    return [int(np.argmin([np.linalg.norm(f - g) for g in dst])) for f in src]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  MODELO CYCLE-GAN COMPLETO
+#  MODELO SIMBÓLICO  (G, F, D_A, D_B + PCA)
 # ══════════════════════════════════════════════════════════════════════════════
 
-class CycleGANModel:
-    """
-    Encapsula G, F, D_A, D_B y las pérdidas de ciclo e identidad.
-    Ahora trabaja en el espacio de piano roll (con PCA opcional).
-    Se serializa a .cgan.pkl.
-    """
+class CycleGANSymbolic:
+    """Backend simbólico: piano roll centroide + PCA + Ridge/KNN."""
 
-    VERSION = "2.0"
+    VERSION = "3.0-symbolic"
 
-    def __init__(self,
-                 solver: str = 'ridge',
-                 alpha: float = 1.0,
-                 k_neighbors: int = 5,
-                 lambda_cycle: float = 10.0,
-                 lambda_identity: float = 5.0,
-                 # parámetros de piano roll
-                 resolution: int = TICKS_PER_BAR,
-                 active_roles: list = None,
-                 pitch_lo: int = None,
-                 pitch_hi: int = None,
-                 pca_dim: int = 0):
+    def __init__(self, solver='ridge', alpha=1.0, k_neighbors=5,
+                 lambda_cycle=10.0, lambda_identity=5.0,
+                 resolution=TICKS_PER_BAR, active_roles=None,
+                 pitch_lo=None, pitch_hi=None, pca_dim=0):
 
         self.solver          = solver
         self.alpha           = alpha
         self.k_neighbors     = k_neighbors
         self.lambda_cycle    = lambda_cycle
         self.lambda_identity = lambda_identity
+        self.resolution      = resolution
+        self.active_roles    = active_roles or ROLES
+        self.pitch_lo        = pitch_lo
+        self.pitch_hi        = pitch_hi
+        self.pca_dim         = pca_dim
 
-        # Parámetros de representación de piano roll
-        self.resolution  = resolution
-        self.active_roles = active_roles or ROLES
-        self.pitch_lo    = pitch_lo
-        self.pitch_hi    = pitch_hi
-        self.pca_dim     = pca_dim
-
-        n_pitch  = (pitch_hi - pitch_lo + 1) if pitch_lo is not None else PITCH_CLASSES
+        n_pitch      = (pitch_hi - pitch_lo + 1) if pitch_lo is not None else PITCH_CLASSES
         self.raw_dim = roll_vector_dim(len(self.active_roles), resolution, n_pitch)
 
         self.G   = FeatureMapper("G_AtoB", solver, alpha, k_neighbors)
         self.F   = FeatureMapper("F_BtoA", solver, alpha, k_neighbors)
         self.D_A = SymbolicDiscriminator("D_A")
         self.D_B = SymbolicDiscriminator("D_B")
+        self.pca = None
 
-        # PCA compartido (se ajusta sobre la unión de ambos dominios)
-        self.pca: "PCA | None" = None
+        self.losses_history = []
+        self.domain_a_name  = "A"
+        self.domain_b_name  = "B"
 
-        self.centroid_a:     np.ndarray | None = None
-        self.centroid_b:     np.ndarray | None = None
-        self.losses_history: list[dict] = []
-        self.domain_a_name:  str = "A"
-        self.domain_b_name:  str = "B"
+    # ── Vectorización ─────────────────────────────────────────────────────
 
-    # ── API de vectorización (encapsula los parámetros del modelo) ──────────
-
-    def midi_to_vec(self, midi_path: str, verbose: bool = False) -> np.ndarray:
-        """Convierte un MIDI al vector de features del modelo (roll + PCA si aplica)."""
-        vec = midi_to_roll_vector(
-            midi_path,
-            resolution   = self.resolution,
-            active_roles = self.active_roles,
-            pitch_lo     = self.pitch_lo,
-            pitch_hi     = self.pitch_hi,
-            verbose      = verbose,
-        )
+    def midi_to_vec(self, midi_path, verbose=False):
+        vec = midi_to_roll_vector(midi_path, self.resolution,
+                                  self.active_roles, self.pitch_lo,
+                                  self.pitch_hi, verbose)
         if self.pca is not None:
             vec = self.pca.transform(vec.reshape(1, -1))[0]
         return vec
 
-    def _apply_pca(self, vecs: np.ndarray) -> np.ndarray:
-        """Aplica la PCA ya ajustada a un conjunto de vectores."""
-        if self.pca is None:
-            return vecs
-        return self.pca.transform(vecs)
+    # ── Entrenamiento ─────────────────────────────────────────────────────
 
-    # ── Entrenamiento ────────────────────────────────────────────────────────
-
-    def fit(self, feats_a: np.ndarray, feats_b: np.ndarray,
-            iters: int = 100, verbose: bool = False):
-        """
-        feats_a, feats_b: arrays (N, raw_dim) de vectores de piano roll crudos.
-        Si pca_dim > 0, ajusta PCA sobre la unión y proyecta antes de entrenar.
-        """
+    def fit(self, feats_a, feats_b, iters=100, verbose=False):
         if len(feats_a) == 0 or len(feats_b) == 0:
             raise ValueError("Se necesitan MIDIs en ambos dominios.")
 
-        # ── PCA (opcional) ─────────────────────────────────────────────────
+        if (self.pca_dim == 0 and HAS_SKLEARN
+                and feats_a.shape[1] > MAX_FULL_COV_DIM):
+            # Ridge guarda una matriz D×D: con D=61440 (valores por defecto) son
+            # ~14 GB y el entrenamiento muere por OOM. Se activa PCA automática.
+            self.pca_dim = 64
+            print(f"  AVISO: dimensión {feats_a.shape[1]} > {MAX_FULL_COV_DIM}: "
+                  f"se activa PCA automática de {self.pca_dim} componentes "
+                  f"(usa --pca-dim/--resolution/--pitch-range para controlarlo).")
+
         if self.pca_dim > 0 and HAS_SKLEARN:
-            all_vecs = np.vstack([feats_a, feats_b])
+            all_vecs     = np.vstack([feats_a, feats_b])
             n_components = min(self.pca_dim, all_vecs.shape[0], all_vecs.shape[1])
+            # FIX: warning explícito si PCA se recorta por corpus pequeño
+            if n_components < self.pca_dim:
+                print(f"  AVISO: pca_dim={self.pca_dim} recortado a {n_components} "
+                      f"(limitado por n_samples={all_vecs.shape[0]} o dim={all_vecs.shape[1]}). "
+                      f"Amplía el corpus o reduce --pca-dim.")
             self.pca = PCA(n_components=n_components)
             self.pca.fit(all_vecs)
             feats_a = self.pca.transform(feats_a)
@@ -852,21 +1312,13 @@ class CycleGANModel:
         else:
             self.pca = None
 
-        self.centroid_a = np.mean(feats_a, axis=0)
-        self.centroid_b = np.mean(feats_b, axis=0)
-
         self.D_A.fit(feats_a)
         self.D_B.fit(feats_b)
 
-        # Pares iniciales por vecino más cercano
         pairs_ab = _nearest_neighbor_pairs(feats_a, feats_b)
         pairs_ba = _nearest_neighbor_pairs(feats_b, feats_a)
-
-        Y_b = np.array([feats_b[j] for j in pairs_ab])
-        Y_a = np.array([feats_a[j] for j in pairs_ba])
-
-        self.G.fit(feats_a, Y_b)
-        self.F.fit(feats_b, Y_a)
+        self.G.fit(feats_a, np.array([feats_b[j] for j in pairs_ab]))
+        self.F.fit(feats_b, np.array([feats_a[j] for j in pairs_ba]))
 
         if verbose:
             print(f"  {'Iter':>4}  {'CycLoss_A':>10}  {'CycLoss_B':>10}  "
@@ -877,101 +1329,383 @@ class CycleGANModel:
             lc_b  = self.F.cycle_loss(feats_b, self.G)
             li_g  = self.G.identity_loss(feats_b)
             li_f  = self.F.identity_loss(feats_a)
-            total = (self.lambda_cycle * (lc_a + lc_b) +
-                     self.lambda_identity * (li_g + li_f))
+            total = self.lambda_cycle * (lc_a + lc_b) + self.lambda_identity * (li_g + li_f)
 
             self.losses_history.append({
                 'iter': it, 'cycle_a': lc_a, 'cycle_b': lc_b,
                 'identity_g': li_g, 'identity_f': li_f, 'total': total
             })
-
             if verbose and (it % max(1, iters // 20) == 0 or it == iters - 1):
                 print(f"  {it:>4}  {lc_a:>10.4f}  {lc_b:>10.4f}  "
                       f"{li_g:>9.4f}  {li_f:>9.4f}  {total:>10.4f}")
 
-            # Refinamiento con datos pseudo-ciclados
-            G_feats_a = np.array([self.G.transform(f) for f in feats_a])
-            aug_X_a   = np.vstack([feats_a, np.array([self.F.transform(f) for f in feats_b])])
-            aug_Y_b   = np.vstack([G_feats_a, feats_b])
-            self.G.fit(aug_X_a, aug_Y_b)
+            # Refinamiento iterativo alternado con datos pseudo-ciclados
+            G_out = np.array([self.G.transform(f) for f in feats_a])
+            self.G.fit(
+                np.vstack([feats_a, [self.F.transform(f) for f in feats_b]]),
+                np.vstack([G_out, feats_b]))
 
-            F_feats_b = np.array([self.F.transform(f) for f in feats_b])
-            aug_X_b   = np.vstack([feats_b, np.array([self.G.transform(f) for f in feats_a])])
-            aug_Y_a   = np.vstack([F_feats_b, feats_a])
-            self.F.fit(aug_X_b, aug_Y_a)
+            F_out = np.array([self.F.transform(f) for f in feats_b])
+            self.F.fit(
+                np.vstack([feats_b, [self.G.transform(f) for f in feats_a]]),
+                np.vstack([F_out, feats_a]))
 
         if verbose:
-            print(f"\n  Entrenamiento completado. Pérdida final total: {total:.4f}")
+            print(f"\n  Pérdida final total: {total:.4f}")
 
-    # ── Inferencia ─────────────────────────────────────────────────────────
+    # ── Inferencia ────────────────────────────────────────────────────────
 
-    def map_features(self, feat: np.ndarray, direction: str = 'AtoB') -> np.ndarray:
-        if direction == 'AtoB':
-            return self.G.transform(feat)
-        elif direction == 'BtoA':
-            return self.F.transform(feat)
-        else:
-            raise ValueError(f"direction debe ser 'AtoB' o 'BtoA', no '{direction}'")
+    def map_features(self, feat, direction='AtoB'):
+        if direction == 'AtoB': return self.G.transform(feat)
+        if direction == 'BtoA': return self.F.transform(feat)
+        raise ValueError(f"direction debe ser 'AtoB' o 'BtoA'")
 
-    def discriminate(self, feat: np.ndarray) -> dict:
+    def discriminate(self, feat):
         return {
-            'D_A_dist':  self.D_A.score(feat),
-            'D_B_dist':  self.D_B.score(feat),
-            'D_A_prob':  self.D_A.domain_probability(feat),
-            'D_B_prob':  self.D_B.domain_probability(feat),
+            'D_A_dist': self.D_A.score(feat),           'D_B_dist': self.D_B.score(feat),
+            'D_A_prob': self.D_A.domain_probability(feat), 'D_B_prob': self.D_B.domain_probability(feat),
         }
 
-    # ── Serialización ────────────────────────────────────────────────────────
+    # ── Serialización ─────────────────────────────────────────────────────
 
-    def save(self, path: str):
+    def save(self, path):
         with open(_ensure_parent(path), 'wb') as f:
             pickle.dump(self, f)
-        print(f"  Modelo guardado → {path}")
+        print(f"  Modelo simbólico guardado → {path}")
 
     @staticmethod
-    def load(path: str) -> "CycleGANModel":
+    def load(path):
+        if not path:
+            sys.exit("ERROR: falta --model (ruta del .pkl del modelo simbólico "
+                     "entrenado con 'train').")
         with open(path, 'rb') as f:
-            model = pickle.load(f)
-        if not isinstance(model, CycleGANModel):
-            raise TypeError("El fichero no contiene un CycleGANModel válido.")
-        return model
+            obj = pickle.load(f)
+        if not isinstance(obj, CycleGANSymbolic):
+            raise TypeError("El fichero no contiene un CycleGANSymbolic.")
+        return obj
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONVERSIÓN: vector de roll transformado → parámetros para el generador DNA
+#  ARQUITECTURA NEURAL  (ResNet-9 + PatchGAN)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def roll_vector_to_dna_overrides(
-        src_vec: np.ndarray,
-        dst_vec: np.ndarray,
-        source_dna: UnifiedDNA,
-        model: CycleGANModel,
-        intensity: float = 1.0) -> UnifiedDNA:
+def _build_generator(n_roles, resolution, n_pitch, n_res_blocks=9, base_ch=64):
     """
-    Deriva parámetros musicales del desplazamiento en el espacio de piano roll
-    para guiar el motor generador DNA.
-
-    En lugar de operar directamente sobre un vector de 22 estadísticas como
-    en v1, aquí se extraen las dimensiones relevantes del roll transformado:
-
-      - Densidad rítmica: fracción de celdas activas en el centroide de melody
-      - Registro medio de pitch: centro de masa del eje de pitch en melody
-      - Complejidad armónica: densidad en accompaniment vs melody
-      - Tensión emocional: actividad en notas disonantes (mod 12)
-
-    El resultado es un UnifiedDNA copia del source con solo esos campos
-    sobreescritos. El resto de parámetros (tonalidad, forma, markov, groove)
-    se heredan del source_dna sin modificación, lo que preserva más estructura
-    original que el enfoque de v1.
+    Generador ResNet para piano rolls.
+    Entrada/Salida: (B, N_ROLES, resolution, n_pitch)
+    Stem(conv7) → Down×2 → ResBlock×N → Up×2 → Head(conv7+Sigmoid)
     """
-    out = copy.deepcopy(source_dna)
+    if not HAS_TORCH:
+        raise ImportError("torch requerido para backend neural.")
 
-    n_roles    = len(model.active_roles)
-    resolution = model.resolution
-    n_pitch    = (model.pitch_hi - model.pitch_lo + 1) if model.pitch_lo is not None else PITCH_CLASSES
-    slot_size  = resolution * n_pitch
+    class _ResBlock(nn.Module):
+        def __init__(self, ch):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.ReflectionPad2d(1), nn.Conv2d(ch, ch, 3),
+                nn.InstanceNorm2d(ch), nn.ReLU(inplace=True), nn.Dropout2d(0.05),
+                nn.ReflectionPad2d(1), nn.Conv2d(ch, ch, 3), nn.InstanceNorm2d(ch),
+            )
+        def forward(self, x): return x + self.net(x)
 
-    # Si hay PCA, revertir al espacio de roll (aproximado)
+    class _Generator(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.stem = nn.Sequential(
+                nn.ReflectionPad2d(3), nn.Conv2d(n_roles, base_ch, 7),
+                nn.InstanceNorm2d(base_ch), nn.ReLU(inplace=True),
+            )
+            self.down = nn.Sequential(
+                nn.Conv2d(base_ch,     base_ch*2, 3, stride=2, padding=1),
+                nn.InstanceNorm2d(base_ch*2), nn.ReLU(inplace=True),
+                nn.Conv2d(base_ch*2,   base_ch*4, 3, stride=2, padding=1),
+                nn.InstanceNorm2d(base_ch*4), nn.ReLU(inplace=True),
+            )
+            self.res  = nn.Sequential(*[_ResBlock(base_ch*4) for _ in range(n_res_blocks)])
+            self.up   = nn.Sequential(
+                nn.ConvTranspose2d(base_ch*4, base_ch*2, 3, stride=2, padding=1, output_padding=1),
+                nn.InstanceNorm2d(base_ch*2), nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(base_ch*2, base_ch,   3, stride=2, padding=1, output_padding=1),
+                nn.InstanceNorm2d(base_ch), nn.ReLU(inplace=True),
+            )
+            self.head = nn.Sequential(
+                nn.ReflectionPad2d(3), nn.Conv2d(base_ch, n_roles, 7), nn.Sigmoid(),
+            )
+        def forward(self, x):
+            return self.head(self.up(self.res(self.down(self.stem(x)))))
+
+    return _Generator()
+
+
+def _build_discriminator(n_roles, base_ch=64):
+    """
+    PatchGAN ~70×70 campo receptivo.
+    Entrada: (B, N_ROLES, resolution, n_pitch)  →  (B, 1, H', W')
+    """
+    if not HAS_TORCH:
+        raise ImportError("torch requerido para backend neural.")
+
+    def _block(ic, oc, norm=True):
+        layers = [nn.Conv2d(ic, oc, 4, stride=2, padding=1)]
+        if norm: layers.append(nn.InstanceNorm2d(oc))
+        layers.append(nn.LeakyReLU(0.2, inplace=True))
+        return layers
+
+    return nn.Sequential(
+        *_block(n_roles,     base_ch,    norm=False),
+        *_block(base_ch,     base_ch*2),
+        *_block(base_ch*2,   base_ch*4),
+        nn.Conv2d(base_ch*4, base_ch*8, 4, stride=1, padding=1),
+        nn.InstanceNorm2d(base_ch*8), nn.LeakyReLU(0.2, inplace=True),
+        nn.Conv2d(base_ch*8, 1, 4, stride=1, padding=1),
+    )
+
+
+class ReplayBuffer:
+    """Almacena los últimos max_size ejemplos generados para estabilizar D."""
+    def __init__(self, max_size=50):
+        self.max_size = max_size; self.data = []
+
+    def push_and_pop(self, data):
+        to_return = []
+        for element in data:
+            element = element.unsqueeze(0)
+            if len(self.data) < self.max_size:
+                self.data.append(element); to_return.append(element)
+            else:
+                if random.random() > 0.5:
+                    idx = random.randint(0, self.max_size - 1)
+                    tmp = self.data[idx].clone()
+                    self.data[idx] = element
+                    to_return.append(tmp)
+                else:
+                    to_return.append(element)
+        return torch.cat(to_return, 0)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ENTRENADOR NEURAL
+# ══════════════════════════════════════════════════════════════════════════════
+
+class CycleTrainer:
+    CONFIG_NAME     = 'model_config.json'
+    CHECKPOINT_NAME = 'checkpoint.pt'
+    BEST_NAME       = 'best_model.pt'
+    HISTORY_NAME    = 'history.json'
+
+    def __init__(self, G_A2B, G_B2A, D_A, D_B,
+                 opt_G, opt_D_A, opt_D_B,
+                 model_dir, patience=40,
+                 lambda_cycle=10.0, lambda_ident=0.5):
+        self.G_A2B = G_A2B; self.G_B2A = G_B2A
+        self.D_A   = D_A;   self.D_B   = D_B
+        self.opt_G = opt_G; self.opt_D_A = opt_D_A; self.opt_D_B = opt_D_B
+        self.model_dir  = Path(model_dir)
+        self.patience   = patience
+        self.λ_cycle    = lambda_cycle
+        self.λ_ident    = lambda_ident
+        self.history    = {'train_G': [], 'train_D': [], 'val_cycle': []}
+        self.best_loss  = float('inf')
+        self.no_improve = 0
+        self.start_epoch = 0
+
+    def save_checkpoint(self, epoch, val_loss, is_best):
+        state = {
+            'epoch': epoch,
+            'G_A2B': self.G_A2B.state_dict(), 'G_B2A': self.G_B2A.state_dict(),
+            'D_A':   self.D_A.state_dict(),   'D_B':   self.D_B.state_dict(),
+            'opt_G': self.opt_G.state_dict(),
+            'opt_D_A': self.opt_D_A.state_dict(), 'opt_D_B': self.opt_D_B.state_dict(),
+            'best_loss': self.best_loss, 'no_improve': self.no_improve,
+            'history': self.history,
+        }
+        torch.save(_ensure_parent(state), self.model_dir / self.CHECKPOINT_NAME)
+        if is_best:
+            torch.save(_ensure_parent(state), self.model_dir / self.BEST_NAME)
+        with open(_ensure_parent(self.model_dir / self.HISTORY_NAME), 'w') as f:
+            json.dump(self.history, f, indent=2)
+
+    def load_checkpoint(self):
+        path = self.model_dir / self.CHECKPOINT_NAME
+        if not path.exists():
+            print("[train] Entrenando desde cero."); return
+        state = torch.load(path, map_location='cpu', weights_only=False)  # FIX: explícito para torch>=2.0
+        self.G_A2B.load_state_dict(state['G_A2B']); self.G_B2A.load_state_dict(state['G_B2A'])
+        self.D_A.load_state_dict(state['D_A']);   self.D_B.load_state_dict(state['D_B'])
+        self.opt_G.load_state_dict(state['opt_G'])
+        self.opt_D_A.load_state_dict(state['opt_D_A']); self.opt_D_B.load_state_dict(state['opt_D_B'])
+        self.best_loss = state['best_loss']; self.no_improve = state['no_improve']
+        self.history   = state['history'];  self.start_epoch = state['epoch'] + 1
+        print(f"[train] Reanudando desde época {self.start_epoch} (mejor val={self.best_loss:.4f})")
+
+    def _gan_loss(self, pred, target_is_real):
+        target = torch.ones_like(pred) if target_is_real else torch.zeros_like(pred)
+        return F.mse_loss(pred, target)
+
+    def _train_epoch(self, loader_A, loader_B, buf_A, buf_B, device):
+        self.G_A2B.train(); self.G_B2A.train()
+        self.D_A.train();   self.D_B.train()
+        sum_G = sum_D = n_batches = 0
+        iter_B = iter(loader_B)
+
+        for real_A in loader_A:
+            try:
+                real_B = next(iter_B)
+            except StopIteration:
+                iter_B = iter(loader_B); real_B = next(iter_B)
+
+            real_A = real_A.to(device); real_B = real_B.to(device)
+
+            # ── Generadores ──────────────────────────────────────────────
+            self.opt_G.zero_grad()
+            fake_B = self.G_A2B(real_A); fake_A = self.G_B2A(real_B)
+            loss_G = (self._gan_loss(self.D_B(fake_B), True)
+                    + self._gan_loss(self.D_A(fake_A), True)
+                    + self.λ_cycle * (F.l1_loss(self.G_B2A(fake_B), real_A)
+                                    + F.l1_loss(self.G_A2B(fake_A), real_B))
+                    + self.λ_ident * (F.l1_loss(self.G_A2B(real_B), real_B)
+                                    + F.l1_loss(self.G_B2A(real_A), real_A)))
+            loss_G.backward()
+            nn_utils.clip_grad_norm_(
+                list(self.G_A2B.parameters()) + list(self.G_B2A.parameters()), 1.0)
+            self.opt_G.step()
+
+            # ── Discriminadores ───────────────────────────────────────────
+            self.opt_D_A.zero_grad()
+            loss_D_A = 0.5 * (self._gan_loss(self.D_A(real_A), True)
+                             + self._gan_loss(self.D_A(buf_A.push_and_pop(fake_A.detach())), False))
+            loss_D_A.backward(); self.opt_D_A.step()
+
+            self.opt_D_B.zero_grad()
+            loss_D_B = 0.5 * (self._gan_loss(self.D_B(real_B), True)
+                             + self._gan_loss(self.D_B(buf_B.push_and_pop(fake_B.detach())), False))
+            loss_D_B.backward(); self.opt_D_B.step()
+
+            sum_G += loss_G.item(); sum_D += (loss_D_A + loss_D_B).item(); n_batches += 1
+
+        n_batches = max(n_batches, 1)
+        return sum_G / n_batches, sum_D / n_batches
+
+    def _val_cycle_loss(self, loader_A, loader_B, device):
+        self.G_A2B.eval(); self.G_B2A.eval()
+        total = n = 0
+        with torch.no_grad():
+            for real_A in loader_A:
+                real_A = real_A.to(device)
+                total += F.l1_loss(self.G_B2A(self.G_A2B(real_A)), real_A).item()
+                n += 1
+                if n >= 20: break
+        return total / max(n, 1)
+
+    def train(self, loader_A_tr, loader_B_tr, loader_A_val, loader_B_val,
+              n_epochs, resume=False):
+        import time
+        import torch.optim.lr_scheduler as sched
+
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        for m in (self.G_A2B, self.G_B2A, self.D_A, self.D_B):
+            m.to(device)
+
+        buf_A = ReplayBuffer(); buf_B = ReplayBuffer()
+
+        def _lr_lambda(epoch):
+            ds = n_epochs // 2
+            return 1.0 if epoch < ds else 1.0 - (epoch - ds) / max(n_epochs - ds, 1)
+
+        sch_G   = sched.LambdaLR(self.opt_G,   _lr_lambda)
+        sch_D_A = sched.LambdaLR(self.opt_D_A, _lr_lambda)
+        sch_D_B = sched.LambdaLR(self.opt_D_B, _lr_lambda)
+
+        if resume:
+            self.load_checkpoint()
+
+        print(f"\n{'─'*64}")
+        print(f"  CycleGAN neural: {n_epochs} épocas  |  dispositivo: {device}")
+        print(f"  λ_cycle={self.λ_cycle}  λ_identity={self.λ_ident}")
+        print(f"{'─'*64}\n")
+
+        train_start = time.time()
+        bar_w = 30
+
+        for epoch in range(self.start_epoch, n_epochs):
+            t0 = time.time()
+            if epoch == self.start_epoch and resume:
+                for _ in range(self.start_epoch):
+                    sch_G.step(); sch_D_A.step(); sch_D_B.step()
+
+            loss_G, loss_D = self._train_epoch(loader_A_tr, loader_B_tr, buf_A, buf_B, device)
+            val_cycle      = self._val_cycle_loss(loader_A_val, loader_B_val, device)
+
+            sch_G.step(); sch_D_A.step(); sch_D_B.step()
+
+            self.history['train_G'].append(round(loss_G, 5))
+            self.history['train_D'].append(round(loss_D, 5))
+            self.history['val_cycle'].append(round(val_cycle, 5))
+
+            is_best = val_cycle < self.best_loss
+            if is_best:
+                self.best_loss = val_cycle; self.no_improve = 0
+            else:
+                self.no_improve += 1
+
+            self.save_checkpoint(epoch, val_cycle, is_best)
+
+            elapsed  = time.time() - t0
+            progress = int((epoch + 1) / n_epochs * bar_w)
+            bar      = '█' * progress + '░' * (bar_w - progress)
+            best_str = ' ◀ mejor' if is_best else ''
+            stop_str = (f'  [sin mejora {self.no_improve}/{self.patience}]'
+                        if self.no_improve > 0 else '')
+            print(f"  Época {epoch+1:4d}/{n_epochs}  │{bar}│  "
+                  f"G={loss_G:.4f}  D={loss_D:.4f}  val_cycle={val_cycle:.4f}"
+                  f"  {_fmt_time(elapsed)}/ép{best_str}{stop_str}")
+
+            if self.no_improve >= self.patience:
+                print(f"\n  Early stopping tras {epoch+1} épocas.")
+                break
+
+        print(f"\n{'─'*64}")
+        print(f"  Completado en {_fmt_time(time.time() - train_start)}.")
+        print(f"  Mejor val_cycle : {self.best_loss:.4f}")
+        print(f"  Modelos en      : {self.model_dir}")
+        print(f"{'─'*64}\n")
+
+
+def _load_neural_models(model_dir):
+    cfg_path   = Path(model_dir) / CycleTrainer.CONFIG_NAME
+    model_path = Path(model_dir) / CycleTrainer.BEST_NAME
+    if not cfg_path.exists() or not model_path.exists():
+        raise FileNotFoundError(
+            f"Modelo neural no encontrado en {model_dir}. ¿Has ejecutado train --backend neural?")
+    with open(cfg_path) as f:
+        cfg = json.load(f)
+    G_A2B = _build_generator(cfg['n_roles'], cfg['resolution'], cfg['n_pitch'],
+                              cfg.get('n_res_blocks', 9), cfg.get('base_ch', 64))
+    G_B2A = _build_generator(cfg['n_roles'], cfg['resolution'], cfg['n_pitch'],
+                              cfg.get('n_res_blocks', 9), cfg.get('base_ch', 64))
+    state = torch.load(str(model_path), map_location='cpu', weights_only=False)  # FIX: explícito para torch>=2.0
+    G_A2B.load_state_dict(state['G_A2B']); G_B2A.load_state_dict(state['G_B2A'])
+    G_A2B.eval(); G_B2A.eval()
+    return G_A2B, G_B2A, cfg
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CONVERSIÓN ROLL TRANSFORMADO → PARÁMETROS DNA (backend simbólico)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def roll_vector_to_dna_overrides(src_vec, dst_vec, source_dna, model, intensity=1.0):
+    """
+    Deriva overrides de parámetros DNA desde el desplazamiento en el espacio de roll:
+      · Densidad rítmica (slot melody vs src)
+      · Registro medio de pitch (centro de masa del slot melody)
+      · Complejidad armónica (ratio acc/melody)
+      · Tensión emocional (pitch-classes disonantes {1,2,6,10,11})
+    Solo sobreescribe los campos que el roll indica que deben cambiar.
+    """
+    out       = copy.deepcopy(source_dna)
+    n_pitch   = (model.pitch_hi - model.pitch_lo + 1) if model.pitch_lo is not None else PITCH_CLASSES
+    slot_size = model.resolution * n_pitch
+
     def _get_raw(vec):
         if model.pca is not None:
             return model.pca.inverse_transform(vec.reshape(1, -1))[0]
@@ -979,145 +1713,92 @@ def roll_vector_to_dna_overrides(
 
     src_raw = _get_raw(src_vec)
     dst_raw = _get_raw(dst_vec)
-
-    # Interpolar según intensidad
-    interp = src_raw * (1.0 - intensity) + dst_raw * intensity
+    interp  = src_raw * (1.0 - intensity) + dst_raw * intensity
 
     def _slot(vec, role_name):
-        """Extrae el slot (resolution, n_pitch) del rol dado."""
-        idx = model.active_roles.index(role_name) if role_name in model.active_roles else None
-        if idx is None:
-            return None
-        start = idx * slot_size
-        return vec[start: start + slot_size].reshape(resolution, n_pitch)
+        if role_name not in model.active_roles: return None
+        idx = model.active_roles.index(role_name)
+        return vec[idx * slot_size: (idx + 1) * slot_size].reshape(model.resolution, n_pitch)
 
-    mel_slot  = _slot(interp, 'melody')
-    acc_slot  = _slot(interp, 'accompaniment')
-    bass_slot = _slot(interp, 'bass')
+    mel_slot = _slot(interp, 'melody')
+    acc_slot = _slot(interp, 'accompaniment')
 
-    # ── Densidad rítmica (notas activas en melodía) ────────────────────────
+    # ── Densidad rítmica ──────────────────────────────────────────────────
     if mel_slot is not None:
-        density = float(mel_slot.mean())
-        # Mapear [0, 1] a una escala de densidad de notas por compás
-        # Un centroide con densidad 0.1 equivale aprox. a corcheas (~8 notas/compás)
-        out.harmony_complexity = float(
-            np.clip(getattr(source_dna, 'harmony_complexity', 0.3)
-                    + (density - float(_slot(src_raw, 'melody').mean())),
-                    0.0, 1.0)
-        ) if _slot(src_raw, 'melody') is not None else out.harmony_complexity
+        src_mel = _slot(src_raw, 'melody')
+        if src_mel is not None:
+            out.harmony_complexity = float(np.clip(
+                getattr(source_dna, 'harmony_complexity', 0.3)
+                + (float(mel_slot.mean()) - float(src_mel.mean())),
+                0.0, 1.0))
 
-    # ── Registro medio de pitch ────────────────────────────────────────────
+    # ── Registro medio de pitch ───────────────────────────────────────────
     if mel_slot is not None and mel_slot.sum() > 0:
-        pitch_axis = mel_slot.sum(axis=0)  # (n_pitch,)
-        mean_pitch_idx = float(np.average(np.arange(n_pitch), weights=pitch_axis + 1e-9))
-        # Convertir índice de pitch al espacio MIDI
         pitch_lo_eff = model.pitch_lo if model.pitch_lo is not None else 0
-        mean_pitch_midi = pitch_lo_eff + mean_pitch_idx
-        # Ajustar el registro del source_dna si el desplazamiento es significativo
-        src_mel_slot = _slot(src_raw, 'melody')
-        if src_mel_slot is not None and src_mel_slot.sum() > 0:
-            src_pitch_ax = src_mel_slot.sum(axis=0)
-            src_mean_idx = float(np.average(np.arange(n_pitch), weights=src_pitch_ax + 1e-9))
-            pitch_delta  = (mean_pitch_idx - src_mean_idx) * intensity
-            # Solo guardar si hay desplazamiento real
+        mean_idx     = float(np.average(np.arange(n_pitch),
+                                        weights=mel_slot.sum(axis=0) + 1e-9))
+        src_mel2 = _slot(src_raw, 'melody')
+        if src_mel2 is not None and src_mel2.sum() > 0:
+            src_mean_idx = float(np.average(np.arange(n_pitch),
+                                            weights=src_mel2.sum(axis=0) + 1e-9))
+            pitch_delta  = (mean_idx - src_mean_idx) * intensity
             if abs(pitch_delta) > 1.0:
                 contour = list(getattr(source_dna, 'pitch_contour', []) or [])
                 if contour:
                     shift = int(round(pitch_delta))
-                    out.pitch_contour = [
-                        int(np.clip(p + shift, 21, 108)) for p in contour
-                    ]
+                    out.pitch_contour = [int(np.clip(p + shift, 21, 108)) for p in contour]
 
-    # ── Complejidad armónica relativa acc/melody ───────────────────────────
+    # ── Complejidad armónica acc/melody ───────────────────────────────────
     if acc_slot is not None and mel_slot is not None:
-        acc_density = float(acc_slot.mean())
-        mel_density = float(mel_slot.mean()) + 1e-9
-        ratio       = min(acc_density / mel_density, 2.0)
-        src_acc = _slot(src_raw, 'accompaniment')
-        src_mel = _slot(src_raw, 'melody')
-        if src_acc is not None and src_mel is not None:
-            src_ratio = float(src_acc.mean()) / (float(src_mel.mean()) + 1e-9)
-            delta_ratio = (ratio - src_ratio) * intensity * 0.3
-            out.harmony_complexity = float(
-                np.clip(out.harmony_complexity + delta_ratio, 0.0, 1.0))
+        ratio   = float(acc_slot.mean()) / (float(mel_slot.mean()) + 1e-9)
+        src_acc = _slot(src_raw, 'accompaniment'); src_mel3 = _slot(src_raw, 'melody')
+        if src_acc is not None and src_mel3 is not None:
+            src_ratio = float(src_acc.mean()) / (float(src_mel3.mean()) + 1e-9)
+            out.harmony_complexity = float(np.clip(
+                out.harmony_complexity + (ratio - src_ratio) * intensity * 0.3, 0.0, 1.0))
 
-    # ── Tensión emocional: presencia de intervalos disonantes ────────────
+    # ── Tensión emocional (pitch-classes disonantes) ──────────────────────
     if mel_slot is not None:
-        # Proyectar al espacio de pitch-class
-        pitch_lo_eff = model.pitch_lo if model.pitch_lo is not None else 0
-        pc_profile   = np.zeros(12, dtype=np.float32)
-        for pc in range(12):
-            # Sumar todas las posiciones pitch que correspondan a esta clase
-            idxs = [i for i in range(n_pitch)
-                    if (pitch_lo_eff + i) % 12 == pc]
-            if idxs:
-                pc_profile[pc] = mel_slot[:, idxs].mean()
-
+        pitch_lo_eff  = model.pitch_lo if model.pitch_lo is not None else 0
         DISSONANT_PCS = {1, 2, 6, 10, 11}
-        total_act = pc_profile.sum() + 1e-9
-        diss_frac = sum(pc_profile[pc] for pc in DISSONANT_PCS) / total_act
+        pc_profile    = np.zeros(12, dtype=np.float32)
+        for pc in range(12):
+            idxs = [i for i in range(n_pitch) if (pitch_lo_eff + i) % 12 == pc]
+            if idxs: pc_profile[pc] = mel_slot[:, idxs].mean()
+        diss_frac = sum(pc_profile[pc] for pc in DISSONANT_PCS) / (pc_profile.sum() + 1e-9)
 
-        tc = list(getattr(source_dna, 'tension_curve', [0.5]) or [0.5])
-        src_mel_slot2 = _slot(src_raw, 'melody')
-        if src_mel_slot2 is not None:
+        src_mel4 = _slot(src_raw, 'melody')
+        if src_mel4 is not None:
             src_pc = np.zeros(12, dtype=np.float32)
             for pc in range(12):
-                idxs = [i for i in range(n_pitch)
-                        if (pitch_lo_eff + i) % 12 == pc]
-                if idxs:
-                    src_pc[pc] = src_mel_slot2[:, idxs].mean()
-            src_diss = sum(src_pc[pc] for pc in DISSONANT_PCS) / (src_pc.sum() + 1e-9)
+                idxs = [i for i in range(n_pitch) if (pitch_lo_eff + i) % 12 == pc]
+                if idxs: src_pc[pc] = src_mel4[:, idxs].mean()
+            src_diss      = sum(src_pc[pc] for pc in DISSONANT_PCS) / (src_pc.sum() + 1e-9)
             delta_tension = (diss_frac - src_diss) * intensity
-            out.tension_curve = [
-                float(np.clip(t + delta_tension, 0.0, 1.0)) for t in tc
-            ]
+            tc            = list(getattr(source_dna, 'tension_curve', [0.5]) or [0.5])
+            out.tension_curve = [float(np.clip(t + delta_tension, 0.0, 1.0)) for t in tc]
 
     return out
 
 
-def _nearest_neighbor_pairs(src: np.ndarray, dst: np.ndarray) -> list:
-    indices = []
-    for f in src:
-        dists = [np.linalg.norm(f - g) for g in dst]
-        indices.append(int(np.argmin(dists)))
-    return indices
-
-
 # ══════════════════════════════════════════════════════════════════════════════
-#  CARGA DE CORPUS
+#  CARGA DE CORPUS (backend simbólico)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def load_corpus_rolls(directory: str,
-                      resolution: int = TICKS_PER_BAR,
-                      active_roles: list = None,
-                      pitch_lo: int = None,
-                      pitch_hi: int = None,
-                      verbose: bool = False) -> np.ndarray:
-    """
-    Carga todos los MIDIs de un directorio y los convierte a vectores de piano roll.
-    Retorna array (N, D).
-    """
-    midi_files = (
-        glob.glob(os.path.join(directory, "*.mid")) +
-        glob.glob(os.path.join(directory, "*.midi"))
-    )
+def load_corpus_rolls(directory, resolution=TICKS_PER_BAR, active_roles=None,
+                      pitch_lo=None, pitch_hi=None, verbose=False):
+    midi_files = (glob.glob(os.path.join(directory, "*.mid")) +
+                  glob.glob(os.path.join(directory, "*.midi")))
     if not midi_files:
         raise RuntimeError(f"No se encontraron MIDIs en {directory}")
 
     vecs = []
     for path in midi_files:
         try:
-            v = midi_to_roll_vector(
-                path,
-                resolution   = resolution,
-                active_roles = active_roles or ROLES,
-                pitch_lo     = pitch_lo,
-                pitch_hi     = pitch_hi,
-                verbose      = False,
-            )
+            v = midi_to_roll_vector(path, resolution, active_roles or ROLES,
+                                    pitch_lo, pitch_hi, verbose=False)
             vecs.append(v)
-            if verbose:
-                print(f"  ✓ {os.path.basename(path)}")
+            if verbose: print(f"  ✓ {os.path.basename(path)}")
         except Exception as e:
             print(f"  ✗ {os.path.basename(path)}: {e}")
 
@@ -1130,47 +1811,30 @@ def load_corpus_rolls(directory: str,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  MOTOR DE GENERACIÓN (igual que v1 — el DNA sigue siendo el generador)
+#  MOTOR DE GENERACIÓN DNA (compartido por ambos backends)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _snap_melody_to_key(melody, key_obj):
     return [(o, _snap_to_scale(p, key_obj), d, v) for o, p, d, v in melody]
 
 
-def run_cycle_gan_transform(
-    source_dna: UnifiedDNA,
-    transformed_dna: UnifiedDNA,
-    original_melody,
-    intensity: float = 1.0,
-    n_bars: int = 16,
-    candidates: int = 3,
-    seed: int = 42,
-    verbose: bool = False,
-):
-    """
-    Motor de generación: dado el DNA transformado por el CycleGAN,
-    genera el MIDI de salida preservando la esencia melódica del source.
-    (Idéntico a v1; el DNA transformado ahora viene de roll_vector_to_dna_overrides.)
-    """
-    random.seed(seed)
-    np.random.seed(seed)
+def run_cycle_gan_transform(source_dna, transformed_dna, original_melody,
+                            intensity=1.0, n_bars=16, candidates=3,
+                            seed=42, verbose=False):
+    random.seed(seed); np.random.seed(seed)
 
     target_key = transformed_dna.key_obj or source_dna.key_obj
     tempo_bpm  = transformed_dna.tempo_bpm
     time_sig   = transformed_dna.time_sig or source_dna.time_sig
-    bpb = time_sig[0]
+    bpb        = time_sig[0]
 
     prog_s = source_dna.harmony_prog or [('I', 2.0)]
     prog_t = transformed_dna.harmony_prog or [('I', 2.0)]
     n_prog = max(len(prog_s), len(prog_t))
     prog_s = (prog_s * (n_prog // max(len(prog_s), 1) + 1))[:n_prog]
     prog_t = (prog_t * (n_prog // max(len(prog_t), 1) + 1))[:n_prog]
-    mixed_prog = []
-    for (fs, ds), (ft, dt) in zip(prog_s, prog_t):
-        if random.random() < intensity:
-            mixed_prog.append((ft, dt))
-        else:
-            mixed_prog.append((fs, ds))
+    mixed_prog = [(ft, dt) if random.random() < intensity else (fs, ds)
+                  for (fs, ds), (ft, dt) in zip(prog_s, prog_t)]
 
     ec = EmotionalController(
         tension_curve   = transformed_dna.tension_curve   or [0.5],
@@ -1181,7 +1845,6 @@ def run_cycle_gan_transform(
         emotional_arc_label = getattr(transformed_dna, 'emotional_arc_label', ''),
         n_bars = n_bars,
     )
-
     fg = FormGenerator(
         form_string       = getattr(transformed_dna, 'form_string',       'AABA'),
         section_map       = getattr(transformed_dna, 'section_map',       {}),
@@ -1190,333 +1853,643 @@ def run_cycle_gan_transform(
         n_bars_out        = n_bars,
     )
 
-    total_beats_out = n_bars * bpb
+    total_beats = n_bars * bpb
     if original_melody:
-        total_beats_in = max(o + d for o, _, d, _ in original_melody)
-        scale = total_beats_out / max(total_beats_in, 1e-9)
-        scaled_mel = [(o * scale, p, d * scale, v) for o, p, d, v in original_melody]
-        scaled_mel = _snap_melody_to_key(scaled_mel, target_key)
+        t_in   = max(o + d for o, _, d, _ in original_melody)
+        scale  = total_beats / max(t_in, 1e-9)
+        scaled = [(o * scale, p, d * scale, v) for o, p, d, v in original_melody]
+        scaled = _snap_melody_to_key(scaled, target_key)
     else:
-        scaled_mel = []
+        scaled = []
 
     groove = (transformed_dna.groove_map
               if getattr(transformed_dna, 'groove_map', None)
-              and transformed_dna.groove_map.trained
-              else None)
+              and transformed_dna.groove_map.trained else None)
 
     best_score, best_result = -1.0, None
 
     for ci in range(max(1, candidates)):
-        random.seed(seed + ci * 17)
-        np.random.seed(seed + ci * 17)
+        random.seed(seed + ci * 17); np.random.seed(seed + ci * 17)
 
         generated = dna_mod._generate_melody_with_modulation(
-            h_prog       = mixed_prog,
-            target_key   = target_key,
-            r_pat        = transformed_dna.rhythm_pattern or source_dna.rhythm_pattern,
-            contour      = transformed_dna.pitch_contour  or source_dna.pitch_contour,
-            reg          = source_dna.pitch_register,
-            motif        = source_dna.motif_intervals,
-            n_bars       = n_bars,
-            ec           = ec,
-            fg           = fg,
-            bpb          = bpb,
-            rhythm_strength    = intensity,
-            markov             = transformed_dna.markov,
-            seq_phrases        = getattr(transformed_dna, 'sequitur_phrases', []),
-            melody_mode        = 'markov',
-            surprise_rate      = 0.08,
-            use_motif_coherence= True,
-            use_tension_markov = True,
+            h_prog              = mixed_prog,
+            target_key          = target_key,
+            r_pat               = transformed_dna.rhythm_pattern or source_dna.rhythm_pattern,
+            contour             = transformed_dna.pitch_contour  or source_dna.pitch_contour,
+            reg                 = source_dna.pitch_register,
+            motif               = source_dna.motif_intervals,
+            n_bars              = n_bars,
+            ec                  = ec,
+            fg                  = fg,
+            bpb                 = bpb,
+            rhythm_strength     = intensity,
+            markov              = transformed_dna.markov,
+            seq_phrases         = getattr(transformed_dna, 'sequitur_phrases', []),
+            melody_mode         = 'markov',
+            surprise_rate       = 0.08,
+            use_motif_coherence = True,
+            use_tension_markov  = True,
         )
 
-        if scaled_mel and generated:
-            n     = min(len(scaled_mel), len(generated))
+        if scaled and generated:
+            n = min(len(scaled), len(generated))
             alpha = 1.0 - intensity
-            gen_sorted = sorted(generated, key=lambda x: x[0])
-            src_sorted = sorted(scaled_mel, key=lambda x: x[0])
-            mel = []
+            gen_s = sorted(generated, key=lambda x: x[0])
+            src_s = sorted(scaled,    key=lambda x: x[0])
+            mel   = []
             for i in range(n):
-                oa, pa, da, va = src_sorted[i]
-                ob, pb, db, vb = gen_sorted[i]
-                mp = int(round(pa * alpha + pb * (1 - alpha)))
-                mp = _snap_to_scale(mp, target_key)
+                oa, pa, da, va = src_s[i]; ob, pb, db, vb = gen_s[i]
+                mp = _snap_to_scale(int(round(pa * alpha + pb * (1 - alpha))), target_key)
                 mel.append((oa, mp, da * alpha + db * (1 - alpha),
-                             int(va * alpha + vb * (1 - alpha))))
-        elif scaled_mel:
-            mel = scaled_mel
+                            int(va * alpha + vb * (1 - alpha))))
+        elif scaled:
+            mel = scaled
         else:
             mel = generated
 
-        mel = add_ornamentation(mel, target_key,
-                                getattr(transformed_dna, 'style', 'generic'))
-        if groove:
-            mel = humanize(mel, groove, bpb)
+        mel = add_ornamentation(mel, target_key, getattr(transformed_dna, 'style', 'generic'))
+        if groove: mel = humanize(mel, groove, bpb)
 
-        acc  = generate_accompaniment(
-            mixed_prog, target_key, n_bars, ec, fg, bpb,
-            groove_map=groove,
-            harmony_complexity=transformed_dna.harmony_complexity)
+        acc  = generate_accompaniment(mixed_prog, target_key, n_bars, ec, fg, bpb,
+                                      groove_map=groove,
+                                      harmony_complexity=transformed_dna.harmony_complexity)
         bass = generate_bass(mixed_prog, target_key, n_bars, bpb, groove)
         cp   = generate_counterpoint(mel, mixed_prog, target_key, n_bars, bpb, ec)
 
         sc = score_candidate(mel, acc, target_key)
-        if verbose:
-            print(f"    Candidato {ci+1}/{candidates}: score={sc:.3f}")
-        if sc > best_score:
-            best_score, best_result = sc, (mel, acc, bass, cp)
+        if verbose: print(f"    Candidato {ci+1}/{candidates}: score={sc:.3f}")
+        if sc > best_score: best_score, best_result = sc, (mel, acc, bass, cp)
 
     mel, acc, bass, cp = best_result
-
     perc = generate_percussion(
-        transformed_dna.rhythm_grid,
-        transformed_dna.rhythm_accent_grid,
-        n_bars, bpb,
-        groove_map=groove,
-        style=getattr(transformed_dna, 'style', 'generic'),
-    )
+        transformed_dna.rhythm_grid, transformed_dna.rhythm_accent_grid,
+        n_bars, bpb, groove_map=groove,
+        style=getattr(transformed_dna, 'style', 'generic'))
 
     return mel, acc, bass, cp, perc, target_key, tempo_bpm, time_sig, fg
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  COMANDOS PRINCIPALES
+#  PREPARAR CORPUS (.npz, backend neural)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _parse_roll_args(args) -> tuple:
-    """Extrae parámetros de piano roll de los args del CLI."""
+def _prepare_one_midi(args_tuple):
+    (midi_path, output_dir, resolution, window_bars,
+     active_roles, pitch_lo, pitch_hi) = args_tuple
+
+    stem    = midi_path.stem
+    stats   = {r: 0 for r in ROLES}
+    stats.update({'files_ok': 0, 'files_skipped': 0, 'total_windows': 0})
+    n_pitch = (pitch_hi - pitch_lo + 1) if pitch_lo is not None else PITCH_CLASSES
+
+    try:
+        mid = mido.MidiFile(str(midi_path))
+    except Exception as e:
+        return stem, f"ERROR al cargar: {e}", None, stats
+
+    note_lists = _extract_note_lists(mid)
+    if not note_lists:
+        stats['files_skipped'] = 1
+        return stem, "sin notas — omitido", None, stats
+
+    role_assignment = RoleAssigner().assign(mid)
+    if not role_assignment:
+        stats['files_skipped'] = 1
+        return stem, "sin asignación de roles — omitido", None, stats
+
+    tpb_raw    = mid.ticks_per_beat
+    # FIX: leer compás real en lugar de asumir 4/4
+    ts_num = 4
+    for track in mid.tracks:
+        for msg in track:
+            if msg.type == 'time_signature':
+                ts_num = msg.numerator
+                break
+    tpbar_real = tpb_raw * ts_num
+    all_ticks  = max((n[1] for notes in note_lists.values() for n in notes), default=0)
+    total_bars = max(1, int(all_ticks / tpbar_real) + 1)
+    converter  = PianoRollConverter(resolution=resolution, window_bars=window_bars)
+
+    role_rolls  = {}
+    roles_found = []
+    for role, key in role_assignment.items():
+        if role not in active_roles: continue
+        notes = note_lists.get(key, [])
+        if not notes: continue
+        roll = converter.notes_to_roll(notes, tpbar_real, total_bars)
+        if pitch_lo is not None:
+            roll = _crop_pitch(roll, pitch_lo, pitch_hi)
+        role_rolls[role] = roll
+        roles_found.append(role); stats[role] = 1
+
+    if not role_rolls:
+        stats['files_skipped'] = 1
+        return stem, "no se pudo construir ningún piano roll — omitido", None, stats
+
+    role_windows = {}; min_windows = None
+    for role, roll in role_rolls.items():
+        windows = converter.roll_to_windows(roll)
+        if windows.shape[0] == 0: continue
+        role_windows[role] = windows
+        min_windows = (windows.shape[0] if min_windows is None
+                       else min(min_windows, windows.shape[0]))
+
+    if not min_windows:
+        stats['files_skipped'] = 1
+        return stem, f"demasiado corto ({total_bars} compases) — omitido", None, stats
+
+    save_dict = {f'roll_{r}': role_windows[r][:min_windows] for r in role_windows}
+    meta = {
+        'source': stem, 'resolution': resolution, 'window_bars': window_bars,
+        'total_bars': total_bars, 'n_windows': min_windows,
+        'roles': roles_found, 'tpbar': tpbar_real,   # FIX: era tpb_raw (= tpb*4, asumía 4/4)
+        'ts_num': ts_num,          # FIX: guardar compás real para que _rolls_to_midi lo use
+        'pitch_lo': pitch_lo if pitch_lo is not None else 0,
+        'pitch_hi': pitch_hi if pitch_hi is not None else 127,
+        'n_pitch':  n_pitch,
+    }
+    save_dict['meta_json'] = np.array([json.dumps(meta)])
+    np.savez_compressed(_ensure_parent(str(Path(output_dir) / f"{stem}.npz")), **save_dict)
+
+    stats['files_ok'] = 1; stats['total_windows'] = min_windows
+    return (stem,
+            f"OK  ({total_bars} compases, {min_windows} ventanas, "
+            f"roles: {', '.join(roles_found)})",
+            True, stats)
+
+
+def cmd_prepare(args):
+    input_dir  = Path(args.input_dir)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    disabled     = set(getattr(args, 'disable_roles', None) or [])
+    active_roles = [r for r in ROLES if r not in disabled]
+    pr           = _pitch_range(getattr(args, 'pitch_range', None))
+    pitch_lo     = pr[0] if pr else None
+    pitch_hi     = pr[1] if pr else None
+
+    if pr:
+        print(f"[prepare] Rango de pitch: {args.pitch_range} notas (MIDI {pitch_lo}–{pitch_hi})")
+    if disabled:
+        print(f"[prepare] Roles deshabilitados: {', '.join(sorted(disabled))}")
+
+    midi_files = sorted(list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi')))
+    if not midi_files:
+        print(f"[prepare] No se encontraron MIDI en {input_dir}"); sys.exit(1)
+
+    print(f"[prepare] {len(midi_files)} archivos MIDI → {output_dir}\n")
+
+    job_args    = [(p, output_dir, args.resolution, args.window_bars,
+                    active_roles, pitch_lo, pitch_hi) for p in midi_files]
+    stats_total = {r: 0 for r in ROLES}
+    stats_total.update({'files_ok': 0, 'files_skipped': 0, 'total_windows': 0})
+
+    with ThreadPoolExecutor() as ex:
+        futures = {ex.submit(_prepare_one_midi, a): a[0] for a in job_args}
+        for fut in as_completed(futures):
+            stem, msg, ok, partial = fut.result()
+            print(f"  {'[OK]' if ok else '[--]'} {stem:40s}  {msg}")
+            for k in stats_total: stats_total[k] += partial.get(k, 0)
+
+    print(f"\n[prepare] Archivos OK       : {stats_total['files_ok']}")
+    print(f"[prepare] Archivos omitidos : {stats_total['files_skipped']}")
+    print(f"[prepare] Ventanas totales  : {stats_total['total_windows']}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  HELPERS CLI
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _parse_roll_args(args):
     active_roles = [r for r in ROLES
                     if r not in set(getattr(args, 'disable_roles', None) or [])]
-    pr = _pitch_range(getattr(args, 'pitch_range', None))
-    pitch_lo = pr[0] if pr else None
-    pitch_hi = pr[1] if pr else None
-    resolution = getattr(args, 'resolution', TICKS_PER_BAR)
-    pca_dim    = getattr(args, 'pca_dim', 0)
-    return active_roles, pitch_lo, pitch_hi, resolution, pca_dim
+    pr           = _pitch_range(getattr(args, 'pitch_range', None))
+    pitch_lo     = pr[0] if pr else None
+    pitch_hi     = pr[1] if pr else None
+    return active_roles, pitch_lo, pitch_hi, getattr(args, 'resolution', TICKS_PER_BAR)
 
 
-# ── TRAIN ─────────────────────────────────────────────────────────────────────
+def _compute_n_bars(args, original_melody, source_dna):
+    if args.bars: return args.bars
+    bpb = source_dna.time_sig[0]
+    if original_melody:
+        total_beats = max(o + d for o, _, d, _ in original_melody)
+        return max(4, (int(math.ceil(total_beats / bpb)) // 4) * 4)
+    return 16
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  COMANDOS
+# ══════════════════════════════════════════════════════════════════════════════
 
 def cmd_train(args):
+    backend = getattr(args, 'backend', 'symbolic')
     print("═" * 65)
-    print("  CYCLE-GAN STYLE TRANSFER v2 — TRAIN  (piano roll)")
+    print(f"  CYCLE-GAN STYLE TRANSFER v3 — TRAIN  [{backend}]")
     print("═" * 65)
+    if backend == 'neural':
+        if not HAS_TORCH:
+            print("ERROR: torch no disponible. Usa --backend symbolic."); sys.exit(1)
+        _cmd_train_neural(args)
+    else:
+        _cmd_train_symbolic(args)
+
+
+def _cmd_train_symbolic(args):
+    active_roles, pitch_lo, pitch_hi, resolution = _parse_roll_args(args)
+    pca_dim = getattr(args, 'pca_dim', 0)
+
     print(f"  Dominio A    : {args.domain_a}")
     print(f"  Dominio B    : {args.domain_b}")
     print(f"  Modelo       : {args.model}")
-    print(f"  Solver       : {args.solver}")
-    print(f"  Resolución   : {args.resolution} ticks/compás")
-    print(f"  Rango pitch  : {args.pitch_range or 128} notas")
-    print(f"  PCA dim      : {args.pca_dim or 'sin PCA'}")
-    print(f"  λ ciclo      : {args.lambda_cycle}")
-    print(f"  λ identidad  : {args.lambda_identity}")
-    print(f"  Iteraciones  : {args.iters}")
-
-    active_roles, pitch_lo, pitch_hi, resolution, pca_dim = _parse_roll_args(args)
-
-    if args.verbose and active_roles != ROLES:
-        print(f"  Roles activos: {', '.join(active_roles)}")
+    print(f"  Resolución   : {resolution}  Pitch: {args.pitch_range or 128}  PCA: {pca_dim or 'no'}")
+    print(f"  λ_ciclo={args.lambda_cycle}  λ_identity={args.lambda_identity}  iters={args.iters}")
 
     print("\n[1/3] Cargando corpus A…")
-    feats_a = load_corpus_rolls(
-        args.domain_a, resolution, active_roles, pitch_lo, pitch_hi, args.verbose)
-
+    feats_a = load_corpus_rolls(args.domain_a, resolution, active_roles,
+                                pitch_lo, pitch_hi, args.verbose)
     print("\n[2/3] Cargando corpus B…")
-    feats_b = load_corpus_rolls(
-        args.domain_b, resolution, active_roles, pitch_lo, pitch_hi, args.verbose)
+    feats_b = load_corpus_rolls(args.domain_b, resolution, active_roles,
+                                pitch_lo, pitch_hi, args.verbose)
 
-    print("\n[3/3] Entrenando CycleGAN…")
-    model = CycleGANModel(
-        solver          = args.solver,
-        alpha           = args.alpha,
-        k_neighbors     = args.k_neighbors,
-        lambda_cycle    = args.lambda_cycle,
-        lambda_identity = args.lambda_identity,
-        resolution      = resolution,
-        active_roles    = active_roles,
-        pitch_lo        = pitch_lo,
-        pitch_hi        = pitch_hi,
-        pca_dim         = pca_dim,
+    print("\n[3/3] Entrenando CycleGAN simbólico…")
+    model = CycleGANSymbolic(
+        solver=args.solver, alpha=args.alpha, k_neighbors=args.k_neighbors,
+        lambda_cycle=args.lambda_cycle, lambda_identity=args.lambda_identity,
+        resolution=resolution, active_roles=active_roles,
+        pitch_lo=pitch_lo, pitch_hi=pitch_hi, pca_dim=pca_dim,
     )
     model.domain_a_name = os.path.basename(args.domain_a.rstrip('/'))
     model.domain_b_name = os.path.basename(args.domain_b.rstrip('/'))
     model.fit(feats_a, feats_b, iters=args.iters, verbose=args.verbose)
-
     model.save(_ensure_parent(args.model))
 
     if model.losses_history:
         last = model.losses_history[-1]
-        print(f"\n  Pérdida de ciclo A   : {last['cycle_a']:.4f}")
-        print(f"  Pérdida de ciclo B   : {last['cycle_b']:.4f}")
-        print(f"  Pérdida identidad G  : {last['identity_g']:.4f}")
-        print(f"  Pérdida identidad F  : {last['identity_f']:.4f}")
+        print(f"\n  Pérdida ciclo A/B : {last['cycle_a']:.4f} / {last['cycle_b']:.4f}")
+        print(f"  Pérdida ident G/F : {last['identity_g']:.4f} / {last['identity_f']:.4f}")
 
-    print("\n" + "═" * 65)
-    print(f"  Modelo guardado: {args.model}")
     print("═" * 65)
+
+
+def _cmd_train_neural(args):
+    from torch.utils.data import DataLoader, random_split
+
+    dir_A     = Path(args.domain_a)
+    dir_B     = Path(args.domain_b)
+    model_dir = Path(args.model_dir)
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    disabled     = set(getattr(args, 'disable_roles', None) or [])
+    active_roles = [r for r in ROLES if r not in disabled]
+
+    print(f"  Corpus A: {dir_A}  |  Corpus B: {dir_B}")
+    print(f"  model_dir: {model_dir}  épocas: {args.epochs}  batch: {args.batch_size}")
+
+    ds_A = MidiRollDataset(str(dir_A), roles=active_roles)
+    ds_B = MidiRollDataset(str(dir_B), roles=active_roles)
+
+    if len(ds_A) == 0 or len(ds_B) == 0:
+        print("ERROR: algún dataset está vacío. Ejecuta primero: prepare")
+        sys.exit(1)
+
+    sample     = ds_A[0]
+    n_roles    = sample.shape[0]
+    resolution = ds_A.samples[0][2]['resolution']
+    n_pitch    = ds_A.n_pitch
+
+    print(f"  n_roles={n_roles}  resolution={resolution}  n_pitch={n_pitch}")
+    print(f"  Corpus A: {len(ds_A)} ventanas  |  Corpus B: {len(ds_B)} ventanas")
+
+    def _split(ds):
+        n_val = max(1, int(len(ds) * 0.1))
+        return random_split(ds, [len(ds) - n_val, n_val])
+
+    tr_A, val_A = _split(ds_A); tr_B, val_B = _split(ds_B)
+    kw = dict(collate_fn=_collate_fn, num_workers=0, pin_memory=False)
+    loader_A_tr  = DataLoader(tr_A,  batch_size=args.batch_size, shuffle=True,  **kw)
+    loader_B_tr  = DataLoader(tr_B,  batch_size=args.batch_size, shuffle=True,  **kw)
+    loader_A_val = DataLoader(val_A, batch_size=args.batch_size, shuffle=False, **kw)
+    loader_B_val = DataLoader(val_B, batch_size=args.batch_size, shuffle=False, **kw)
+
+    n_res_blocks = getattr(args, 'n_res_blocks', 9)
+    base_ch      = getattr(args, 'base_ch', 64)
+    lr           = getattr(args, 'lr', 2e-4)
+
+    G_A2B = _build_generator(n_roles, resolution, n_pitch, n_res_blocks, base_ch)
+    G_B2A = _build_generator(n_roles, resolution, n_pitch, n_res_blocks, base_ch)
+    D_A   = _build_discriminator(n_roles, base_ch)
+    D_B   = _build_discriminator(n_roles, base_ch)
+
+    opt_G   = torch.optim.Adam(list(G_A2B.parameters()) + list(G_B2A.parameters()),
+                               lr=lr, betas=(0.5, 0.999))
+    opt_D_A = torch.optim.Adam(D_A.parameters(), lr=lr, betas=(0.5, 0.999))
+    opt_D_B = torch.optim.Adam(D_B.parameters(), lr=lr, betas=(0.5, 0.999))
+
+    _npz  = sorted(dir_A.glob('*.npz'))[0]
+    _meta = json.loads(str(np.load(str(_npz), allow_pickle=True)['meta_json'][0]))
+    cfg = {
+        'n_roles': n_roles, 'roles': active_roles,
+        'resolution': resolution, 'n_pitch': n_pitch,
+        'pitch_lo': _meta.get('pitch_lo', 0), 'pitch_hi': _meta.get('pitch_hi', 127),
+        'window_bars': _meta.get('window_bars', WINDOW_BARS_DEFAULT),
+        'base_ch': base_ch, 'n_res_blocks': n_res_blocks,
+        'lambda_cycle': args.lambda_cycle, 'lambda_identity': args.lambda_identity,
+        'model_version': 'cyclegan_v3_neural',
+    }
+    with open(model_dir / CycleTrainer.CONFIG_NAME, 'w') as f:
+        json.dump(cfg, f, indent=2)
+
+    trainer = CycleTrainer(
+        G_A2B, G_B2A, D_A, D_B, opt_G, opt_D_A, opt_D_B,
+        model_dir,
+        patience=getattr(args, 'patience', 40),
+        lambda_cycle=args.lambda_cycle,
+        lambda_ident=args.lambda_identity,
+    )
+    trainer.train(loader_A_tr, loader_B_tr, loader_A_val, loader_B_val,
+                  args.epochs, resume=getattr(args, 'resume', False))
 
 
 # ── TRANSFORM ─────────────────────────────────────────────────────────────────
 
 def cmd_transform(args):
+    backend = getattr(args, 'backend', 'symbolic')
     print("═" * 65)
-    print("  CYCLE-GAN STYLE TRANSFER v2 — TRANSFORM  (piano roll)")
+    print(f"  CYCLE-GAN STYLE TRANSFER v3 — TRANSFORM  [{backend}]")
     print("═" * 65)
-    print(f"  Entrada   : {args.input}")
-    print(f"  Modelo    : {args.model}")
-    print(f"  Dirección : {args.direction}")
-    print(f"  Intensidad: {args.intensity:.2f}")
+    if backend == 'neural':
+        _cmd_transform_neural(args)
+    else:
+        _cmd_transform_symbolic(args)
 
-    model = CycleGANModel.load(args.model)
 
-    print("\n[1/5] Extrayendo melodía…")
-    original_melody, _, _ = extract_raw_melody(args.input, verbose=args.verbose)
-    print(f"  ✓ {len(original_melody)} notas")
+def _cmd_transform_symbolic(args):
+    model = CycleGANSymbolic.load(args.model)
 
-    print("\n[2/5] Convirtiendo a piano roll…")
+    # ── Vectorización ──────────────────────────────────────────────────────
+    print("\n[1/4] Convirtiendo a piano roll centroide…")
     feat_src = model.midi_to_vec(args.input, verbose=args.verbose)
-    print(f"  ✓ vector {len(feat_src)}D")
+    print(f"  ✓ {len(feat_src)}D" + (f" (PCA {model.pca_dim}D)" if model.pca else ""))
 
-    print("\n[3/5] Aplicando transformación CycleGAN…")
-    feat_dst = model.map_features(feat_src, direction=args.direction)
+    print("\n[2/4] Aplicando CycleGAN simbólico…")
+    feat_dst    = model.map_features(feat_src, direction=args.direction)
     feat_interp = feat_src * (1 - args.intensity) + feat_dst * args.intensity
-
-    disc = model.discriminate(feat_interp)
+    disc        = model.discriminate(feat_interp)
     if args.verbose:
         print(f"  D_A prob: {disc['D_A_prob']:.3f}  |  D_B prob: {disc['D_B_prob']:.3f}")
 
-    print("\n[4/5] Derivando parámetros DNA desde roll transformado…")
-    source_dna = UnifiedDNA(args.input)
-    source_dna.extract(verbose=args.verbose)
-    transformed_dna = roll_vector_to_dna_overrides(
-        feat_src, feat_interp, source_dna, model, intensity=args.intensity)
+    if HAS_DNA:
+        # ── Pipeline completo vía DNA ──────────────────────────────────────
+        print("\n[3/4] Extrayendo melodía…")
+        original_melody, _, _ = extract_raw_melody(args.input, verbose=args.verbose)
+        print(f"  ✓ {len(original_melody)} notas")
 
-    if args.bars:
-        n_bars = args.bars
+        print("\n[4/4] Derivando parámetros DNA y generando MIDI…")
+        source_dna = UnifiedDNA(args.input)
+        source_dna.extract(verbose=args.verbose)
+        transformed_dna = roll_vector_to_dna_overrides(
+            feat_src, feat_interp, source_dna, model, intensity=args.intensity)
+
+        n_bars = _compute_n_bars(args, original_melody, source_dna)
+        print(f"       {n_bars} compases, {args.candidates} candidatos…")
+
+        mel, acc, bass, cp, perc, target_key, tempo_bpm, time_sig, fg = run_cycle_gan_transform(
+            source_dna, transformed_dna, original_melody,
+            intensity=args.intensity, n_bars=n_bars,
+            candidates=args.candidates, seed=args.seed, verbose=args.verbose)
+
+        out_path = args.output or (
+            os.path.splitext(args.input)[0] + f"_cganv3_{args.direction}.mid")
+        build_midi(mel, acc, bass, cp, target_key, tempo_bpm, time_sig, n_bars,
+                   form_gen=fg, output_path=out_path,
+                   percussion_notes=None if args.no_percussion else perc)
+
+        if args.export_fingerprint:
+            fp = dna_mod.extract_fingerprint(
+                mel, bass, acc, target_key, tempo_bpm, n_bars, time_sig,
+                fg, transformed_dna, out_path)
+            print(f"  → Fingerprint: {dna_mod.export_fingerprint(fp, out_path)}")
+
+        print("\n" + "═" * 65)
+        print(f"  Salida    : {out_path}")
+        print(f"  Tonalidad : {target_key.tonic.name} {target_key.mode}  |  {tempo_bpm:.0f} BPM")
+        print(f"  D_A prob  : {disc['D_A_prob']:.3f}  |  D_B prob: {disc['D_B_prob']:.3f}")
+        print("═" * 65)
+
     else:
-        bpb = source_dna.time_sig[0]
-        if original_melody:
-            total_beats = max(o + d for o, _, d, _ in original_melody)
-            n_bars = max(4, (int(math.ceil(total_beats / bpb)) // 4) * 4)
-        else:
-            n_bars = 16
+        # ── FIX: Fallback roll-directo cuando midi_dna_unified no está disponible ──
+        # Pipeline: MIDI → rolls → modular amplitud por ratio de energía por rol → MIDI
+        print("\n  [AVISO] midi_dna_unified no disponible; usando pipeline de rolls directo.")
+        print("\n[3/4] Leyendo piano rolls del MIDI fuente…")
 
-    print(f"\n[5/5] Generando MIDI ({n_bars} compases, {args.candidates} candidatos)…")
-    mel, acc, bass, cp, perc, target_key, tempo_bpm, time_sig, fg = run_cycle_gan_transform(
-        source_dna=source_dna,
-        transformed_dna=transformed_dna,
-        original_melody=original_melody,
-        intensity=args.intensity,
-        n_bars=n_bars,
-        candidates=args.candidates,
-        seed=args.seed,
-        verbose=args.verbose,
-    )
+        cfg = {
+            'resolution': model.resolution,
+            'roles':      model.active_roles,
+            'pitch_lo':   model.pitch_lo,
+            'pitch_hi':   model.pitch_hi,
+            'window_bars': WINDOW_BARS_DEFAULT,
+        }
+        rolls, ts_num_src = _midi_to_rolls(args.input, cfg)
+        if not rolls:
+            print("  ERROR: no se encontraron notas en el MIDI."); sys.exit(1)
+        cfg['ts_num'] = ts_num_src   # propagar compás para _rolls_to_midi
+
+        bpm    = _infer_bpm_from_midi(args.input)
+        n_bars = min(r.shape[0] for r in rolls.values())
+        print(f"  ✓ {n_bars} compases | {list(rolls.keys())} | {bpm:.0f} BPM")
+
+        print("\n[4/4] Aplicando transformación por energía de rol…")
+        # Reconstruir vectores raw desde PCA para calcular ratios por segmento de rol
+        n_pitch  = (model.pitch_hi - model.pitch_lo + 1) if model.pitch_lo is not None else PITCH_CLASSES
+        seg_dim  = model.resolution * n_pitch
+
+        if model.pca is not None:
+            vec_raw_src = model.pca.inverse_transform(feat_src.reshape(1, -1))[0]
+            vec_raw_dst = model.pca.inverse_transform(feat_interp.reshape(1, -1))[0]
+        else:
+            vec_raw_src = feat_src
+            vec_raw_dst = feat_interp
+
+        # FIX: enmascarar roles ausentes (energía src ~0) para evitar ratios degenerados
+        transformed_rolls = {}
+        for i, role in enumerate(model.active_roles):
+            if role not in rolls:
+                continue
+            s      = i * seg_dim
+            e      = s + seg_dim
+            e_src  = float(np.abs(vec_raw_src[s:e]).mean())
+            e_dst  = float(np.abs(vec_raw_dst[s:e]).mean())
+            # Solo aplicar ratio si el rol tiene energía real en el src
+            if e_src < 1e-7:
+                ratio = 1.0          # rol ausente en src: no modificar
+            else:
+                ratio = float(np.clip(e_dst / (e_src + 1e-9), 0.25, 4.0))
+            if args.verbose:
+                print(f"  {role}: e_src={e_src:.5f}  e_dst={e_dst:.5f}  ratio={ratio:.3f}")
+            transformed_rolls[role] = np.clip(rolls[role] * ratio, 0.0, 1.0)
+
+        mid_src  = mido.MidiFile(args.input)
+        role_map = RoleAssigner().assign(mid_src)
+        palette  = _extract_palette_from_midi(args.input, role_map)
+
+        out_path = args.output or (
+            os.path.splitext(args.input)[0] + f"_cganv3_{args.direction}.mid")
+        threshold_pct = getattr(args, 'threshold_pct', 97.0)  # FIX: 97 más adecuado para rolls simbólicos
+        n_notes = _rolls_to_midi(transformed_rolls, cfg, palette, out_path,
+                                 bpm=bpm, threshold_pct=threshold_pct)
+
+        print("\n" + "═" * 65)
+        print(f"  Salida    : {out_path}  ({n_notes} notas)")
+        print(f"  D_A prob  : {disc['D_A_prob']:.3f}  |  D_B prob: {disc['D_B_prob']:.3f}")
+        if n_notes == 0:
+            print("  ⚠  MIDI vacío — prueba --threshold-pct 95")
+        print("═" * 65)
+
+
+def _cmd_transform_neural(args):
+    if not HAS_TORCH:
+        print("ERROR: torch no disponible."); sys.exit(1)
+
+    if not args.model_dir:
+        sys.exit("ERROR: el backend neural requiere --model-dir.")
+    model_dir = Path(args.model_dir)
+    G_A2B, G_B2A, cfg = _load_neural_models(model_dir)
+    generator  = G_A2B if args.direction == 'AtoB' else G_B2A
+    device     = 'cuda' if torch.cuda.is_available() else 'cpu'
+    generator.to(device)
+    palette    = _load_palette(getattr(args, 'palette', None), cfg)
+
+    print(f"\n  {args.input}  ({'A→B' if args.direction == 'AtoB' else 'B→A'})")
+    rolls, ts_num_src = _midi_to_rolls(args.input, cfg)
+    if not rolls:
+        print("ERROR: no se encontraron notas."); sys.exit(1)
+    cfg['ts_num'] = ts_num_src
+
+    role_list  = cfg['roles']
+    n_roles    = cfg['n_roles']
+    resolution = cfg['resolution']
+    n_pitch    = cfg.get('n_pitch', 128)
+    n_bars     = min(r.shape[0] for r in rolls.values())
+    threshold_pct = getattr(args, 'threshold_pct', 99.0)
+
+    print(f"  {n_bars} compases  ·  {n_roles} roles")
+
+    # FIX: construir un batch completo (n_bars, n_roles, res, n_pitch) y hacer
+    # un único forward pass en lugar de n_bars pasadas individuales (mucho más rápido)
+    x_all = np.zeros((n_bars, n_roles, resolution, n_pitch), dtype=np.float32)
+    for ridx, role in enumerate(role_list):
+        if role in rolls:
+            x_all[:, ridx] = rolls[role][:n_bars]
+
+    x_t = torch.tensor(x_all).to(device)
+    with torch.no_grad():
+        y_all = generator(x_t).cpu().numpy()   # (n_bars, n_roles, res, n_pitch)
+
+    # Diagnóstico en el primer compás
+    y0 = y_all[0]
+    thr   = _adaptive_threshold(y0, threshold_pct)
+    n_act = int((y0 > thr).sum())
+    print(f"\n  [diag] Compás 0: mean={y0.mean():.4f}  max={y0.max():.4f}  "
+          f"umbral={thr:.4f}  notas_activas={n_act}")
+    if n_act == 0:
+        print("         ⚠  sin notas activas — prueba --threshold-pct 97")
+
+    bars_per_role = {}
+    for ridx, role in enumerate(role_list):
+        bars_per_role[role] = y_all[:, ridx]   # (n_bars, res, n_pitch)
 
     out_path = args.output or (
-        os.path.splitext(args.input)[0] + f"_cgan_{args.direction}.mid")
-
-    build_midi(mel, acc, bass, cp,
-               target_key, tempo_bpm, time_sig, n_bars,
-               form_gen=fg, output_path=out_path,
-               percussion_notes=None if args.no_percussion else perc)
-
-    if args.export_fingerprint:
-        fp = dna_mod.extract_fingerprint(
-            mel, bass, acc, target_key, tempo_bpm, n_bars, time_sig,
-            fg, transformed_dna, out_path)
-        json_path = dna_mod.export_fingerprint(fp, out_path)
-        print(f"  → Fingerprint: {json_path}")
-
-    print("\n" + "═" * 65)
-    print(f"  Salida: {out_path}")
-    print(f"  Tonalidad: {target_key.tonic.name} {target_key.mode}  |  {tempo_bpm:.0f} BPM")
-    print(f"  D_A prob: {disc['D_A_prob']:.3f}  |  D_B prob: {disc['D_B_prob']:.3f}")
-    print("═" * 65)
+        os.path.splitext(args.input)[0] + f"_neural_{args.direction}.mid")
+    n_notes  = _rolls_to_midi(bars_per_role, cfg, palette, out_path,
+                              bpm=getattr(args, 'bpm', 120.0),
+                              threshold=getattr(args, 'threshold', None),
+                              threshold_pct=threshold_pct)
+    print(f"\n  Guardado: {out_path}  ({n_notes} notas, {n_bars} compases)")
+    if n_notes == 0:
+        print("  ⚠  MIDI vacío — ajusta --threshold-pct (prueba 95.0 ó 97.0)")
 
 
 # ── CYCLE ─────────────────────────────────────────────────────────────────────
 
 def cmd_cycle(args):
     print("═" * 65)
-    print("  CYCLE-GAN STYLE TRANSFER v2 — CYCLE CONSISTENCY  (piano roll)")
+    print("  CYCLE-GAN STYLE TRANSFER v3 — CYCLE CONSISTENCY")
     print("═" * 65)
 
-    model = CycleGANModel.load(args.model)
+    if not HAS_DNA:
+        # Fallback: medir consistencia de ciclo solo en feature space, sin generar MIDI
+        print("\n  [AVISO] midi_dna_unified no disponible. "
+              "Calculando pérdida de ciclo en feature space únicamente.")
+        model    = CycleGANSymbolic.load(args.model)
+        feat_src = model.midi_to_vec(args.input, verbose=args.verbose)
+        dir1     = args.direction
+        dir2     = 'BtoA' if dir1 == 'AtoB' else 'AtoB'
+        feat_ab  = model.map_features(feat_src, direction=dir1)
+        feat_aba = model.map_features(feat_ab,  direction=dir2)
+        cycle_loss = float(np.linalg.norm(feat_aba - feat_src))
+        print(f"\n  Pérdida de ciclo ‖F(G(a)) − a‖₂ : {cycle_loss:.4f}")
+        disc_src = model.discriminate(feat_src)
+        disc_ab  = model.discriminate(feat_ab)
+        print(f"  Fuente   → D_A={disc_src['D_A_prob']:.3f}  D_B={disc_src['D_B_prob']:.3f}")
+        print(f"  Tras G   → D_A={disc_ab['D_A_prob']:.3f}  D_B={disc_ab['D_B_prob']:.3f}")
+        print("═" * 65)
+        return
 
-    print("\n[1/5] Extrayendo melodía y piano roll…")
+    model = CycleGANSymbolic.load(args.model)
     original_melody, _, _ = extract_raw_melody(args.input, verbose=args.verbose)
     feat_src = model.midi_to_vec(args.input, verbose=args.verbose)
+    source_dna = UnifiedDNA(args.input); source_dna.extract(verbose=args.verbose)
 
-    source_dna = UnifiedDNA(args.input)
-    source_dna.extract(verbose=args.verbose)
+    dir1 = args.direction; dir2 = 'BtoA' if dir1 == 'AtoB' else 'AtoB'
 
-    dir1 = args.direction
-    dir2 = 'BtoA' if dir1 == 'AtoB' else 'AtoB'
+    print(f"\n[1/4] Aplicando {dir1} (G)…")
+    feat_ab   = model.map_features(feat_src, direction=dir1)
+    feat_ab_i = feat_src * (1 - args.intensity) + feat_ab * args.intensity
+    dna_ab    = roll_vector_to_dna_overrides(feat_src, feat_ab_i, source_dna, model,
+                                             intensity=args.intensity)
 
-    print(f"\n[2/5] Aplicando {dir1} (G)…")
-    feat_ab    = model.map_features(feat_src, direction=dir1)
-    feat_ab_i  = feat_src * (1 - args.intensity) + feat_ab * args.intensity
-    dna_ab     = roll_vector_to_dna_overrides(
-        feat_src, feat_ab_i, source_dna, model, intensity=args.intensity)
+    n_bars = _compute_n_bars(args, original_melody, source_dna)
 
-    bpb = source_dna.time_sig[0]
-    if original_melody:
-        total_beats = max(o + d for o, _, d, _ in original_melody)
-        n_bars = max(4, (int(math.ceil(total_beats / bpb)) // 4) * 4)
-    else:
-        n_bars = 16
-    if args.bars:
-        n_bars = args.bars
-
-    print(f"\n[3/5] Generando MIDI intermedio ({n_bars} compases)…")
+    print(f"\n[2/4] Generando MIDI intermedio ({n_bars} compases)…")
     mel_ab, acc_ab, bass_ab, cp_ab, perc_ab, tk_ab, tmp_ab, ts_ab, fg_ab = \
         run_cycle_gan_transform(source_dna, dna_ab, original_melody,
-                                intensity=args.intensity,
-                                n_bars=n_bars, candidates=args.candidates,
-                                seed=args.seed, verbose=args.verbose)
-
+                                intensity=args.intensity, n_bars=n_bars,
+                                candidates=args.candidates, seed=args.seed,
+                                verbose=args.verbose)
     out_ab = args.output_ab or (os.path.splitext(args.input)[0] + "_ab.mid")
     build_midi(mel_ab, acc_ab, bass_ab, cp_ab, tk_ab, tmp_ab, ts_ab, n_bars,
                form_gen=fg_ab, output_path=out_ab,
                percussion_notes=None if args.no_percussion else perc_ab)
-    print(f"  ✓ Salida G: {out_ab}")
+    print(f"  ✓ {out_ab}")
 
-    print(f"\n[4/5] Aplicando {dir2} (F) sobre el resultado intermedio…")
-    # Extraer roll del MIDI intermedio generado
+    print(f"\n[3/4] Aplicando {dir2} (F)…")
     feat_ab_real = model.midi_to_vec(out_ab, verbose=False)
-
-    feat_aba   = model.map_features(feat_ab_real, direction=dir2)
-    feat_aba_i = feat_ab_real * (1 - args.intensity) + feat_aba * args.intensity
-
-    dna_ab_file = UnifiedDNA(out_ab)
-    dna_ab_file.extract(verbose=False)
-    dna_aba = roll_vector_to_dna_overrides(
-        feat_ab_real, feat_aba_i, dna_ab_file, model, intensity=args.intensity)
-
+    feat_aba     = model.map_features(feat_ab_real, direction=dir2)
+    feat_aba_i   = feat_ab_real * (1 - args.intensity) + feat_aba * args.intensity
+    dna_ab_file  = UnifiedDNA(out_ab); dna_ab_file.extract(verbose=False)
+    dna_aba      = roll_vector_to_dna_overrides(feat_ab_real, feat_aba_i, dna_ab_file, model,
+                                               intensity=args.intensity)
     mel_aba_src, _, _ = extract_raw_melody(out_ab, verbose=False)
 
-    print(f"\n[5/5] Generando MIDI reconstruido ({n_bars} compases)…")
+    print(f"\n[4/4] Generando MIDI reconstruido ({n_bars} compases)…")
     mel_aba, acc_aba, bass_aba, cp_aba, perc_aba, tk_aba, tmp_aba, ts_aba, fg_aba = \
         run_cycle_gan_transform(dna_ab_file, dna_aba, mel_aba_src,
-                                intensity=args.intensity,
-                                n_bars=n_bars, candidates=args.candidates,
-                                seed=args.seed + 100, verbose=args.verbose)
-
+                                intensity=args.intensity, n_bars=n_bars,
+                                candidates=args.candidates, seed=args.seed + 100,
+                                verbose=args.verbose)
     out_aba = args.output_aba or (os.path.splitext(args.input)[0] + "_aba.mid")
     build_midi(mel_aba, acc_aba, bass_aba, cp_aba, tk_aba, tmp_aba, ts_aba, n_bars,
                form_gen=fg_aba, output_path=out_aba,
                percussion_notes=None if args.no_percussion else perc_aba)
 
-    # Pérdida de ciclo en el espacio de roll (con PCA si aplica)
-    feat_aba_check = model.map_features(feat_ab_real, direction=dir2)
-    cycle_loss = float(np.linalg.norm(feat_aba_check - feat_src))
+    cycle_loss = float(np.linalg.norm(model.map_features(feat_ab_real, dir2) - feat_src))
 
     print("\n" + "═" * 65)
-    print(f"  Salida G   : {out_ab}")
-    print(f"  Salida F∘G : {out_aba}")
-    print(f"  Pérdida de ciclo (‖F(G(a)) - a‖₂): {cycle_loss:.4f}")
-    print(f"  Espacio: {'PCA ' + str(model.pca_dim) + 'D' if model.pca else 'roll ' + str(len(feat_src)) + 'D'}")
+    print(f"  Salida G    : {out_ab}")
+    print(f"  Salida F∘G  : {out_aba}")
+    print(f"  ‖F(G(a)) - a‖₂ : {cycle_loss:.4f}")
     print("═" * 65)
 
 
@@ -1524,123 +2497,335 @@ def cmd_cycle(args):
 
 def cmd_analyze(args):
     print("═" * 65)
-    print("  CYCLE-GAN STYLE TRANSFER v2 — ANALYZE  (piano roll)")
+    print("  CYCLE-GAN STYLE TRANSFER v3 — ANALYZE")
     print("═" * 65)
-    print(f"  Entrada : {args.input}")
-    print(f"  Modelo  : {args.model}")
-
-    model = CycleGANModel.load(args.model)
-
-    feat = model.midi_to_vec(args.input, verbose=args.verbose)
-
+    model   = CycleGANSymbolic.load(args.model)
+    feat    = model.midi_to_vec(args.input, verbose=args.verbose)
     disc    = model.discriminate(feat)
     feat_ab = model.map_features(feat, 'AtoB')
     feat_ba = model.map_features(feat, 'BtoA')
 
     print(f"\n  Dominio A ({model.domain_a_name}):")
-    print(f"    Distancia discriminativa : {disc['D_A_dist']:.4f}")
-    print(f"    Probabilidad pertenencia : {disc['D_A_prob']:.4f}")
+    print(f"    Distancia : {disc['D_A_dist']:.4f}  |  Prob: {disc['D_A_prob']:.4f}")
     print(f"\n  Dominio B ({model.domain_b_name}):")
-    print(f"    Distancia discriminativa : {disc['D_B_dist']:.4f}")
-    print(f"    Probabilidad pertenencia : {disc['D_B_prob']:.4f}")
-
-    total_prob = disc['D_A_prob'] + disc['D_B_prob'] + 1e-9
-    pct_a = disc['D_A_prob'] / total_prob * 100
-    pct_b = disc['D_B_prob'] / total_prob * 100
-    print(f"\n  Posición relativa: {pct_a:.1f}% {model.domain_a_name} / "
-          f"{pct_b:.1f}% {model.domain_b_name}")
-
-    print(f"\n  Espacio: {'PCA ' + str(model.pca_dim) + 'D (roll ' + str(model.raw_dim) + 'D crudo)' if model.pca else 'roll ' + str(len(feat)) + 'D'}")
-
-    # Mostrar primeros 10 componentes del feature vector (roll o PCA)
+    print(f"    Distancia : {disc['D_B_dist']:.4f}  |  Prob: {disc['D_B_prob']:.4f}")
+    total = disc['D_A_prob'] + disc['D_B_prob'] + 1e-9
+    print(f"\n  Posición: {disc['D_A_prob']/total*100:.1f}% A / {disc['D_B_prob']/total*100:.1f}% B")
+    print(f"  Espacio: {'PCA '+str(model.pca_dim)+'D' if model.pca else 'roll '+str(len(feat))+'D'}")
     n_show = min(10, len(feat))
-    print(f"\n  Vector (primeros {n_show} componentes):")
+    print(f"\n  Vector (primeros {n_show}):")
     for i in range(n_show):
-        print(f"    [{i:>3}]  src={feat[i]:.4f}  →A→B={feat_ab[i]:.4f}  →B→A={feat_ba[i]:.4f}")
-
-    # Pérdida de ciclo
+        print(f"    [{i:>3}]  src={feat[i]:.4f}  A→B={feat_ab[i]:.4f}  B→A={feat_ba[i]:.4f}")
     feat_aba = model.map_features(feat_ab, 'BtoA')
-    cl = float(np.linalg.norm(feat_aba - feat))
-    print(f"\n  Pérdida de ciclo puntual (A→B→A): {cl:.4f}")
-
+    print(f"\n  Pérdida ciclo (A→B→A): {float(np.linalg.norm(feat_aba - feat)):.4f}")
     print("═" * 65)
 
 
+# ── STYLE-CORPUS ──────────────────────────────────────────────────────────────
+
+def cmd_style_corpus(args):
+    backend   = getattr(args, 'backend', 'symbolic')
+    input_dir = Path(args.input_dir)
+    direction = getattr(args, 'direction', 'a2b')
+    dir_label = 'A→B' if direction == 'a2b' else 'B→A'
+    midi_files = sorted(list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi')))
+
+    if not midi_files:
+        print(f"[style-corpus] No se encontraron MIDIs en {input_dir}"); sys.exit(1)
+
+    print(f"[style-corpus] {len(midi_files)} archivos  ·  {dir_label}  [{backend}]\n")
+    densities = []; skipped = 0
+
+    if backend == 'neural':
+        if not HAS_TORCH:
+            print("ERROR: torch no disponible."); sys.exit(1)
+        if not args.model_dir:
+            sys.exit("ERROR: el backend neural requiere --model-dir.")
+        G_A2B, G_B2A, cfg = _load_neural_models(Path(args.model_dir))
+        generator = G_A2B if direction == 'a2b' else G_B2A
+        device    = 'cuda' if torch.cuda.is_available() else 'cpu'
+        generator.to(device)
+        n_roles = cfg['n_roles']; role_list = cfg['roles']
+        resolution = cfg['resolution']; n_pitch = cfg.get('n_pitch', 128)
+
+        for midi_path in midi_files:
+            try:
+                rolls, ts_num_src  = _midi_to_rolls(str(midi_path), cfg)
+                cfg['ts_num'] = ts_num_src
+                n_bars = min(r.shape[0] for r in rolls.values())
+                x_np   = np.zeros((n_bars, n_roles, resolution, n_pitch), dtype=np.float32)
+                for ridx, role in enumerate(role_list):
+                    if role in rolls: x_np[:, ridx] = rolls[role][:n_bars]
+                x_t = torch.tensor(x_np).to(device)
+                with torch.no_grad():
+                    y_np = generator(x_t).cpu().numpy()
+                thr  = _adaptive_threshold(y_np)
+                dens = float((y_np > thr).mean())
+                densities.append(dens)
+                print(f"  [OK] {midi_path.stem:40s}  densidad_out={dens:.4f}")
+            except Exception as e:
+                print(f"  [SKIP] {midi_path.stem} — {e}"); skipped += 1
+    else:
+        model = CycleGANSymbolic.load(args.model)
+        direction_ = 'AtoB' if direction == 'a2b' else 'BtoA'
+        for midi_path in midi_files:
+            try:
+                feat_src = model.midi_to_vec(str(midi_path))
+                feat_dst = model.map_features(feat_src, direction=direction_)
+                disc     = model.discriminate(feat_dst)
+                dens     = disc['D_B_prob'] if direction == 'a2b' else disc['D_A_prob']
+                densities.append(dens)
+                print(f"  [OK] {midi_path.stem:40s}  D_dst_prob={dens:.4f}")
+            except Exception as e:
+                print(f"  [SKIP] {midi_path.stem} — {e}"); skipped += 1
+
+    if not densities:
+        print("[style-corpus] Sin resultados."); sys.exit(1)
+
+    mean_d = float(np.mean(densities)); std_d = float(np.std(densities))
+    out_path = args.output or f"corpus_stats_{input_dir.stem}_{direction}.json"
+    with open(_ensure_parent(out_path), 'w') as f:
+        json.dump({'n_files': len(densities), 'n_skipped': skipped,
+                   'density_mean': mean_d, 'density_std': std_d,
+                   'densities': densities, 'direction': direction}, f, indent=2)
+
+    print(f"\n[style-corpus] Procesados: {len(densities)}  Omitidos: {skipped}")
+    print(f"[style-corpus] Densidad media: {mean_d:.4f} ± {std_d:.4f}")
+    if mean_d < 0.005: print("[style-corpus] ⚠  densidad muy baja — generador puede no haber convergido")
+    if mean_d > 0.3:   print("[style-corpus] ⚠  densidad muy alta — posible colapso de modo")
+    print(f"[style-corpus] → {out_path}")
+
+
+# ── ROUND-TRIP ────────────────────────────────────────────────────────────────
+
+def cmd_round_trip(args):
+    """
+    MIDI → piano roll → MIDI sin modelo (diagnóstico del parser).
+    Preserva los programas, canales y velocidades del MIDI original.
+    """
+    cfg_rt = {
+        'resolution':  args.resolution,
+        'window_bars': WINDOW_BARS_DEFAULT,
+        'roles':       [r for r in ROLES if r not in (args.disable_roles or [])],
+        'n_pitch':     PITCH_CLASSES,
+        'pitch_lo':    0,
+        'pitch_hi':    127,
+    }
+    model_dir = getattr(args, 'model_dir', None)
+    if model_dir:
+        try:
+            cfg_path = Path(model_dir) / CycleTrainer.CONFIG_NAME
+            if cfg_path.exists():
+                with open(cfg_path) as f:
+                    loaded = json.load(f)
+                # FIX: el --resolution del usuario tiene prioridad sobre el del model_dir
+                user_resolution = args.resolution
+                cfg_rt.update(loaded)
+                cfg_rt['resolution'] = user_resolution
+                print(f"[round-trip] Config desde {model_dir} (resolución del usuario: {user_resolution})")
+        except Exception:
+            pass
+
+    # BPM y compás desde el fuente si no se especifica
+    bpm = args.bpm if args.bpm != 120.0 else _infer_bpm_from_midi(args.input)
+    ts_num, _ = _infer_time_sig_from_midi(args.input)
+    cfg_rt['ts_num'] = ts_num   # FIX: propagar compás real para ticks correctos
+
+    rolls, ts_num_src = _midi_to_rolls(args.input, cfg_rt)
+    cfg_rt['ts_num']  = ts_num_src   # refinar con el valor real del MIDI (puede diferir)
+    n_bars   = min(r.shape[0] for r in rolls.values())
+    print(f"[round-trip] {n_bars} compases  ·  roles: {list(rolls.keys())}  ·  {bpm} BPM")
+
+    # Paleta extraída del MIDI original
+    mid_src  = mido.MidiFile(args.input)
+    role_map = RoleAssigner().assign(mid_src)
+    palette  = _extract_palette_from_midi(args.input, role_map)
+    print(f"[round-trip] Paleta: { {r: (v['program'], v['channel']) for r,v in palette.items()} }")
+
+    n_notes = _rolls_to_midi(rolls, cfg_rt, palette, args.output, bpm=bpm)
+    print(f"[round-trip] → {args.output}  ({n_notes} notas)")
+    if n_notes == 0:
+        print("[round-trip] ⚠  MIDI vacío — posible problema en el parser")
+
+
+# ── INSPECT ───────────────────────────────────────────────────────────────────
+
+def cmd_inspect(args):
+    if 'npz' in args.what and args.data_dir:
+        data_dir  = Path(args.data_dir)
+        npz_files = sorted(data_dir.glob('*.npz'))
+        if not npz_files:
+            print(f"[inspect] Sin .npz en {data_dir}")
+        else:
+            target = getattr(args, 'npz_file', None) or npz_files[0].name
+            path   = data_dir / target
+            if not path.exists():
+                print(f"[inspect] No encontrado: {path}")
+            else:
+                data = np.load(str(path), allow_pickle=True)
+                meta = json.loads(str(data['meta_json'][0]))
+                print(f"[inspect] {path.name}")
+                for k in ('resolution', 'window_bars', 'total_bars', 'n_windows', 'roles', 'n_pitch'):
+                    print(f"  {k:20s}: {meta.get(k, '?')}")
+                for role in meta['roles']:
+                    key = f'roll_{role}'
+                    if key in data:
+                        arr = data[key]
+                        print(f"    {role:20s}: shape={arr.shape}  densidad={float(arr.mean()):.5f}")
+
+    if 'loss_curve' in args.what and args.model_dir:
+        hist_path = Path(args.model_dir) / CycleTrainer.HISTORY_NAME
+        if hist_path.exists():
+            with open(hist_path) as f:
+                hist = json.load(f)
+            print(f"\n[inspect] Historial ({len(hist.get('train_G',[]))} épocas)")
+            for key, vals in hist.items():
+                if vals:
+                    print(f"  {key:15s}: último={vals[-1]:.4f}  min={min(vals):.4f}")
+        else:
+            print(f"[inspect] Sin historial en {args.model_dir}")
+
+    if args.model_dir:
+        cfg_path = Path(args.model_dir) / CycleTrainer.CONFIG_NAME
+        if cfg_path.exists():
+            with open(cfg_path) as f:
+                cfg = json.load(f)
+            print(f"\n[inspect] Config ({cfg_path})")
+            for k, v in cfg.items():
+                print(f"  {k:20s}: {v}")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-#  MAIN
+#  CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
-        description="CYCLE-GAN STYLE TRANSFER v2 — Transferencia bidireccional (piano roll)",
+        prog='cycle_gan_style_transfer',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
+        description="CYCLE-GAN STYLE TRANSFER v3.0 — simbólico + neural",
     )
     sub = parser.add_subparsers(dest='command', required=True)
 
+    # ── prepare ───────────────────────────────────────────────────────────────
+    p_pr = sub.add_parser('prepare', help='MIDI corpus → .npz (backend neural)')
+    p_pr.add_argument('--input-dir',    required=True)
+    p_pr.add_argument('--output-dir',   required=True)
+    p_pr.add_argument('--resolution',   type=int, default=TICKS_PER_BAR)
+    p_pr.add_argument('--window-bars',  type=int, default=WINDOW_BARS_DEFAULT, dest='window_bars')
+    p_pr.add_argument('--disable-roles', nargs='+', choices=ROLES, default=[], dest='disable_roles')
+    p_pr.add_argument('--pitch-range',  type=int, default=None, dest='pitch_range')
+    p_pr.set_defaults(func=cmd_prepare)
+
     # ── train ─────────────────────────────────────────────────────────────────
-    p_train = sub.add_parser('train', help='Entrenar modelo CycleGAN')
-    p_train.add_argument('--domain-a',        required=True)
-    p_train.add_argument('--domain-b',        required=True)
-    p_train.add_argument('--model',           default='cycle_gan.pkl')
-    p_train.add_argument('--resolution',      type=int,   default=TICKS_PER_BAR,
-                         help=f'Ticks por compás [default: {TICKS_PER_BAR}]')
-    p_train.add_argument('--pitch-range',     type=int,   default=None, dest='pitch_range',
-                         help='Notas MIDI centradas en C4 (None = 128 completo)')
-    p_train.add_argument('--disable-roles',   nargs='+',  default=[], dest='disable_roles',
-                         choices=ROLES, metavar='ROL')
-    p_train.add_argument('--pca-dim',         type=int,   default=0, dest='pca_dim',
-                         help='Reducir con PCA (0 = sin PCA)')
-    p_train.add_argument('--solver',          default='ridge', choices=['ridge', 'knn'])
-    p_train.add_argument('--alpha',           type=float, default=1.0)
-    p_train.add_argument('--k-neighbors',     type=int,   default=5)
-    p_train.add_argument('--lambda-cycle',    type=float, default=10.0)
-    p_train.add_argument('--lambda-identity', type=float, default=5.0)
-    p_train.add_argument('--iters',           type=int,   default=100)
-    p_train.add_argument('--verbose',         action='store_true')
+    p_tr = sub.add_parser('train', help='Entrenar el modelo CycleGAN')
+    p_tr.add_argument('--backend',        default='symbolic', choices=['symbolic', 'neural'])
+    p_tr.add_argument('--domain-a',       default=None, dest='domain_a')
+    p_tr.add_argument('--domain-b',       default=None, dest='domain_b')
+    # Simbólico
+    p_tr.add_argument('--model',          default='cycle_gan_v3.pkl')
+    p_tr.add_argument('--resolution',     type=int,   default=TICKS_PER_BAR)
+    p_tr.add_argument('--pitch-range',    type=int,   default=None, dest='pitch_range')
+    p_tr.add_argument('--disable-roles',  nargs='+',  choices=ROLES, default=[], dest='disable_roles')
+    p_tr.add_argument('--pca-dim',        type=int,   default=0, dest='pca_dim')
+    p_tr.add_argument('--solver',         default='ridge', choices=['ridge', 'knn'])
+    p_tr.add_argument('--alpha',          type=float, default=1.0)
+    p_tr.add_argument('--k-neighbors',    type=int,   default=5, dest='k_neighbors')
+    p_tr.add_argument('--lambda-cycle',   type=float, default=10.0, dest='lambda_cycle')
+    p_tr.add_argument('--lambda-identity',type=float, default=5.0,  dest='lambda_identity')
+    p_tr.add_argument('--iters',          type=int,   default=100)
+    # Neural
+    p_tr.add_argument('--model-dir',      default='model_neural', dest='model_dir')
+    p_tr.add_argument('--epochs',         type=int,   default=200)
+    p_tr.add_argument('--batch-size',     type=int,   default=4, dest='batch_size')
+    p_tr.add_argument('--lr',             type=float, default=2e-4)
+    p_tr.add_argument('--n-res-blocks',   type=int,   default=9, dest='n_res_blocks')
+    p_tr.add_argument('--base-ch',        type=int,   default=64, dest='base_ch')
+    p_tr.add_argument('--patience',       type=int,   default=40)
+    p_tr.add_argument('--resume',         action='store_true')
+    p_tr.add_argument('--verbose',        action='store_true')
+    p_tr.set_defaults(func=cmd_train)
 
     # ── transform ─────────────────────────────────────────────────────────────
-    p_tf = sub.add_parser('transform', help='Transformar un MIDI con el modelo')
-    p_tf.add_argument('input',               help='MIDI de entrada')
-    p_tf.add_argument('--model',             required=True)
-    p_tf.add_argument('--direction',         default='AtoB', choices=['AtoB', 'BtoA'])
-    p_tf.add_argument('--intensity',         type=float, default=1.0)
-    p_tf.add_argument('--output',            default=None)
-    p_tf.add_argument('--bars',              type=int,   default=None)
-    p_tf.add_argument('--candidates',        type=int,   default=3)
-    p_tf.add_argument('--no-percussion',     action='store_true')
-    p_tf.add_argument('--export-fingerprint',action='store_true')
-    p_tf.add_argument('--seed',              type=int,   default=42)
-    p_tf.add_argument('--verbose',           action='store_true')
+    p_tf = sub.add_parser('transform', help='Transferir estilo a un MIDI')
+    p_tf.add_argument('input')
+    p_tf.add_argument('--backend',            default='symbolic', choices=['symbolic', 'neural'])
+    p_tf.add_argument('--model',              default=None)
+    p_tf.add_argument('--model-dir',          default=None, dest='model_dir')
+    p_tf.add_argument('--direction',          default='AtoB', choices=['AtoB', 'BtoA'])
+    p_tf.add_argument('--intensity',          type=float, default=1.0)
+    p_tf.add_argument('--output',             default=None)
+    p_tf.add_argument('--bars',               type=int,   default=None)
+    p_tf.add_argument('--candidates',         type=int,   default=3)
+    p_tf.add_argument('--no-percussion',      action='store_true', dest='no_percussion')
+    p_tf.add_argument('--export-fingerprint', action='store_true', dest='export_fingerprint')
+    p_tf.add_argument('--seed',               type=int,   default=42)
+    p_tf.add_argument('--bpm',                type=float, default=120.0)
+    p_tf.add_argument('--threshold',          type=float, default=None)
+    p_tf.add_argument('--threshold-pct',      type=float, default=99.0, dest='threshold_pct')
+    p_tf.add_argument('--palette',            default=None)
+    p_tf.add_argument('--verbose',            action='store_true')
+    p_tf.set_defaults(func=cmd_transform)
 
     # ── cycle ─────────────────────────────────────────────────────────────────
     p_cy = sub.add_parser('cycle', help='Verificar consistencia de ciclo A→B→A')
-    p_cy.add_argument('input',               help='MIDI de entrada')
-    p_cy.add_argument('--model',             required=True)
-    p_cy.add_argument('--direction',         default='AtoB', choices=['AtoB', 'BtoA'])
-    p_cy.add_argument('--intensity',         type=float, default=1.0)
-    p_cy.add_argument('--output-ab',         default=None)
-    p_cy.add_argument('--output-aba',        default=None)
-    p_cy.add_argument('--bars',              type=int,   default=None)
-    p_cy.add_argument('--candidates',        type=int,   default=2)
-    p_cy.add_argument('--no-percussion',     action='store_true')
-    p_cy.add_argument('--seed',              type=int,   default=42)
-    p_cy.add_argument('--verbose',           action='store_true')
+    p_cy.add_argument('input')
+    p_cy.add_argument('--model',         required=True)
+    p_cy.add_argument('--backend',       default='symbolic', choices=['symbolic', 'neural'])
+    p_cy.add_argument('--direction',     default='AtoB', choices=['AtoB', 'BtoA'])
+    p_cy.add_argument('--intensity',     type=float, default=1.0)
+    p_cy.add_argument('--output-ab',     default=None, dest='output_ab')
+    p_cy.add_argument('--output-aba',    default=None, dest='output_aba')
+    p_cy.add_argument('--bars',          type=int,   default=None)
+    p_cy.add_argument('--candidates',    type=int,   default=2)
+    p_cy.add_argument('--no-percussion', action='store_true', dest='no_percussion')
+    p_cy.add_argument('--seed',          type=int,   default=42)
+    p_cy.add_argument('--verbose',       action='store_true')
+    p_cy.set_defaults(func=cmd_cycle)
 
     # ── analyze ───────────────────────────────────────────────────────────────
-    p_an = sub.add_parser('analyze', help='Analizar posición de un MIDI en el espacio A/B')
-    p_an.add_argument('input',    help='MIDI a analizar')
-    p_an.add_argument('--model',  required=True)
+    p_an = sub.add_parser('analyze', help='Posición de un MIDI en el espacio A/B')
+    p_an.add_argument('input')
+    p_an.add_argument('--model',   required=True)
+    p_an.add_argument('--backend', default='symbolic', choices=['symbolic', 'neural'])
     p_an.add_argument('--verbose', action='store_true')
+    p_an.set_defaults(func=cmd_analyze)
 
-    args = parser.parse_args()
+    # ── style-corpus ──────────────────────────────────────────────────────────
+    p_sc = sub.add_parser('style-corpus', help='Estadísticas de densidad del generador')
+    p_sc.add_argument('--input-dir',  required=True)
+    p_sc.add_argument('--backend',    default='symbolic', choices=['symbolic', 'neural'])
+    p_sc.add_argument('--model',      default=None)
+    p_sc.add_argument('--model-dir',  default=None, dest='model_dir')
+    p_sc.add_argument('--direction',  default='a2b', choices=['a2b', 'b2a'])
+    p_sc.add_argument('--output',     default=None)
+    p_sc.set_defaults(func=cmd_style_corpus)
 
-    {
-        'train':     cmd_train,
-        'transform': cmd_transform,
-        'cycle':     cmd_cycle,
-        'analyze':   cmd_analyze,
-    }[args.command](args)
+    # ── round-trip ────────────────────────────────────────────────────────────
+    p_rt = sub.add_parser('round-trip', help='MIDI → roll → MIDI sin modelo')
+    p_rt.add_argument('--input',         required=True)
+    p_rt.add_argument('--model-dir',     default=None, dest='model_dir')
+    p_rt.add_argument('--resolution',    type=int, default=TICKS_PER_BAR)
+    p_rt.add_argument('--disable-roles', nargs='+', choices=ROLES, default=[], dest='disable_roles')
+    p_rt.add_argument('--output',        default='roundtrip.mid')
+    p_rt.add_argument('--bpm',           type=float, default=120.0)
+    p_rt.set_defaults(func=cmd_round_trip)
+
+    # ── inspect ───────────────────────────────────────────────────────────────
+    p_ins = sub.add_parser('inspect', help='.npz / curvas de pérdida / config')
+    p_ins.add_argument('--what',      nargs='+', choices=['npz', 'loss_curve'],
+                       default=['npz'])
+    p_ins.add_argument('--data-dir',  default=None, dest='data_dir')
+    p_ins.add_argument('--model-dir', default=None, dest='model_dir')
+    p_ins.add_argument('--file',      default=None, dest='npz_file')
+    p_ins.set_defaults(func=cmd_inspect)
+
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
+    args.func(args)
 
 
 if __name__ == '__main__':

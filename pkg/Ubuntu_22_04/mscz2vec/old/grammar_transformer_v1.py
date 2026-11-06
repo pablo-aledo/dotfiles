@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 r"""
-grammar_transformer_v3.py — Grammar Transformer: transformación estructural de
+grammar_transformer.py — Grammar Transformer: transformación estructural de
 MIDI mediante gramática Re-Pair
 (versión 2.0).
 
@@ -89,48 +89,6 @@ Opciones
                               (0=desactivado, rec: 0.3-0.8) (defecto 0.0)
   --target-key KEY            Transponer insercion a tonalidad (ej: C, Dm, F#,
                               Bbm, Am)
-  --entropy-report            Imprime entropías por dimensión, gap de orden 1
-                              y perfil de sorpresa
-  --boundary-model W          Continuidad de frontera con sorpresa APRENDIDA
-                              de la pieza, P(intervalo | intervalo previo)
-                              (0=off, rec: 1-2; con W>=4 la pieza casi no
-                              cambia). Sustituye a --continuity (semitonos) y
-                              puede combinarse con él. (defecto 0.0)
-  --boundary-scope BOUNDARY_SCOPE
-                              Fronteras evaluadas: solo salida del candidato o
-                              entrada+salida (def: both) (defecto both;
-                              valores: exit|both)
-  --surprise-prior L          Prior de sorpresa del candidato: L>0 favorece
-                              material idiomático, L<0 material
-                              raro/contrastante (rec: -0.5..0.5) (defecto 0.0)
-  --surprise-curve SPEC       Curva de sorpresa objetivo:
-                              original|invert|rising|falling|arch|calm|tense|wave|lista
-                              "0.2,0.5,0.9" (activa --per-occurrence)
-  --curve-strength K          Fuerza de seguimiento de la curva (def: 2.0; k<1
-                              apenas se nota, k>=4 satura). Controla la forma,
-                              no el nivel absoluto de sorpresa. (defecto 2.0)
-  --surprise-window BEATS     Ventana del perfil de sorpresa en beats (def: 4)
-                              (defecto 4.0)
-  --per-occurrence [PER_OCCURRENCE]
-                              Sustituir cada ocurrencia de forma independiente
-                              en vez de por nombre: root = solo la raíz; deep
-                              = a cualquier profundidad (def. si se da sin
-                              valor). Se activa solo con --surprise-curve.
-                              (valores: root|deep)
-  --auto-tune                 Bucle cerrado: prueba temperaturas/semillas y
-                              elige la salida cuya entropía se acerca a la del
-                              original (+margen) sin degenerar
-  --tune-temps LIST           Temperaturas a probar, separadas por comas (def:
-                              0.1,0.3,0.5,0.8,1.0,1.5)
-  --tune-seeds N              Semillas por temperatura (def: 3) (defecto 3)
-  --tune-margin BITS          Margen de entropía conjunta (intervalo,duración)
-                              sobre el original (def: 0.1) (defecto 0.1)
-  --tune-min-change F         Cambio mínimo respecto al original, rechaza
-                              salidas casi idénticas (def: 0.05) (defecto
-                              0.05)
-  --tune-max-change F         Cambio máximo (def: 0.85) (defecto 0.85)
-  --tune-max-novel F          Máx. fracción de intervalos ausentes del
-                              original (def: 0.05) (defecto 0.05)
 
 ────────────────────────────────────────────────────────────────────────────
 Parámetros (spec)
@@ -165,21 +123,6 @@ midi              file  io=in ext=mid required  # MIDI de entrada
 --track           int    # Track del MIDI a usar
 --seed            float  # Semilla aleatoria para reproducibilidad
 --verbose         bool  default=false  # Traza detallada del proceso
---entropy-report  bool  default=false  # Imprime entropías por dimensión, gap de orden 1 y perfil…
---boundary-model  float default=0.0 typical=1..2 unit=semitonos  # Continuidad de frontera con…
---boundary-scope  enum  default=both values=exit|both  # Fronteras evaluadas: solo salida del…
---surprise-prior  float default=0.0 min=-0.5 max=0.5  # Prior de sorpresa del candidato: L>0…
---surprise-curve  str    # Curva de sorpresa objetivo: original|invert|rising|falling|arch|calm|tens…
---curve-strength  float default=2.0  # Fuerza de seguimiento de la curva (def: 2.0; k<1 apenas se…
---surprise-window float default=4.0 unit=tiempos  # Ventana del perfil de sorpresa en beats (def: 4)
---per-occurrence  enum  values=root|deep  # Sustituir cada ocurrencia de forma independiente en vez…
---auto-tune       bool  default=false  # Bucle cerrado: prueba temperaturas/semillas y elige la…
---tune-temps      str    # Temperaturas a probar, separadas por comas (def: 0.1,0.3,0.5,0.8,1.0,1.5)
---tune-seeds      int   default=3  # Semillas por temperatura (def: 3)
---tune-margin     float default=0.1  # Margen de entropía conjunta (intervalo,duración) sobre el…
---tune-min-change float default=0.05  # Cambio mínimo respecto al original, rechaza salidas casi…
---tune-max-change float default=0.85  # Cambio máximo (def: 0.85)
---tune-max-novel  float default=0.05  # Máx. fracción de intervalos ausentes del original (def: 0.05)
 @end
 
 ────────────────────────────────────────────────────────────────────────────
@@ -257,17 +200,6 @@ Ejemplos de uso
       python grammar_transformer.py obra.mid --length 1.0 --temp 0.5 \
         --report --report-format both -o salida.mid
 
-── Más modos ──
-
-  # Invocación básica
-  python grammar_transformer_v3.py entrada.mid
-
-  # Mostrar informe de gramática y estadísticas
-  python grammar_transformer_v3.py entrada.mid --report
-
-  # Imprime entropías por dimensión, gap de orden 1 y perfil de sorpresa
-  python grammar_transformer_v3.py entrada.mid --entropy-report
-
 ────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
@@ -296,7 +228,7 @@ from mido import MidiFile, MidiTrack, Message, MetaMessage
 # CONSTANTES
 # ═══════════════════════════════════════════════════════════════════════════════
 
-VERSION = "3.0"
+VERSION = "2.0"
 TICKS_EPSILON = 1
 
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -1276,7 +1208,7 @@ def build_compatibility_matrix(
     # Asegurar vectores calculados
     candidates = []
     for name, elem in elements.items():
-        if name == '__root__' or is_alias(name):
+        if name == '__root__':
             continue
         if abs(elem.duration_beats - target_duration) <= dur_tolerance:
             if elem.vector is None:
@@ -1481,553 +1413,6 @@ def boundary_score(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# INFORMACIÓN Y SORPRESA  (entropía como herramienta de análisis y de generación)
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# Modelo estadístico aprendido de la propia pieza: P(intervalo | intervalo previo)
-# y P(duración). La "sorpresa" de un evento es -log2 P (bits). Se usa en cuatro
-# mecanismos de generación, todos opcionales y aditivos sobre la puntuación de
-# similitud coseno que ya existía:
-#
-#   1. boundary-model  continuidad en fronteras con sorpresa aprendida (no semitonos)
-#   2. surprise-prior  prior de sorpresa del candidato (+λ → idiomático, -λ → contraste)
-#   3. surprise-curve  curva de sorpresa objetivo a lo largo de la obra
-#   4. auto-tune       bucle cerrado: elige temperatura/semilla midiendo la salida
-#
-# Convención: la "sorpresa percentil" de un elemento es su rango [0,1] entre todos
-# los elementos de la gramática (robusta a escala); prior y curva trabajan en ella.
-
-ALIAS_TAG = '@o'      # sufijo de las copias por ocurrencia (ver split_root_occurrences)
-IV_CLIP = 24          # los intervalos se recortan a ±24 semitonos
-IV_SUPPORT = 2 * IV_CLIP + 1
-
-
-def is_alias(name) -> bool:
-    return isinstance(name, str) and ALIAS_TAG in name
-
-
-def alias_base(name):
-    return name.split(ALIAS_TAG, 1)[0] if is_alias(name) else name
-
-
-def _as_pairs(notes: list) -> list:
-    """Normaliza a [(onset, GrammarNote)] (acepta GrammarNote sueltas o pares)."""
-    out = []
-    for it in notes:
-        if isinstance(it, tuple):
-            out.append((float(it[0]), it[1]))
-        else:
-            out.append((float(it.offset), it))
-    return out
-
-
-def melodic_line(notes: list) -> tuple:
-    """
-    Línea melódica de una lista de notas: la más aguda de cada onset.
-    Devuelve (pitches, durs_cuantizadas, onsets).
-    """
-    pairs = sorted(_as_pairs(notes), key=lambda x: (round(x[0], 4), -x[1].pitch))
-    pitches, durs, onsets = [], [], []
-    last = None
-    for on, n in pairs:
-        key = round(on, 4)
-        if key == last:
-            continue
-        last = key
-        pitches.append(n.pitch)
-        durs.append(quantize_duration(n.duration))
-        onsets.append(on)
-    return pitches, durs, onsets
-
-
-def _intervals(pitches: list) -> list:
-    return [int(max(-IV_CLIP, min(IV_CLIP, b - a))) for a, b in zip(pitches[:-1], pitches[1:])]
-
-
-def shannon(counter: Counter) -> float:
-    """Entropía de Shannon (bits) de un Counter."""
-    n = sum(counter.values())
-    if n <= 0:
-        return 0.0
-    return float(-sum((c / n) * math.log2(c / n) for c in counter.values() if c > 0))
-
-
-def stream_entropies(notes: list) -> dict:
-    """
-    Entropías del flujo de notas por dimensión (estimador plug-in, bits):
-      H_pc    clase de pitch          H_iv   intervalo melódico
-      H_dur   duración                H_joint (intervalo, duración)
-      Hc1_iv  H(intervalo | intervalo previo)   gap1 = H_iv - Hc1_iv
-    gap1 ≈ cuánta estructura secuencial hay que un modelo de orden 0 (Huffman) no ve.
-    """
-    p, d, _ = melodic_line(notes)
-    ivs = _intervals(p)
-    n_iv = len(ivs)
-    res = dict(n=len(p), H_pc=shannon(Counter(x % 12 for x in p)),
-               H_iv=shannon(Counter(ivs)), H_dur=shannon(Counter(d)),
-               H_joint=shannon(Counter(zip(ivs, d[1:]))) if n_iv else 0.0)
-    if n_iv >= 3:
-        h_prev = shannon(Counter(ivs[:-1]))
-        res['Hc1_iv'] = shannon(Counter(zip(ivs[:-1], ivs[1:]))) - h_prev
-        res['gap1'] = h_prev - res['Hc1_iv']
-    else:
-        res['Hc1_iv'] = res['gap1'] = 0.0
-    return res
-
-
-class SurpriseModel:
-    """
-    Modelo de sorpresa aprendido de una pieza.
-      P(iv | iv_prev) = interpolación Witten-Bell entre contexto de orden 1 y
-                        orden 0 suavizado (Laplace α sobre 49 intervalos).
-      P(dur)          = frecuencia suavizada sobre la rejilla de 1/16.
-    """
-
-    def __init__(self, alpha: float = 0.1):
-        self.alpha = alpha
-        self.c0: Counter = Counter()
-        self.n0 = 0
-        self.c1: dict = defaultdict(Counter)
-        self.cd: Counter = Counter()
-        self.nd = 0
-
-    def fit(self, notes: list) -> 'SurpriseModel':
-        p, d, _ = melodic_line(notes)
-        ivs = _intervals(p)
-        self.c0 = Counter(ivs)
-        self.n0 = len(ivs)
-        self.c1 = defaultdict(Counter)
-        for a, b in zip(ivs[:-1], ivs[1:]):
-            self.c1[a][b] += 1
-        self.cd = Counter(d)
-        self.nd = len(d)
-        return self
-
-    def p_iv(self, iv: int, ctx=None) -> float:
-        iv = int(max(-IV_CLIP, min(IV_CLIP, iv)))
-        p0 = (self.c0.get(iv, 0) + self.alpha) / (self.n0 + self.alpha * IV_SUPPORT)
-        if ctx is None:
-            return p0
-        cc = self.c1.get(int(max(-IV_CLIP, min(IV_CLIP, ctx))))
-        if not cc:
-            return p0
-        n = sum(cc.values())
-        lam = n / (n + len(cc))
-        return lam * (cc.get(iv, 0) / n) + (1.0 - lam) * p0
-
-    def iv_surprise(self, iv: int, ctx=None) -> float:
-        return -math.log2(self.p_iv(iv, ctx))
-
-    def dur_surprise(self, dur: float) -> float:
-        dur = quantize_duration(dur)
-        return -math.log2((self.cd.get(dur, 0) + self.alpha) / (self.nd + self.alpha * 64))
-
-    def note_surprises(self, pitches: list, durs: list) -> np.ndarray:
-        """Sorpresa en bits de cada nota: intervalo (con contexto) + duración."""
-        n = len(pitches)
-        s = np.zeros(n)
-        ivs = _intervals(pitches)
-        for i in range(n):
-            s[i] = self.dur_surprise(durs[i])
-            if i >= 1:
-                s[i] += self.iv_surprise(ivs[i - 1], ivs[i - 2] if i >= 2 else None)
-        return s
-
-    def element_surprise(self, notes: list) -> float:
-        p, d, _ = melodic_line(notes)
-        if not p:
-            return 0.0
-        return float(np.mean(self.note_surprises(p, d)))
-
-
-def percentile_ranks(values) -> np.ndarray:
-    """Rango percentil [0,1] con empates promediados."""
-    v = np.asarray(values, dtype=float)
-    n = len(v)
-    if n <= 1:
-        return np.full(n, 0.5)
-    order = np.argsort(v, kind='mergesort')
-    sv = v[order]
-    ranks = np.empty(n)
-    i = 0
-    while i < n:
-        j = i
-        while j + 1 < n and abs(sv[j + 1] - sv[i]) < 1e-9:
-            j += 1
-        ranks[order[i:j + 1]] = (i + j) / 2.0
-        i = j + 1
-    return ranks / (n - 1)
-
-
-def surprise_profile(model: SurpriseModel, notes: list, window: float = 4.0) -> tuple:
-    """
-    Perfil de sorpresa por ventanas de `window` beats.
-    Devuelve (centros_en_fracción_[0,1], media_de_bits_por_ventana).
-    """
-    p, d, on = melodic_line(notes)
-    if len(p) < 2:
-        return np.array([0.5]), np.array([0.0])
-    s = model.note_surprises(p, d)
-    total = max(on[-1] + d[-1], 1e-6)
-    nwin = max(1, int(math.ceil(total / window)))
-    acc = np.zeros(nwin)
-    cnt = np.zeros(nwin)
-    for o, v in zip(on, s):
-        k = min(nwin - 1, int(o / window))
-        acc[k] += v
-        cnt[k] += 1
-    vals = np.where(cnt > 0, acc / np.maximum(cnt, 1), np.nan)
-    if np.isnan(vals).any():
-        idx = np.arange(nwin)
-        good = ~np.isnan(vals)
-        vals = np.interp(idx, idx[good], vals[good]) if good.any() else np.zeros(nwin)
-    centers = (np.arange(nwin) + 0.5) * window / (nwin * window)
-    return centers, vals
-
-
-def segment_profile(model: SurpriseModel, notes: list, nseg: int = 16) -> np.ndarray:
-    """Sorpresa media en `nseg` segmentos iguales de la pieza (comparable entre piezas de distinta duración)."""
-    p, d, on = melodic_line(notes)
-    if len(p) < 2:
-        return np.zeros(nseg)
-    s = model.note_surprises(p, d)
-    total = max(on[-1] + d[-1], 1e-6)
-    acc = np.zeros(nseg)
-    cnt = np.zeros(nseg)
-    for o, v in zip(on, s):
-        k = min(nseg - 1, int(o / total * nseg))
-        acc[k] += v
-        cnt[k] += 1
-    vals = np.where(cnt > 0, acc / np.maximum(cnt, 1), np.nan)
-    if np.isnan(vals).any():
-        idx = np.arange(nseg)
-        good = ~np.isnan(vals)
-        vals = np.interp(idx, idx[good], vals[good]) if good.any() else np.zeros(nseg)
-    return vals
-
-
-CURVE_PRESETS = {
-    'rising':  [(0.0, 0.10), (1.0, 0.90)],
-    'falling': [(0.0, 0.90), (1.0, 0.10)],
-    'arch':    [(0.0, 0.20), (0.66, 0.90), (1.0, 0.25)],
-    'calm':    [(0.0, 0.15), (1.0, 0.15)],
-    'tense':   [(0.0, 0.85), (1.0, 0.85)],
-    'wave':    [(0.0, 0.2), (0.25, 0.8), (0.5, 0.2), (0.75, 0.8), (1.0, 0.2)],
-}
-
-
-def make_curve(spec: str, orig_centers: np.ndarray, orig_pct: np.ndarray):
-    """
-    Construye f(x∈[0,1]) → sorpresa percentil objetivo ∈ [0,1].
-    spec: original | invert | rising | falling | arch | calm | tense | wave
-          | lista de números "0.2,0.5,0.9" (puntos de control equiespaciados).
-    """
-    s = spec.strip().lower()
-    if s == 'original':
-        xs, ys = orig_centers, orig_pct
-    elif s == 'invert':
-        xs, ys = orig_centers, 1.0 - orig_pct
-    elif s in CURVE_PRESETS:
-        xs, ys = zip(*CURVE_PRESETS[s])
-        xs, ys = np.array(xs), np.array(ys)
-    else:
-        try:
-            ys = np.array([float(v) for v in s.split(',')], dtype=float)
-        except ValueError:
-            raise ValueError(f"Curva no reconocida: '{spec}'. Usa original|invert|"
-                             f"{'|'.join(CURVE_PRESETS)} o una lista '0.2,0.5,0.9'")
-        if len(ys) == 1:
-            ys = np.array([ys[0], ys[0]])
-        xs = np.linspace(0.0, 1.0, len(ys))
-    ys = np.clip(np.asarray(ys, dtype=float), 0.0, 1.0)
-    return lambda x: float(np.interp(x, xs, ys))
-
-
-class SurpriseContext:
-    """
-    Agrupa los tres mecanismos que modifican la puntuación de candidatos:
-    boundary-model, surprise-prior y surprise-curve. `adjust` recibe las puntuaciones
-    de similitud coseno de un origen frente a sus candidatos y devuelve las ajustadas.
-    """
-
-    def __init__(self, model: SurpriseModel, boundary_w: float = 0.0,
-                 boundary_scope: str = 'both', prior_lambda: float = 0.0,
-                 curve=None, curve_strength: float = 0.6,
-                 boundary_metric: str = 'model'):
-        self.model = model
-        self.boundary_w = boundary_w
-        self.boundary_scope = boundary_scope
-        self.boundary_metric = boundary_metric   # 'model' (bits aprendidos) | 'semitone' (solo ablación)
-        self.prior_lambda = prior_lambda
-        self.curve = curve
-        self.curve_strength = curve_strength
-        self.pct: dict = {}
-        self.ctx_map: dict = {}
-        self.target: dict = {}
-
-    @property
-    def active(self) -> bool:
-        return (self.boundary_w > 0 or self.prior_lambda != 0
-                or (self.curve is not None and self.curve_strength > 0))
-
-    # ── preparación ────────────────────────────────────────────────────────────
-    def prepare(self, root: list, rules: dict, elements: dict) -> None:
-        names = [n for n in elements if n != '__root__' and not is_alias(n)]
-        sur = [self.model.element_surprise(elements[n].notes) for n in names]
-        self.pct = dict(zip(names, percentile_ranks(sur)))
-
-        def edge(tok):
-            """(primer_pitch, último_pitch, último_intervalo) de un token, o None."""
-            if isinstance(tok, tuple):
-                return tok[0], tok[0], None
-            e = elements.get(tok)
-            if e is None or not e.notes:
-                return None
-            ns = e.notes
-            liv = ns[-1].pitch - ns[-2].pitch if len(ns) >= 2 else None
-            return ns[0].pitch, ns[-1].pitch, liv
-
-        ctx_map: dict = defaultdict(list)
-        for body in [root] + list(rules.values()):
-            for j, tok in enumerate(body):
-                if not isinstance(tok, str):
-                    continue
-                pe = edge(body[j - 1]) if j > 0 else None
-                ne = edge(body[j + 1]) if j + 1 < len(body) else None
-                ctx_map[tok].append((pe[1] if pe else None,
-                                     pe[2] if pe else None,
-                                     ne[0] if ne else None))
-        self.ctx_map = ctx_map
-
-        # Posición media (fracción de la obra) de cada nombre, para la curva.
-        if self.curve is not None:
-            pos: dict = defaultdict(list)
-
-            def dur_of(tok):
-                if isinstance(tok, tuple):
-                    return tok[1]
-                e = elements.get(tok)
-                return e.duration_beats if e is not None else 0.0
-
-            def walk(tokens, start, depth):
-                cur = start
-                for tok in tokens:
-                    dd = dur_of(tok)
-                    if isinstance(tok, str):
-                        pos[tok].append(cur + dd / 2.0)
-                        if tok in rules and depth < 64:
-                            walk(rules[tok], cur, depth + 1)
-                    cur += dd
-                return cur
-
-            total = max(walk(root, 0.0, 0), 1e-6)
-            self.target = {n: float(np.mean([self.curve(min(1.0, p / total)) for p in ps]))
-                           for n, ps in pos.items()}
-
-    # ── ajuste de puntuaciones ────────────────────────────────────────────────
-    def boundary_penalty(self, src: str, cand_elem: 'GrammarElement', shift: int = 0) -> float:
-        """
-        Penalización media (sobre todas las ocurrencias de `src`) de colocar `cand_elem`
-        en su lugar. 'model': bits/8 de cada unión bajo el modelo aprendido, con el
-        intervalo previo como contexto. 'semitone': |Δpitch|/12 (solo para ablación).
-        """
-        ctxs = self.ctx_map.get(src)
-        if not ctxs or not cand_elem.notes:
-            return 0.0
-        ns = cand_elem.notes
-        first = ns[0].pitch + shift
-        last = ns[-1].pitch + shift
-        own_iv = ns[-1].pitch - ns[-2].pitch if len(ns) >= 2 else None
-        tot = 0.0
-        for prev_last, prev_iv, next_first in ctxs:
-            pen = 0.0
-            if self.boundary_metric == 'semitone':
-                if self.boundary_scope == 'both' and prev_last is not None:
-                    pen += abs(first - prev_last) / 12.0
-                if next_first is not None:
-                    pen += abs(next_first - last) / 12.0
-            else:
-                if self.boundary_scope == 'both' and prev_last is not None:
-                    pen += self.model.iv_surprise(first - prev_last, prev_iv) / 8.0
-                if next_first is not None:
-                    pen += self.model.iv_surprise(next_first - last, own_iv) / 8.0
-            tot += pen
-        return tot / len(ctxs)
-
-    def adjust(self, src: str, cands: list, scores: np.ndarray, elements: dict,
-               shifts: list | None = None) -> np.ndarray:
-        """
-        Ajuste ADITIVO en el espacio de puntuaciones (logits antes de la temperatura):
-            score' = sim - w·penalización_frontera - λ·sorpresa_pct - k·|sorpresa_pct - objetivo|
-        Aditivo a propósito: un factor multiplicativo (como el --continuity de v2) encoge
-        el rango de puntuaciones y, tras dividir por T, aplana la distribución en vez de
-        concentrarla.
-        """
-        s = np.array(scores, dtype=float)
-        if self.boundary_w > 0:
-            pen = np.array([self.boundary_penalty(src, elements[c], shifts[i] if shifts else 0)
-                            for i, c in enumerate(cands)])
-            s = s - self.boundary_w * pen
-        if self.prior_lambda != 0 or (self.curve is not None and self.curve_strength > 0):
-            pc = np.array([self.pct.get(c, 0.5) for c in cands])
-            if self.prior_lambda != 0:
-                s = s - self.prior_lambda * pc
-            if self.curve is not None and self.curve_strength > 0:
-                t = self.target.get(src)
-                if t is not None:
-                    s = s - self.curve_strength * np.abs(pc - t)
-        return s
-
-
-def split_root_occurrences(root: list, rules: dict, elements: dict) -> list:
-    """
-    Da a cada ocurrencia de la raíz su propio nombre (X → X@o<i>) para que se
-    sustituya de forma independiente. Sin esto, la sustitución es por nombre: todas
-    las apariciones de N7 reciben el mismo reemplazo y no hay control posicional.
-    Las copias se excluyen de los pools de candidatos (is_alias).
-    """
-    new_root = []
-    for i, tok in enumerate(root):
-        if isinstance(tok, str) and tok in elements and tok != '__root__' and not is_alias(tok):
-            alias = f"{tok}{ALIAS_TAG}{i}"
-            e = copy.copy(elements[tok])
-            e.name = alias
-            elements[alias] = e
-            if tok in rules:
-                rules[alias] = list(rules[tok])
-            new_root.append(alias)
-        else:
-            new_root.append(tok)
-    return new_root
-
-
-def unfold_occurrences(root: list, rules: dict, elements: dict, targets: set | None = None) -> list:
-    """
-    Versión profunda de split_root_occurrences: da nombre propio a cada ocurrencia en
-    CUALQUIER nivel de la derivación (no solo en la raíz). Los padres de una ocurrencia
-    objetivo se clonan también, para que cada hueco pueda sustituirse de forma independiente
-    y con su propio contexto de frontera y posición.
-      targets  nombres que serán sustituibles (None = todos). Las ramas que no contienen
-               ningún objetivo no se despliegan, y bajo un objetivo no se despliega nada.
-    """
-    memo: dict = {}
-
-    def contains(name, depth=0) -> bool:
-        if targets is None:
-            return True
-        if name in memo:
-            return memo[name]
-        res = name in targets
-        if not res and name in rules and depth < 64:
-            res = any(isinstance(t, str) and t in elements and contains(t, depth + 1)
-                      for t in rules[name])
-        memo[name] = res
-        return res
-
-    counter = [0]
-
-    def clone(tok, depth=0):
-        if not isinstance(tok, str) or tok == '__root__' or tok not in elements or depth > 64:
-            return tok
-        if not contains(tok):
-            return tok
-        alias = f"{tok}{ALIAS_TAG}{counter[0]}"
-        counter[0] += 1
-        e = copy.copy(elements[tok])
-        e.name = alias
-        elements[alias] = e
-        if tok in rules:
-            if targets is not None and tok in targets:
-                rules[alias] = list(rules[tok])
-            else:
-                rules[alias] = [clone(t, depth + 1) for t in rules[tok]]
-        return alias
-
-    return [clone(t) for t in root]
-
-
-# ── evaluación de flujos y bucle cerrado ────────────────────────────────────────
-
-def stream_stats(notes: list) -> dict:
-    """Estadísticas de un flujo (entropías + soportes) para comparar original vs salida."""
-    p, d, _ = melodic_line(notes)
-    ivs = _intervals(p)
-    st = stream_entropies(notes)
-    st.update(p=p, d=d, ivs=ivs, tokens=list(zip(p, d)),
-              iv_support=set(ivs), bg_support=set(zip(ivs[:-1], ivs[1:])))
-    return st
-
-
-def compare_streams(orig: dict, out: dict, model: SurpriseModel) -> dict:
-    """Métricas de la salida frente al original (todas en el mismo modelo de sorpresa)."""
-    import difflib
-    ivs, bgs = out['ivs'], list(zip(out['ivs'][:-1], out['ivs'][1:]))
-    novel_iv = float(np.mean([iv not in orig['iv_support'] for iv in ivs])) if ivs else 0.0
-    novel_bg = float(np.mean([b not in orig['bg_support'] for b in bgs])) if bgs else 0.0
-    change = 1.0 - difflib.SequenceMatcher(None, orig['tokens'], out['tokens'],
-                                           autojunk=False).ratio()
-    s = model.note_surprises(out['p'], out['d']) if out['p'] else np.zeros(1)
-    return dict(novel_iv=novel_iv, novel_bg=novel_bg, change=change,
-                surprise=float(np.mean(s)),
-                dH_joint=out['H_joint'] - orig['H_joint'],
-                dH_iv=out['H_iv'] - orig['H_iv'],
-                dHc1=out['Hc1_iv'] - orig['Hc1_iv'])
-
-
-def autotune_search(gen, orig: dict, model: SurpriseModel, temps: list, n_seeds: int,
-                    margin: float, min_change: float, max_change: float,
-                    max_novel: float, base_seed: int, verbose: bool = False) -> dict:
-    """
-    Bucle cerrado. gen(T, seed) → dict(notes=..., ...). Para cada (T, semilla) mide la
-    salida y elige la que mejor cumple:
-        |H_joint_out - (H_joint_orig + margin)| mínimo,
-        con cambio ∈ [min_change, max_change] y fracción de intervalos fuera de estilo ≤ max_novel.
-    Si ninguna cumple las restricciones, devuelve la de menor violación (passed=False).
-    """
-    trials = []
-    k = 0
-    for T in temps:
-        for _ in range(n_seeds):
-            seed = base_seed * 1000 + k
-            k += 1
-            art = gen(T, seed)
-            cmpd = compare_streams(orig, stream_stats(art['notes']), model)
-            J = abs(cmpd['dH_joint'] - margin)
-            viol = (max(0.0, min_change - cmpd['change']) + max(0.0, cmpd['change'] - max_change)
-                    + max(0.0, cmpd['novel_iv'] - max_novel))
-            passed = viol <= 1e-12
-            trials.append(dict(T=T, seed=seed, J=J, viol=viol, passed=passed, art=art, **cmpd))
-            if verbose:
-                print(f"    [tune] T={T:<4} seed={seed:<6} Δchange={cmpd['change']:.2f} "
-                      f"novel={cmpd['novel_iv']:.3f} dH={cmpd['dH_joint']:+.2f} "
-                      f"J={J:.3f} {'ok' if passed else 'rechazada'}")
-    ok = [t for t in trials if t['passed']]
-    best = min(ok, key=lambda t: t['J']) if ok else min(trials, key=lambda t: (t['viol'], t['J']))
-    return dict(best=best, trials=trials, n_passed=len(ok))
-
-
-def print_entropy_report(model: SurpriseModel, notes: list, window: float = 4.0) -> None:
-    """Informe de entropías por dimensión y perfil de sorpresa por compases."""
-    st = stream_entropies(notes)
-    print("\n  ── ENTROPÍA DEL FLUJO DE NOTAS (bits) ─────────────────────────────")
-    print(f"    notas={st['n']}   H(clase pitch)={st['H_pc']:.2f}   H(intervalo)={st['H_iv']:.2f}   "
-          f"H(duración)={st['H_dur']:.2f}")
-    print(f"    H(intervalo,duración)={st['H_joint']:.2f}   "
-          f"H(intervalo | intervalo previo)={st['Hc1_iv']:.2f}   "
-          f"estructura de orden 1 (gap)={st['gap1']:.2f}")
-    centers, vals = surprise_profile(model, notes, window)
-    blocks = " ▁▂▃▄▅▆▇█"
-    lo, hi = float(vals.min()), float(vals.max())
-    spark = ''.join(blocks[int(round((v - lo) / (hi - lo + 1e-9) * 8))] for v in vals)
-    print(f"    sorpresa por ventana de {window:g} beats (bits/nota, min={lo:.1f} max={hi:.1f}):")
-    for i in range(0, len(spark), 64):
-        print(f"      {spark[i:i + 64]}")
-    top = np.argsort(vals)[::-1][:5]
-    print("    ventanas más sorprendentes: " +
-          ", ".join(f"#{int(i)}({vals[i]:.1f})" for i in sorted(top)))
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # MODO BIN — agrupación por longitud y ajuste de duración
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2041,7 +1426,7 @@ def build_bins(
     """
     bins: dict = defaultdict(list)
     for name, elem in elements.items():
-        if name == '__root__' or is_alias(name):
+        if name == '__root__':
             continue
         idx = int(elem.duration_beats / bin_size)
         bins[idx].append(name)
@@ -2173,7 +1558,6 @@ def transform_grammar_bins(
     continuity_weight: float = 0.0,
     target_key: tuple | None = None,
     verbose: bool = False,
-    ctx: Optional['SurpriseContext'] = None,
 ) -> tuple[dict, list, dict]:
     """
     Variante de transform_grammar que trabaja con bins de longitud.
@@ -2239,20 +1623,9 @@ def transform_grammar_bins(
             for c in candidates
         ])
 
-        # Continuidad de frontera clásica (semitonos). En v2 se calculaba el mapa
-        # pero nunca se aplicaba en modo bins.
-        if continuity_weight > 0:
-            next_p = next_pitch_map.get(name)
-            scores = scores * np.array([boundary_score(elements[c], next_p, continuity_weight)
-                                        for c in candidates])
-        if ctx is not None and ctx.active:
-            shifts = ([estimate_transpose_semitones(elem, elements[c]) for c in candidates]
-                      if normalize_pitch else None)
-            scores = ctx.adjust(name, candidates, scores, elements, shifts)
-
         chosen_idx = temperature_sample(scores, temperature, rng)
         chosen_name = candidates[chosen_idx]
-        if chosen_name == name or chosen_name == alias_base(name):
+        if chosen_name == name:
             continue   # sin cambio
 
         # Ajustar duración del elegido a la del elemento origen
@@ -2273,10 +1646,16 @@ def transform_grammar_bins(
                   f"→ {fitted_name} [{fit_mode}]  "
                   f"sim={scores[chosen_idx]:.3f}")
 
-    # normalize_pitch: transponer cada elemento insertado al registro de SU origen
-    # (v3: por origen; en v2 se reemplazaban todas las apariciones del mismo elemento
-    # ajustado con la transposición del último origen procesado).
-    final_sub = dict(substitutions)
+    # Aplicar sustituciones a reglas y raíz
+    new_rules = {
+        rname: [substitutions.get(t, t) if isinstance(t, str) else t
+                for t in body]
+        for rname, body in rules.items()
+    }
+    new_root = [substitutions.get(t, t) if isinstance(t, str) else t
+                for t in root]
+
+    # normalize_pitch: transponer elementos insertados al registro del origen
     if normalize_pitch:
         for old_name, fitted_name in substitutions.items():
             src_elem    = elements.get(old_name)
@@ -2288,13 +1667,11 @@ def transform_grammar_bins(
                     tp_name = f"{fitted_name}_tp{semitones:+d}"
                     transposed.name = tp_name
                     elements[tp_name] = transposed
-                    final_sub[old_name] = tp_name
-
-    new_rules = {
-        rname: [final_sub.get(t, t) if isinstance(t, str) else t for t in body]
-        for rname, body in rules.items()
-    }
-    new_root = [final_sub.get(t, t) if isinstance(t, str) else t for t in root]
+                    new_rules = {
+                        rn: [tp_name if t == fitted_name else t for t in body]
+                        for rn, body in new_rules.items()
+                    }
+                    new_root = [tp_name if t == fitted_name else t for t in new_root]
 
     n_subs = len(substitutions)
     range_msg = (f", rango [{lo_filter:.3f}, {hi_filter:.3f}]b — "
@@ -2320,13 +1697,11 @@ def transform_grammar(
     continuity_weight: float = 0.0,
     target_key: tuple | None = None,
     verbose: bool = False,
-    ctx: Optional['SurpriseContext'] = None,
 ) -> tuple[dict, list]:
     """
     Transforma la gramática sustituyendo los elementos con duración
     ≈ target_duration por otros compatibles sampleados.
     Aplica penalización de continuidad y/o transposición a tonalidad si se indica.
-    `ctx` (SurpriseContext) añade boundary-model / surprise-prior / surprise-curve.
     """
     # Construir matriz de compatibilidad
     candidates, matrix = build_compatibility_matrix(
@@ -2344,41 +1719,47 @@ def transform_grammar(
     next_pitch_map = build_next_element_map(root, elements) if continuity_weight > 0 else {}
 
     def sample_replacement(src_name: str) -> str:
-        base = alias_base(src_name)
-        if base not in name_to_idx:
+        if src_name not in name_to_idx:
             return src_name
-        idx = name_to_idx[base]
+        idx = name_to_idx[src_name]
         scores = matrix[idx].copy()
         if continuity_weight > 0:
             next_p = next_pitch_map.get(src_name)
             for ci, cname in enumerate(candidates):
                 scores[ci] *= boundary_score(elements[cname], next_p, continuity_weight)
-        if ctx is not None and ctx.active:
-            shifts = ([estimate_transpose_semitones(elements[base], elements[c])
-                       for c in candidates] if normalize_pitch else None)
-            scores = ctx.adjust(src_name, candidates, scores, elements, shifts)
         chosen_idx = temperature_sample(scores, temperature, rng)
         chosen_name = candidates[chosen_idx]
         if verbose and chosen_name != src_name:
             print(f"    {src_name} → {chosen_name}  (sim={matrix[idx][chosen_idx]:.3f})")
         return chosen_name
 
-    # Construir mapa de sustituciones (uno por nombre; las copias por ocurrencia
-    # @o<i> se añaden al final para no alterar el orden de muestreo sin ellas)
+    # Construir mapa de sustituciones (uno por nombre de elemento transformado)
     substitutions: dict = {}  # old_name → new_name
-    alias_sources = [n for n in elements if is_alias(n) and alias_base(n) in name_to_idx]
-    for name in list(candidates) + alias_sources:
+    for name in candidates:
         new_name = sample_replacement(name)
-        if is_alias(name) and new_name == alias_base(name):
-            continue   # el alias conserva su contenido original
         substitutions[name] = new_name
 
-    # Transposición específica de cada origen (v3). En v2 el nombre «<cand>_tp» era
-    # único por candidato y reemplazaba todas sus apariciones, de modo que dos huecos
-    # de registros distintos que elegían el mismo candidato recibían la misma transposición.
-    final_sub: dict = {}
+    # Aplicar sustituciones con transposición si normalize_pitch
+    new_rules = {}
+    for rule_name, body in rules.items():
+        new_body = []
+        for tok in body:
+            if isinstance(tok, str) and tok in substitutions:
+                new_tok = substitutions[tok]
+                new_body.append(new_tok)
+            else:
+                new_body.append(tok)
+        new_rules[rule_name] = new_body
+
+    new_root = []
+    for tok in root:
+        if isinstance(tok, str) and tok in substitutions:
+            new_root.append(substitutions[tok])
+        else:
+            new_root.append(tok)
+
+    # Transponer elementos insertados
     for old_name, new_name in substitutions.items():
-        final_sub[old_name] = new_name
         if old_name == new_name:
             continue
         src_elem = elements.get(old_name)
@@ -2386,7 +1767,6 @@ def transform_grammar(
         if not src_elem or not tgt_elem:
             continue
         working = tgt_elem
-        st = 0
         if normalize_pitch:
             st = estimate_transpose_semitones(src_elem, working)
             if st != 0:
@@ -2394,16 +1774,12 @@ def transform_grammar(
         if target_key is not None:
             working = transpose_to_key(working, target_key[0], target_key[1])
         if working is not tgt_elem:
-            tp_name = (f"{new_name}_tp{st:+d}" if target_key is None
-                       else f"{new_name}_tp{st:+d}k{target_key[0]}{target_key[1][:3]}")
+            tp_name = f"{new_name}_tp"
             working.name = tp_name
             elements[tp_name] = working
-            final_sub[old_name] = tp_name
-
-    new_rules = {rule_name: [final_sub[t] if isinstance(t, str) and t in final_sub else t
-                             for t in body]
-                 for rule_name, body in rules.items()}
-    new_root = [final_sub[t] if isinstance(t, str) and t in final_sub else t for t in root]
+            new_rules = {rn: [tp_name if t == new_name else t for t in body]
+                         for rn, body in new_rules.items()}
+            new_root = [tp_name if t == new_name else t for t in new_root]
 
     return new_rules, new_root
 
@@ -3534,75 +2910,6 @@ def print_report(
 # PIPELINE PRINCIPAL
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def build_info_context(info: dict, rules: dict, root: list, elements: dict) -> tuple:
-    """
-    Ajusta el modelo de sorpresa sobre la pieza original (la gramática sin transformar,
-    reconstruida) y construye el SurpriseContext con los mecanismos activados.
-    Devuelve (model, orig_notes, ctx).
-    """
-    orig_notes = reconstruct_notes(root, rules, elements)
-    model = SurpriseModel().fit(orig_notes)
-    curve = None
-    if info.get('curve'):
-        centers, vals = surprise_profile(model, orig_notes, info.get('window', 4.0))
-        curve = make_curve(info['curve'], centers, percentile_ranks(vals))
-    ctx = SurpriseContext(
-        model,
-        boundary_w=info.get('boundary_w', 0.0),
-        boundary_scope=info.get('boundary_scope', 'both'),
-        prior_lambda=info.get('prior', 0.0),
-        curve=curve,
-        curve_strength=info.get('curve_strength', 2.0),
-    )
-    return model, orig_notes, ctx
-
-
-def transform_main(
-    rules: dict, root: list, elements: dict, *,
-    target_duration, bin_size, bin_length_range, fit_mode: str,
-    temperature: float, normalize_pitch: bool, continuity_weight: float,
-    target_key, rng: random.Random, ctx: Optional['SurpriseContext'] = None,
-    per_occurrence: bool = False, copy_inputs: bool = False, verbose: bool = False,
-) -> dict:
-    """
-    Transformación de la pista principal (exacta o por bins) + reconstrucción.
-    Con copy_inputs=True no modifica rules/root/elements (necesario para repetir
-    la transformación en el bucle cerrado y en los benchmarks).
-    Devuelve dict(rules, root, elements, notes).
-    """
-    if copy_inputs:
-        rules = copy.deepcopy(rules)
-        root = list(root)
-        elements = copy.deepcopy(elements)
-    if per_occurrence == 'deep':
-        targets = None
-        if bin_size is None and target_duration is not None:
-            targets = {n for n, e in elements.items()
-                       if n != '__root__' and abs(e.duration_beats - target_duration) <= 0.01}
-        root = unfold_occurrences(root, rules, elements, targets)
-    elif per_occurrence:
-        root = split_root_occurrences(root, rules, elements)
-    if ctx is not None and ctx.active:
-        ctx.prepare(root, rules, elements)
-    if bin_size is not None:
-        new_rules, new_root, elements = transform_grammar_bins(
-            rules, root, elements,
-            bin_size=bin_size, fit_mode=fit_mode, temperature=temperature,
-            normalize_pitch=normalize_pitch, rng=rng,
-            bin_length_range=bin_length_range,
-            continuity_weight=continuity_weight, target_key=target_key,
-            verbose=verbose, ctx=ctx)
-    else:
-        new_rules, new_root = transform_grammar(
-            rules, root, elements,
-            target_duration=target_duration, temperature=temperature,
-            normalize_pitch=normalize_pitch, rng=rng,
-            continuity_weight=continuity_weight, target_key=target_key,
-            verbose=verbose, ctx=ctx)
-    notes = reconstruct_notes(new_root, new_rules, elements)
-    return dict(rules=new_rules, root=new_root, elements=elements, notes=notes)
-
-
 def run_transform(
     midi_path: Path,
     out_path: Path,
@@ -3626,11 +2933,9 @@ def run_transform(
     report_format: str,
     seed: float | None,
     verbose: bool,
-    info: dict | None = None,
 ) -> None:
 
     rng = random.Random(seed)
-    info = info or {}
 
     # ── 1. Cargar MIDI
     print(f"[1/6] Cargando MIDI: {midi_path} …")
@@ -3710,84 +3015,42 @@ def run_transform(
                 midi_name=midi_path.name,
             )
 
-    model = orig_notes = ctx = None
-    if info.get('enabled'):
-        model, orig_notes, ctx = build_info_context(info, rules, root, elements)
-        if info.get('entropy_report'):
-            print_entropy_report(model, orig_notes, info.get('window', 4.0))
-
     if target_duration is None and bin_size is None:
         print("\n  (Sin --length ni --bin-size: no se aplica transformación. Usa --report para explorar.)")
         return
 
     # ── 5. Transformar gramática
-    per_occ = info.get('per_occurrence') or False
-    if ctx is not None and ctx.curve is not None and ctx.curve_strength > 0 and not per_occ:
-        per_occ = 'deep'          # la curva exige control posicional
-    active_tags = []
-    if ctx is not None:
-        if ctx.boundary_w > 0:
-            active_tags.append(f"boundary-model w={ctx.boundary_w:g}/{ctx.boundary_scope}")
-        if ctx.prior_lambda != 0:
-            active_tags.append(f"surprise-prior λ={ctx.prior_lambda:g}")
-        if ctx.curve is not None and ctx.curve_strength > 0:
-            active_tags.append(f"surprise-curve '{info.get('curve')}' k={ctx.curve_strength:g}")
-    if per_occ:
-        active_tags.append(f"por ocurrencia ({per_occ if isinstance(per_occ, str) else 'root'})")
-    if info.get('auto_tune'):
-        active_tags.append("auto-tune")
-    tag = f" [{', '.join(active_tags)}]" if active_tags else ""
-
-    common = dict(
-        target_duration=target_duration, bin_size=bin_size,
-        bin_length_range=bin_length_range, fit_mode=fit_mode,
-        normalize_pitch=normalize_pitch, continuity_weight=continuity_weight,
-        target_key=target_key, ctx=ctx, per_occurrence=per_occ,
-    )
     if bin_size is not None:
         range_tag = (f", rango [{bin_length_range[0]:.2f}, {bin_length_range[1]:.2f}]b"
                      if bin_length_range else "")
         print(f"[5/6] Transformando en modo bins "
               f"(bin_size={bin_size}b{range_tag}, fit={fit_mode}, T={temperature}"
-              + (", pitch-norm" if normalize_pitch else "") + f"){tag} …")
+              + (", pitch-norm" if normalize_pitch else "") + ") …")
+        new_rules, new_root, elements = transform_grammar_bins(
+            rules, root, elements,
+            bin_size=bin_size,
+            fit_mode=fit_mode,
+            temperature=temperature,
+            normalize_pitch=normalize_pitch,
+            rng=rng,
+            bin_length_range=bin_length_range,
+            verbose=verbose,
+        )
     else:
         print(f"[5/6] Transformando (length={target_duration:.2f}b, T={temperature}"
-              + (", pitch-norm" if normalize_pitch else "") + f"){tag} …")
+              + (", pitch-norm" if normalize_pitch else "") + ") …")
+        new_rules, new_root = transform_grammar(
+            rules, root, elements,
+            target_duration=target_duration,
+            temperature=temperature,
+            normalize_pitch=normalize_pitch,
+            rng=rng,
+            verbose=verbose,
+        )
 
-    if info.get('auto_tune'):
-        import contextlib, io
-        base_seed = int(seed) if seed is not None else random.randint(0, 999)
-        orig_stats = stream_stats(orig_notes)
-
-        def gen(T, sd):
-            with contextlib.redirect_stdout(io.StringIO()):
-                return transform_main(rules, root, elements, temperature=T,
-                                      rng=random.Random(sd), copy_inputs=True, **common)
-
-        temps = info.get('tune_temps') or [0.1, 0.3, 0.5, 0.8, 1.0, 1.5]
-        res = autotune_search(
-            gen, orig_stats, model, temps, info.get('tune_seeds', 3),
-            margin=info.get('tune_margin', 0.1),
-            min_change=info.get('tune_min_change', 0.05),
-            max_change=info.get('tune_max_change', 0.85),
-            max_novel=info.get('tune_max_novel', 0.05),
-            base_seed=base_seed, verbose=verbose)
-        best = res['best']
-        print(f"  [tune] {len(res['trials'])} intentos, {res['n_passed']} cumplen las restricciones")
-        print(f"  [tune] elegido: T={best['T']} semilla={best['seed']}  "
-              f"cambio={best['change']:.0%}  fuera-de-estilo={best['novel_iv']:.1%}  "
-              f"ΔH(int,dur)={best['dH_joint']:+.2f} bits"
-              + ("" if best['passed'] else "  [AVISO: ninguna cumplió; se usa la de menor violación]"))
-        art = best['art']
-        temperature = best['T']
-    else:
-        art = transform_main(rules, root, elements, temperature=temperature,
-                             rng=rng, copy_inputs=False, verbose=verbose, **common)
-
-    new_rules, new_root, elements, new_notes = art['rules'], art['root'], art['elements'], art['notes']
-
-    # ── 6. Escribir MIDI
+    # ── 6. Reconstruir y escribir MIDI
     print(f"[6/6] Reconstruyendo MIDI …")
+    new_notes = reconstruct_notes(new_root, new_rules, elements)
     print(f"  → {len(new_notes)} notas en track principal")
 
     if not new_notes:
@@ -3914,46 +3177,6 @@ def build_parser() -> argparse.ArgumentParser:
                    metavar='FLOAT', help='Semilla aleatoria para reproducibilidad')
     p.add_argument('--verbose', action='store_true',
                    help='Traza detallada del proceso')
-
-    g = p.add_argument_group('información / sorpresa (v3)')
-    g.add_argument('--entropy-report', action='store_true',
-                   help='Imprime entropías por dimensión, gap de orden 1 y perfil de sorpresa')
-    g.add_argument('--boundary-model', type=float, default=0.0, metavar='W',
-                   help='Continuidad de frontera con sorpresa APRENDIDA de la pieza, '
-                        'P(intervalo | intervalo previo) (0=off, rec: 1-2; con W>=4 la pieza casi no cambia). '
-                        'Sustituye a --continuity (semitonos) y puede combinarse con él.')
-    g.add_argument('--boundary-scope', choices=['exit', 'both'], default='both',
-                   help='Fronteras evaluadas: solo salida del candidato o entrada+salida (def: both)')
-    g.add_argument('--surprise-prior', type=float, default=0.0, metavar='L',
-                   help='Prior de sorpresa del candidato: L>0 favorece material idiomático, '
-                        'L<0 material raro/contrastante (rec: -0.5..0.5)')
-    g.add_argument('--surprise-curve', type=str, default=None, metavar='SPEC',
-                   help='Curva de sorpresa objetivo: original|invert|rising|falling|arch|calm|'
-                        'tense|wave|lista "0.2,0.5,0.9" (activa --per-occurrence)')
-    g.add_argument('--curve-strength', type=float, default=2.0, metavar='K',
-                   help='Fuerza de seguimiento de la curva (def: 2.0; k<1 apenas se nota, '
-                        'k>=4 satura). Controla la forma, no el nivel absoluto de sorpresa.')
-    g.add_argument('--surprise-window', type=float, default=4.0, metavar='BEATS',
-                   help='Ventana del perfil de sorpresa en beats (def: 4)')
-    g.add_argument('--per-occurrence', nargs='?', const='deep', choices=['root', 'deep'], default=None,
-                   help='Sustituir cada ocurrencia de forma independiente en vez de por nombre: '
-                        'root = solo la raíz; deep = a cualquier profundidad (def. si se da sin valor). '
-                        'Se activa solo con --surprise-curve.')
-    g.add_argument('--auto-tune', action='store_true',
-                   help='Bucle cerrado: prueba temperaturas/semillas y elige la salida cuya '
-                        'entropía se acerca a la del original (+margen) sin degenerar')
-    g.add_argument('--tune-temps', type=str, default=None, metavar='LIST',
-                   help='Temperaturas a probar, separadas por comas (def: 0.1,0.3,0.5,0.8,1.0,1.5)')
-    g.add_argument('--tune-seeds', type=int, default=3, metavar='N',
-                   help='Semillas por temperatura (def: 3)')
-    g.add_argument('--tune-margin', type=float, default=0.1, metavar='BITS',
-                   help='Margen de entropía conjunta (intervalo,duración) sobre el original (def: 0.1)')
-    g.add_argument('--tune-min-change', type=float, default=0.05, metavar='F',
-                   help='Cambio mínimo respecto al original, rechaza salidas casi idénticas (def: 0.05)')
-    g.add_argument('--tune-max-change', type=float, default=0.85, metavar='F',
-                   help='Cambio máximo (def: 0.85)')
-    g.add_argument('--tune-max-novel', type=float, default=0.05, metavar='F',
-                   help='Máx. fracción de intervalos ausentes del original (def: 0.05)')
     return p
 
 
@@ -3972,26 +3195,6 @@ def main() -> None:
             target_key = parse_target_key(args.target_key)
         except Exception:
             parser.error(f"Tonalidad no reconocida: '{args.target_key}'. Ej: C, Dm, F#m, Bb, Am")
-
-    info = dict(
-        boundary_w=args.boundary_model, boundary_scope=args.boundary_scope,
-        prior=args.surprise_prior, curve=args.surprise_curve,
-        curve_strength=args.curve_strength, window=args.surprise_window,
-        per_occurrence=args.per_occurrence, auto_tune=args.auto_tune,
-        tune_temps=([float(x) for x in args.tune_temps.split(',')] if args.tune_temps else None),
-        tune_seeds=args.tune_seeds, tune_margin=args.tune_margin,
-        tune_min_change=args.tune_min_change, tune_max_change=args.tune_max_change,
-        tune_max_novel=args.tune_max_novel, entropy_report=args.entropy_report,
-    )
-    try:
-        if args.surprise_curve:
-            make_curve(args.surprise_curve, np.array([0.5]), np.array([0.5]))
-        if args.tune_temps:
-            [float(x) for x in args.tune_temps.split(',')]
-    except ValueError as e:
-        parser.error(str(e))
-    info['enabled'] = bool(args.boundary_model > 0 or args.surprise_prior != 0 or args.surprise_curve
-                           or args.auto_tune or args.entropy_report)
 
     run_transform(
         midi_path        = args.midi,
@@ -4016,7 +3219,6 @@ def main() -> None:
         report_format    = args.report_format,
         seed             = args.seed,
         verbose          = args.verbose,
-        info             = info,
     )
 
 

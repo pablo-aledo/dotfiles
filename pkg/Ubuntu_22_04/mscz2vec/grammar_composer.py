@@ -32,6 +32,9 @@ FORMATO DE GRAMÁTICA:
                   (nombre+octava:duración_en_negras). La duración admite
                   enteros, decimales y fracciones exactas: G4:1/3 es una
                   corchea de tresillo (3 seguidas = 1 negra, sin deriva).
+                  Sufijo & (C4:2&): suena a la vez que el siguiente elemento y
+                  no avanza el cursor → acordes y polifonía: C4:2& E4:2& G4:2
+    · z:D      — silencio de D negras (avanza el cursor sin sonar): z:1  z:1/3
     · Número    — compás N del MIDI de entrada (base 1)
     · M-N       — rango de compases M a N del MIDI de entrada (inclusivos)
     · [label]   — referencia recursiva a otra regla de la gramática
@@ -80,7 +83,7 @@ OPCIONES COMUNES:
 
   NOTAS ABC MIDI soportadas:
     Nombre: C D E F G A B  (con # o b para alteraciones: C#, Eb)
-    Octava:  0-8 (octava MIDI estándar: C4 = nota 60)
+  Octava:  -1 a 9 (octava MIDI estándar: C4 = nota 60, C-1 = nota 0)
     Duración: número decimal en negras (1 = negra, 0.5 = corchea, 4 = redonda)
 
 ── Otras opciones del parser ──
@@ -107,22 +110,24 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 
 @params v1
 [*]
-midi           file  io=in ext=mid required  # Fichero MIDI de entrada
-grammar        str    # [modo compose] Fichero de gramática (.txt)
---learn        bool  default=false  # Activar modo learn: extrae la gramática del MIDI dado
---out          file  io=out ext=mid alias=-o  # Fichero de salida: MIDI (compose) o gramática .txt…
---tempo        int    # Tempo BPM
---channel      int   default=0  # Canal MIDI para notas ABC
---velocity     int   default=80 min=1 max=127  # Velocidad para notas ABC
---tpb          int    # Ticks por negra en salida
---min-pair     int   default=2 min=0  # Frecuencia mínima de un par para crear regla
---max-rules    int   min=0  # Número máximo de reglas a generar
---merge-bars   bool  default=false  # Fusionar compases consecutivos en rangos (en la raíz)
---seed-grammar file  io=in ext=txt  # Gramática semilla (.txt) cuyas reglas se aplican antes de…
---fuzzy        float typical=0.85..0.95  # Activar comparación difusa de compases. THRESHOLD es la…
---track        int    # Índice del track del MIDI a usar
---report       bool  default=false  # Mostrar informe detallado
---verbose      bool  default=false  # Traza paso a paso
+midi             file  io=in ext=mid required  # Fichero MIDI de entrada
+grammar          str    # [modo compose] Fichero de gramática (.txt)
+--learn          bool  default=false  # Activar modo learn: extrae la gramática del MIDI dado
+--learn-gestures bool  default=false  # Activar modo learn-gestures: aprende un codebook de gestos…
+--out            file  io=out ext=mid alias=-o  # Fichero de salida: MIDI (compose) o gramática…
+--tempo          int    # Tempo BPM
+--channel        int   default=0  # Canal MIDI para notas ABC
+--velocity       int   default=80 min=1 max=127  # Velocidad para notas ABC
+--tpb            int    # Ticks por negra en salida
+--min-pair       int   default=2 min=0  # Frecuencia mínima de un par para crear regla
+--max-rules      int   min=0  # Número máximo de reglas a generar
+--merge-bars     bool  default=false  # Fusionar compases consecutivos en rangos (en la raíz)
+--seed-grammar   file  io=in ext=txt  # Gramática semilla (.txt) cuyas reglas se aplican antes de…
+--fuzzy          float typical=0.85..0.95  # Activar comparación difusa de compases. THRESHOLD es…
+--quantize       str    # Cuantizar onsets y duraciones a una rejilla (en negras) antes de…
+--track          int    # Índice del track del MIDI a usar
+--report         bool  default=false  # Mostrar informe detallado
+--verbose        bool  default=false  # Traza paso a paso
 @end
 
 ────────────────────────────────────────────────────────────────────────────
@@ -137,11 +142,31 @@ Ejemplos de uso
   python grammar_composer.py entrada.mid gramatica.txt --verbose
 
 ── USO — MODO LEARN ──
-  python grammar_composer.py --learn entrada.mid
-  python grammar_composer.py --learn entrada.mid -o gramatica.txt
-  python grammar_composer.py --learn entrada.mid --min-pair 3
-  python grammar_composer.py --learn entrada.mid --max-rules 20
-  python grammar_composer.py --learn entrada.mid --report --verbose
+    python grammar_composer.py --learn entrada.mid
+    python grammar_composer.py --learn entrada.mid -o gramatica.txt
+    python grammar_composer.py --learn entrada.mid --min-pair 3
+    python grammar_composer.py --learn entrada.mid --max-rules 20
+    python grammar_composer.py --learn entrada.mid --report --verbose
+
+  USO — MODO LEARN-GESTURES (codebook de gestos transponibles):
+    python grammar_composer.py --learn-gestures entrada.mid
+    python grammar_composer.py --learn-gestures entrada.mid -o gestos.txt
+    python grammar_composer.py --learn-gestures entrada.mid --quantize 1/12
+    python grammar_composer.py entrada.mid gestos.txt   (recompone la obra)
+    Aprende grupos de notas (con su ritmo) que se repiten a distinta altura y
+    escribe una gramática autocontenida: un gesto gN por grupo y una regla
+    `song` que los coloca con el offset global (+n / -n / 0). Al terminar
+    recompone la gramática y comprueba que coincide con el original.
+    No aprende velocidades (usa --velocity). Usa --min-pair y --max-rules.
+    --quantize FRAC  Rejilla en negras (1/4, 1/12…) para MIDIs interpretados.
+
+── Más modos ──
+
+  # Invocación básica
+  python grammar_composer.py entrada.mid
+
+  # Mostrar informe detallado
+  python grammar_composer.py entrada.mid --report
 
 ────────────────────────────────────────────────────────────────────────────
 Dependencias
@@ -172,8 +197,9 @@ NOTE_NAMES = {
 }
 
 ABC_NOTE_RE = re.compile(
-    r'^([A-Ga-g])([#b]?)(\d):(\d+/\d+|[\d.]+)$'   # e.g.  C#4:0.5  eb3:2  G4:1/3
+    r'^([A-Ga-g])([#b]?)(-?\d):(\d+/\d+|[\d.]+)(&?)$'   # C#4:0.5  eb3:2  G4:1/3  C4:1&
 )
+REST_RE    = re.compile(r'^[zZ]:(\d+/\d+|[\d.]+)$')   # e.g.  z:1  z:1/3  (silencio)
 RANGE_RE   = re.compile(r'^(\d+)-(\d+)$')   # e.g.  3-7
 NUMBER_RE  = re.compile(r'^\d+$')            # e.g.  5
 LABEL_RE   = re.compile(r'^\[([^\]]+)\]$')  # e.g.  [verso]
@@ -254,6 +280,18 @@ def parse_grammar(text: str) -> tuple[list[str], dict[str, list[str]]]:
     return root, rules
 
 
+def grammar_uses_bars(root: list[str], rules: dict[str, list[str]]) -> bool:
+    """True si la raíz o alguna regla referencia compases del MIDI (N o M-N)."""
+    for tok in root:
+        if tok != RESET_TOKEN and (RANGE_RE.match(tok) or NUMBER_RE.match(tok)):
+            return True
+    for body in rules.values():
+        for elem in tokenize_rule(body):
+            if elem['type'] in ('bar', 'range'):
+                return True
+    return False
+
+
 def _parse_duration(text: str, tok: str) -> Fraction:
     """
     Duración en negras como Fraction exacta. Acepta enteros (2), decimales
@@ -277,6 +315,9 @@ def tokenize_rule(tokens: list[str]) -> list[dict]:
         {'type': 'range', 'm': int, 'n': int}
         {'type': 'ref',   'label': str}
         {'type': 'shift', 'n': int}      # offset global, con signo
+        {'type': 'reset'}                # token "0"
+        {'type': 'rest',  'dur': Fraction}   # silencio  z:dur
+    Las notas llevan además 'sync' (True si el token acaba en '&').
     """
     parsed = []
     for tok in tokens:
@@ -297,7 +338,13 @@ def tokenize_rule(tokens: list[str]) -> list[dict]:
                 'alter':  m.group(2),
                 'octave': int(m.group(3)),
                 'dur':    _parse_duration(m.group(4), tok),
+                'sync':   m.group(5) == '&',   # True → el cursor NO avanza
             })
+            continue
+
+        m = REST_RE.match(tok)
+        if m:
+            parsed.append({'type': 'rest', 'dur': _parse_duration(m.group(1), tok)})
             continue
 
         m = RANGE_RE.match(tok)
@@ -644,6 +691,9 @@ class GrammarExpander:
             elif elem['type'] == 'ref':
                 notes = self._expand_label(elem['label'], depth + 1)
                 tipo  = f"ref-{elem['label']}"
+            elif elem['type'] == 'rest':
+                notes = []
+                tipo  = 'silencio'
             elif elem['type'] == 'reset':
                 self._reset_shift()
                 notes = []
@@ -732,26 +782,21 @@ class GrammarExpander:
         """
         m_range = RANGE_RE.match(token)
         m_num   = NUMBER_RE.match(token)
+        m_label = LABEL_RE.match(token)
         if m_range:
             lo, hi = int(m_range.group(1)), int(m_range.group(2))
             if lo > hi: lo, hi = hi, lo
             return self._bars_dur(lo, hi)
         if m_num:
             return self._bar_dur(int(token))
+        if m_label:   # "[regla]" en la raíz: misma duración que "regla"
+            return self._rule_duration(m_label.group(1))
         # Regla: sumar la duración de sus tokens constituyentes
         return self._rule_duration(token)
 
     def _elem_duration(self, elem: dict) -> int:
         """Duración en ticks de un elemento ya parseado de una regla."""
-        if elem['type'] == 'bar':
-            return self._bar_dur(elem['n'])
-        if elem['type'] == 'range':
-            return self._bars_dur(elem['m'], elem['n'])
-        if elem['type'] in ('ref',):
-            return self._rule_duration(elem['label'])
-        if elem['type'] == 'note':
-            return self.tpb * elem['dur']   # Fraction exacta: sin deriva
-        return 0
+        return self._elem_duration_seen(elem, frozenset())
 
     def _rule_duration(self, label: str, _seen: frozenset = frozenset()) -> int:
         """Duración total de una regla, sumando sus elementos."""
@@ -771,7 +816,11 @@ class GrammarExpander:
         if elem['type'] == 'ref':
             return self._rule_duration(elem['label'], seen)
         if elem['type'] == 'note':
+            if elem.get('sync'):
+                return 0                    # simultánea con el siguiente elemento
             return self.tpb * elem['dur']   # Fraction exacta: sin deriva
+        if elem['type'] == 'rest':
+            return self.tpb * elem['dur']
         return 0
 
     def _get_bars(self, bar_from: int, bar_to: int) -> list[tuple[int, MidiNote]]:
@@ -1666,6 +1715,421 @@ def print_learn_report(rules: dict, root: list, out_path: Path) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# MODO LEARN-GESTURES — CODEBOOK DE GESTOS INVARIANTES A LA TRANSPOSICIÓN
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Idea: el MIDI se trocea en "cortes" (todas las notas que empiezan a la vez).
+# Cada corte es (forma, avance): la forma son las alturas relativas a su nota
+# más grave y las duraciones; el avance es el tiempo hasta el siguiente corte
+# (así los silencios quedan incluidos). Dos cortes con la misma forma son el
+# mismo símbolo aunque estén a distinta altura.
+#
+# Sobre esa secuencia se aplica Re-Pair, pero un par adyacente solo cuenta como
+# "el mismo" si además el intervalo entre sus notas graves es idéntico. Cada
+# regla creada es un GESTO: un grupo de cortes (ritmo + intervalos) que aparece
+# varias veces a alturas distintas. Las reglas usadas una sola vez se
+# reabsorben (no son un gesto repetido).
+#
+# La gramática resultante es autocontenida (solo notas ABC): el cuerpo de cada
+# gesto se escribe a su altura canónica (la de su primera aparición) y la regla
+# raíz `song` lo coloca con el offset global:  +7 [g1] -3 [g1] 0 [g2] …
+
+PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+
+
+def pitch_to_abc_name(pitch: int) -> str:
+    """Número MIDI → nombre ABC con octava (60 → C4, 0 → C-1)."""
+    return f"{PITCH_NAMES[pitch % 12]}{pitch // 12 - 1}"
+
+
+def extract_note_events(
+    mid:            MidiFile,
+    track_idx:      int,
+    quantize_ticks: int | None = None,
+) -> tuple[list[tuple[int, int, int]], list[int], int]:
+    """
+    Devuelve ([(onset, pitch, dur_ticks), …] ordenadas, canales usados,
+    velocidad media). Con quantize_ticks, onsets y finales se redondean a esa
+    rejilla (la duración mínima es un paso de rejilla).
+    """
+    abs_t  = 0
+    active: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    events: list[tuple[int, int, int]] = []
+    channels: set[int] = set()
+    vels: list[int] = []
+
+    for msg in mid.tracks[track_idx]:
+        abs_t += msg.time
+        if msg.type == 'note_on' and msg.velocity > 0:
+            active.setdefault((msg.channel, msg.note), []).append((abs_t, msg.velocity))
+        elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
+            key = (msg.channel, msg.note)
+            if active.get(key):
+                start, vel = active[key].pop(0)
+                events.append((start, msg.note, max(1, abs_t - start)))
+                channels.add(msg.channel)
+                vels.append(vel)
+
+    if quantize_ticks and quantize_ticks > 1:
+        g = quantize_ticks
+        quantized = []
+        for on, pitch, dur in events:
+            on_q  = round(on / g) * g
+            end_q = round((on + dur) / g) * g
+            quantized.append((on_q, pitch, max(g, end_q - on_q)))
+        events = quantized
+
+    events.sort()
+    mean_vel = round(sum(vels) / len(vels)) if vels else 80
+    return events, sorted(channels), mean_vel
+
+
+def build_gesture_sequence(events: list[tuple[int, int, int]]):
+    """
+    Convierte las notas en la secuencia de cortes.
+
+    Devuelve (terms, ids, refs, first_onset):
+        terms[tid] = {'shape': ((dp, dur), …), 'adv': ticks, 'rho': altura_ref}
+        ids[k]     = tipo de terminal del corte k
+        refs[k]    = altura de su nota más grave (el "ancla" del corte)
+    """
+    by_onset: dict[int, list[tuple[int, int]]] = {}
+    for on, pitch, dur in events:
+        by_onset.setdefault(on, []).append((pitch, dur))
+    onsets = sorted(by_onset)
+
+    term_ids: dict[tuple, int] = {}
+    terms: list[dict] = []
+    ids:   list[int]  = []
+    refs:  list[int]  = []
+    for k, on in enumerate(onsets):
+        notes = sorted(by_onset[on])
+        ref   = notes[0][0]
+        shape = tuple((p - ref, d) for p, d in notes)
+        adv   = (onsets[k + 1] - on) if k + 1 < len(onsets) else max(d for _, d in notes)
+        key   = (shape, adv)
+        tid   = term_ids.get(key)
+        if tid is None:
+            tid = len(terms)
+            term_ids[key] = tid
+            terms.append({'shape': shape, 'adv': adv, 'rho': ref})
+        ids.append(tid)
+        refs.append(ref)
+    return terms, ids, refs, onsets[0]
+
+
+def gesture_repair(
+    ids:       list[int],
+    refs:      list[int],
+    rho_of,
+    first_id:  int,
+    min_pair:  int = 2,
+    max_rules: int | None = None,
+    verbose:   bool = False,
+) -> tuple[dict[int, dict], list[int], list[int]]:
+    """
+    Re-Pair invariante a la transposición. Un par (A, B) es "el mismo" si
+    coinciden los dos símbolos y el intervalo entre sus anclas (refs[i+1]-refs[i]).
+
+    Cada regla nueva: {'body': [(hijo, ref_en_el_marco_de_la_regla), …],
+                       'rho': ancla canónica de la regla}.
+    El marco de una regla es el de su primera aparición: su primer hijo está a
+    su altura canónica y el resto a ancla + intervalo.
+    """
+    nts: dict[int, dict] = {}
+    next_id = first_id
+
+    while max_rules is None or len(nts) < max_rules:
+        n = len(ids)
+        counts: dict[tuple, int] = {}
+        last:   dict[tuple, int] = {}
+        for i in range(n - 1):
+            key = (ids[i], ids[i + 1], refs[i + 1] - refs[i])
+            if i - last.get(key, -2) >= 2:      # no solapar (A A A → un solo par)
+                counts[key] = counts.get(key, 0) + 1
+                last[key]   = i
+        if not counts:
+            break
+        best = max(counts, key=counts.get)
+        if counts[best] < min_pair:
+            break
+
+        a, b, delta = best
+        rho_a = rho_of(a, nts)
+        nts[next_id] = {'body': [(a, rho_a), (b, rho_a + delta)], 'rho': rho_a}
+        if verbose:
+            print(f"  [gesto #{next_id}] ×{counts[best]}  ({a}, {b}, Δ{delta:+d})")
+
+        new_ids:  list[int] = []
+        new_refs: list[int] = []
+        i = 0
+        while i < n:
+            if (i < n - 1 and ids[i] == a and ids[i + 1] == b
+                    and refs[i + 1] - refs[i] == delta):
+                new_ids.append(next_id)
+                new_refs.append(refs[i])
+                i += 2
+            else:
+                new_ids.append(ids[i])
+                new_refs.append(refs[i])
+                i += 1
+        ids, refs = new_ids, new_refs
+        next_id  += 1
+
+    return nts, ids, refs
+
+
+def _finalize_gestures(
+    nts:  dict[int, dict],
+    ids:  list[int],
+    refs: list[int],
+) -> tuple[dict[int, dict], list[tuple[int, int]]]:
+    """
+    Reabsorbe las reglas usadas una sola vez (no son gestos repetidos) y
+    aplana sus cuerpos. Devuelve (gestos_conservados, secuencia_raíz).
+    El aplanado es iterativo: Re-Pair genera cadenas de cientos de niveles.
+    """
+    usage: dict[int, int] = {}
+    for i in ids:
+        if i in nts:
+            usage[i] = usage.get(i, 0) + 1
+    for nt in nts.values():
+        for child, _ in nt['body']:
+            if child in nts:
+                usage[child] = usage.get(child, 0) + 1
+    keep = {nid for nid in nts if usage.get(nid, 0) >= 2}
+
+    def flat(items: list[tuple[int, int]], delta: int) -> list[tuple[int, int]]:
+        out: list[tuple[int, int]] = []
+        stack = [(iter(items), delta)]
+        while stack:
+            it, d = stack[-1]
+            for (i, r) in it:
+                r2 = r + d
+                if i in nts and i not in keep:
+                    stack.append((iter(nts[i]['body']), r2 - nts[i]['rho']))
+                    break
+                out.append((i, r2))
+            else:
+                stack.pop()
+        return out
+
+    kept = {nid: {'body': flat(nts[nid]['body'], 0), 'rho': nts[nid]['rho']}
+            for nid in sorted(keep)}
+    root = flat(list(zip(ids, refs)), 0)
+    return kept, root
+
+
+def _slice_tokens(
+    written: list[int],
+    shape:   tuple,
+    adv:     int,
+    tpb:     int,
+) -> list[str]:
+    """
+    Tokens ABC de un corte. Las notas llevan '&' (simultáneas con la siguiente);
+    la última avanza el cursor. Si ninguna nota dura exactamente `adv`, el
+    avance lo pone un silencio  z:adv.
+    """
+    notes   = [(written[k], shape[k][1]) for k in range(len(shape))]
+    carrier = None
+    for k in range(len(notes) - 1, -1, -1):
+        if notes[k][1] == adv:
+            carrier = k
+            break
+    toks = [f"{pitch_to_abc_name(p)}:{Fraction(d, tpb)}&"
+            for k, (p, d) in enumerate(notes) if k != carrier]
+    if carrier is not None:
+        p, d = notes[carrier]
+        toks.append(f"{pitch_to_abc_name(p)}:{Fraction(d, tpb)}")
+    else:
+        toks.append(f"z:{Fraction(adv, tpb)}")
+    return toks
+
+
+def _emit_gesture_sequence(
+    items:    list[tuple[int, int]],
+    terms:    list[dict],
+    nt_info:  dict[int, dict],
+    tpb:      int,
+    absolute: bool,
+) -> tuple[list[str], int]:
+    """
+    Serializa una secuencia [(símbolo, ref)] siguiendo el offset global.
+    absolute=True (raíz): se permite el token "0". En el cuerpo de un gesto el
+    offset de entrada es desconocido, así que solo se usan desplazamientos
+    relativos. Devuelve (tokens, desplazamiento_neto_al_acabar).
+    """
+    n_terms = len(terms)
+    tokens: list[str] = []
+    c = 0
+
+    def shift_to(target: int) -> None:
+        nonlocal c
+        if target == c:
+            return
+        tokens.append(RESET_TOKEN if (absolute and target == 0) else f"{target - c:+d}")
+        c = target
+
+    for (sym, ref) in items:
+        if sym < n_terms:
+            t       = terms[sym]
+            shape   = t['shape']
+            written = [ref + dp - c for dp, _ in shape]
+            if min(written) < 0 or max(written) > 127:
+                # fuera del rango escribible: ir a la altura canónica del corte
+                shift_to(ref - t['rho'])
+                written = [t['rho'] + dp for dp, _ in shape]
+            tokens.extend(_slice_tokens(written, shape, t['adv'], tpb))
+        else:
+            info = nt_info[sym]
+            shift_to(ref - info['rho'])
+            tokens.append(f"[{info['name']}]")
+            c += info['net']
+    return tokens, c
+
+
+def verify_gesture_grammar(
+    grammar_text: str,
+    events:       list[tuple[int, int, int]],
+    tpb:          int,
+) -> tuple[bool, int, int, list[str]]:
+    """Expande la gramática y la compara con las notas originales (onset, altura, duración)."""
+    root, rules = parse_grammar(grammar_text)
+    expander = GrammarExpander(rules=rules, bars={}, tpb=tpb)
+    got = sorted((on, n.pitch, n.duration_ticks) for on, n in expander.expand_root(root))
+    want = sorted(events)
+    return got == want, len(got), len(want), list(expander.report.warnings)
+
+
+def learn_gestures(
+    mid:       MidiFile,
+    track_idx: int,
+    min_pair:  int = 2,
+    max_rules: int | None = None,
+    quantize:  Fraction | None = None,
+    verbose:   bool = False,
+) -> tuple[str, dict]:
+    """
+    Aprende el codebook de gestos de un track y devuelve (texto_gramática, stats).
+    """
+    tpb = mid.ticks_per_beat
+    q_ticks = None
+    if quantize is not None:
+        q_ticks = round(tpb * quantize)
+        if q_ticks < 1:
+            raise ValueError(f"--quantize {quantize} es menor que 1 tick (tpb={tpb}).")
+
+    events, channels, mean_vel = extract_note_events(mid, track_idx, q_ticks)
+    if not events:
+        raise ValueError("El track no contiene notas. Comprueba el índice de track.")
+
+    terms, ids, refs, first_onset = build_gesture_sequence(events)
+    n_slices = len(ids)
+    n_terms  = len(terms)
+    print(f"  → {len(events)} notas, {n_slices} cortes, {n_terms} formas distintas")
+
+    def rho_of(sym: int, nts: dict) -> int:
+        return terms[sym]['rho'] if sym < n_terms else nts[sym]['rho']
+
+    print(f"  Aplicando Re-Pair invariante a la transposición (min_pair={min_pair}"
+          + (f", max_rules={max_rules}" if max_rules else "") + ") …")
+    nts, rids, rrefs = gesture_repair(ids, refs, rho_of, first_id=n_terms,
+                                      min_pair=min_pair, max_rules=max_rules,
+                                      verbose=verbose)
+    kept, root_items = _finalize_gestures(nts, rids, rrefs)
+    print(f"  → {len(nts)} reglas de Re-Pair, {len(kept)} gestos tras reabsorber "
+          f"los de un solo uso")
+
+    # ── Nombres y serialización (hijos antes que padres: ids ascendentes)
+    nt_info: dict[int, dict] = {}
+    for k, nid in enumerate(sorted(kept), start=1):
+        nt_info[nid] = {'name': f"g{k}", 'rho': kept[nid]['body'][0][1], 'net': 0}
+    body_tokens: dict[int, list[str]] = {}
+    for nid in sorted(kept):
+        toks, net = _emit_gesture_sequence(kept[nid]['body'], terms, nt_info, tpb, absolute=False)
+        body_tokens[nid]       = toks
+        nt_info[nid]['net']    = net
+
+    song, _ = _emit_gesture_sequence(root_items, terms, nt_info, tpb, absolute=True)
+    if first_onset > 0:
+        song.insert(0, f"z:{Fraction(first_onset, tpb)}")
+
+    # ── Estadísticas por gesto
+    n_slices_of: dict[int, int] = {}
+    for nid in sorted(kept):
+        n_slices_of[nid] = sum(1 if s < n_terms else n_slices_of[s] for s, _ in kept[nid]['body'])
+    uses: dict[int, int] = {nid: 0 for nid in kept}
+    for s, _ in root_items:
+        if s in kept:
+            uses[s] += 1
+    for nid in sorted(kept, reverse=True):
+        for s, _ in kept[nid]['body']:
+            if s in kept:
+                uses[s] += uses[nid]
+    covered = sum(n_slices_of[s] for s, _ in root_items if s in kept)
+
+    naive_tokens = sum(len(_slice_tokens([0] * len(terms[s]['shape']), terms[s]['shape'],
+                                         terms[s]['adv'], tpb)) for s in ids)
+    grammar_tokens = len(song) + sum(len(t) for t in body_tokens.values())
+
+    # ── Texto de la gramática
+    lines = [
+        "# Gramática de gestos — grammar_composer --learn-gestures",
+        f"# Fuente: track {track_idx}, tpb={tpb}, {len(events)} notas, {n_slices} cortes"
+        + (f", cuantizado a {quantize} negra" if quantize is not None else ""),
+        "# Cada gesto gN es un grupo de notas (con su ritmo) repetido a distintas alturas;",
+        "# la regla `song` los coloca con el offset global (+n / -n / 0).",
+        "# Las notas con '&' suenan a la vez que el siguiente elemento; z:d es un silencio.",
+        f"# Recomponer: python grammar_composer.py <original.mid> <esta gramática>"
+        f" --velocity {mean_vel}"
+        + (f" --channel {channels[0]}" if len(channels) == 1 and channels[0] != 0 else ""),
+        "song",
+    ]
+    for nid in sorted(kept):
+        info = nt_info[nid]
+        lines.append(f"# {info['name']}: {n_slices_of[nid]} cortes, {uses[nid]} apariciones")
+        lines.append(f"{info['name']} : {' '.join(body_tokens[nid])}")
+    lines.append(f"song : {' '.join(song)}")
+    text = "\n".join(lines) + "\n"
+
+    ok, n_got, n_want, warns = verify_gesture_grammar(text, events, tpb)
+
+    stats = {
+        'notes': len(events), 'slices': n_slices, 'terminal_shapes': n_terms,
+        'gestures': len(kept), 'covered': covered,
+        'naive_tokens': naive_tokens, 'grammar_tokens': grammar_tokens,
+        'roundtrip_ok': ok, 'notes_out': n_got, 'warnings': warns,
+        'info': {nid: {'name': nt_info[nid]['name'], 'slices': n_slices_of[nid],
+                       'uses': uses[nid]} for nid in kept},
+        'channels': channels, 'mean_vel': mean_vel,
+    }
+    return text, stats
+
+
+def print_gesture_report(stats: dict, out_path: Path) -> None:
+    print()
+    print("╔══════════════════════════════════════════════════════════╗")
+    print("║        GRAMMAR COMPOSER — Informe learn-gestures          ║")
+    print("╚══════════════════════════════════════════════════════════╝")
+    print(f"  Fichero de gramática : {out_path}")
+    print(f"  Notas / cortes       : {stats['notes']} / {stats['slices']}")
+    print(f"  Formas de corte      : {stats['terminal_shapes']} distintas "
+          f"(invariantes a la transposición)")
+    print(f"  Gestos aprendidos    : {stats['gestures']}")
+    pct = 100 * stats['covered'] / max(1, stats['slices'])
+    print(f"  Cortes dentro de un gesto repetido : {stats['covered']} ({pct:.0f} %)")
+    print(f"  Tokens: {stats['naive_tokens']} (notas planas) → "
+          f"{stats['grammar_tokens']} (gramática)")
+    top = sorted(stats['info'].values(), key=lambda g: -(g['slices'] * g['uses']))[:10]
+    if top:
+        print("  Gestos que más cubren:")
+        for g in top:
+            print(f"    {g['name']:6s} {g['slices']:3d} cortes × {g['uses']} apariciones")
+    print()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PUNTO DE ENTRADA
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1682,6 +2146,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     # ── Modo learn (flag)
     p.add_argument('--learn', action='store_true',
                    help='Activar modo learn: extrae la gramática del MIDI dado')
+    p.add_argument('--learn-gestures', action='store_true',
+                   help=('Activar modo learn-gestures: aprende un codebook de gestos '
+                         '(grupos de notas repetidos a distinta altura) y escribe una '
+                         'gramática autocontenida que los recompone con +n/-n/0. '
+                         'Usa --min-pair, --max-rules y --quantize.'))
 
     # ── Argumentos posicionales (flexibles según modo)
     p.add_argument('midi',    type=Path,
@@ -1728,6 +2197,13 @@ def build_argument_parser() -> argparse.ArgumentParser:
                            'Sin esta opción se usa comparación exacta (equivalente a 1.0).'
                        ))
 
+    gest = p.add_argument_group('Opciones modo learn-gestures')
+    gest.add_argument('--quantize', type=str, default=None, metavar='FRAC',
+                      help=('Cuantizar onsets y duraciones a una rejilla (en negras) '
+                            'antes de aprender: 1/4, 1/12, 0.25… Necesario con MIDIs '
+                            'interpretados a mano; con ello la recomposición ya no es '
+                            'idéntica al original, sino al original cuantizado.'))
+
     # ── Opciones comunes
     p.add_argument('--track',   type=int, default=None,
                    help='Índice del track del MIDI a usar (default: auto)')
@@ -1756,6 +2232,64 @@ def main() -> None:
     t_idx = args.track if args.track is not None else choose_main_track(mid)
     print(f"  → {len(mid.tracks)} track(s), tpb={mid.ticks_per_beat}, "
           f"track principal={t_idx}")
+
+    if args.learn and args.learn_gestures:
+        parser.error("--learn y --learn-gestures son modos distintos; usa uno solo.")
+
+    # ════════════════════════════════════════════════════════════════
+    # MODO LEARN-GESTURES
+    # ════════════════════════════════════════════════════════════════
+    if args.learn_gestures:
+        out_path = args.out or args.midi.with_suffix('.gestures.txt')
+        try:
+            quantize = Fraction(args.quantize) if args.quantize else None
+        except (ValueError, ZeroDivisionError):
+            parser.error(f"--quantize inválido: {args.quantize!r} (usa 1/4, 0.25…)")
+
+        print("[2/4] Modo LEARN-GESTURES — aprendiendo el codebook de gestos …")
+        try:
+            grammar_text, stats = learn_gestures(
+                mid       = mid,
+                track_idx = t_idx,
+                min_pair  = args.min_pair,
+                max_rules = args.max_rules,
+                quantize  = quantize,
+                verbose   = args.verbose,
+            )
+        except Exception as e:
+            sys.exit(f"  Error durante el aprendizaje de gestos: {e}")
+
+        print(f"[3/4] Guardando gramática: {out_path} …")
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(grammar_text, encoding='utf-8')
+        except Exception as e:
+            sys.exit(f"  Error al escribir la gramática: {e}")
+        print(f"  → Fichero guardado: {out_path}")
+
+        print("[4/4] Verificación: recomponer la gramática y comparar con el original …")
+        if stats['roundtrip_ok']:
+            print(f"  → OK: las {stats['notes_out']} notas coinciden exactamente "
+                  f"(altura, inicio y duración)"
+                  + (" con el original cuantizado." if quantize is not None else "."))
+        else:
+            print(f"  → ✗ NO coincide: {stats['notes_out']} notas recompuestas "
+                  f"frente a {stats['notes']} originales.")
+            for w in stats['warnings']:
+                print(f"    ⚠  {w}")
+        if len(stats['channels']) > 1:
+            print(f"  [AVISO] El track usa {len(stats['channels'])} canales MIDI; "
+                  f"la recomposición los unifica en uno (--channel).")
+        print("  [AVISO] La velocidad no se aprende: la recomposición usa --velocity "
+              f"(media del original: {stats['mean_vel']}).")
+
+        if args.report:
+            print_gesture_report(stats, out_path)
+
+        print("\n✓ Grammar Composer (learn-gestures) finalizado correctamente.\n")
+        if not stats['roundtrip_ok']:
+            sys.exit(1)
+        return
 
     # ════════════════════════════════════════════════════════════════
     # MODO LEARN
@@ -1832,6 +2366,14 @@ def main() -> None:
 
     print(f"  → Raíz: {root}")
     print(f"  → Reglas: {list(rules.keys())}")
+
+    # Gramática autocontenida (solo notas ABC): no depende de los compases del
+    # MIDI, así que se expande una sola vez en lugar de una por cada track.
+    if not grammar_uses_bars(root, rules) and n_tracks > 1:
+        print(f"  → Gramática autocontenida (sin compases del MIDI): se expande "
+              f"una sola vez, no una por cada uno de los {n_tracks} tracks.")
+        all_bars = {t_idx: {}}
+        n_tracks = 1
 
     # ── Expansión de la gramática (un expander por track)
     print(f"[4/5] Expandiendo gramática ({n_tracks} track(s)) …")

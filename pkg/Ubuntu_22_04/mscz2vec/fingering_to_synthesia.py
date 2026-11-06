@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-fingering_to_synthesia.py — Convierte la digitación generada por fingering_v3.py o posterior (v4–v6)
+fingering_to_synthesia.py — Convierte la digitación generada por fingering.py o posterior (v4–v6)
 a formato .synthesia (LocalFingerInfoList / FingerInfo), el sistema de "finger
 hints" que usa Synthesia.
 
@@ -9,7 +9,7 @@ Entrada
 ────────────────────────────────────────────────────────────────────────────
 Espera el JSON producido por cualquier versión de la familia con --json (v3 a v6):
 
-    python fingering_v3.py archivo.mid --json digitacion.json
+    python fingering.py archivo.mid --json digitacion.json
 
 es decir, un objeto con la forma (solo se leen midi_file, measure, beat,
 hand, pitch y fingering; los campos extra de v4–v6 se ignoran):
@@ -55,7 +55,7 @@ de un acorde (varias notas que empiezan en el mismo instante), ese orden
 NO tiene por qué ser ascendente por altura: depende de cómo se escribió
 originalmente el MIDI, y es habitual que se alternen o inviertan.
 
-fingering_v3.py, en cambio, guarda en su JSON las notas de cada acorde
+fingering.py, en cambio, guarda en su JSON las notas de cada acorde
 ordenadas por altura ascendente (conveniente para su propio algoritmo de
 digitación, pero no es el orden físico real). Si este conversor usara esa
 misma ordenación para generar el "fingers", cada vez que el orden físico
@@ -121,7 +121,7 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 
 @params v1
 [*]
-json_file      file  io=out ext=json required  # JSON exportado por fingering_v3.py (--json)
+json_file      file  io=out ext=json required  # JSON exportado por fingering.py (--json)
 --output       file  io=out required alias=-o  # Ruta del fichero .synthesia a generar
 --hash         str    # Hash real de la canción en Synthesia (recomendado). Si se omite, se genera…
 --existing     file  io=in  # Fichero .synthesia real existente en el que fusionar/actualizar la…
@@ -135,7 +135,7 @@ json_file      file  io=out ext=json required  # JSON exportado por fingering_v3
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     # Flujo completo: MIDI → digitación → Synthesia
-    python fingering_v6.py archivo.mid --json digitacion.json
+    python fingering.py archivo.mid --json digitacion.json
     python fingering_to_synthesia.py digitacion.json -o salida.synthesia --midi archivo.mid
 
     # Básico (hash placeholder; hay que sustituirlo a mano)
@@ -156,7 +156,7 @@ Ejemplos de uso
     python fingering_to_synthesia.py digitacion.json -o salida.synthesia --midi archivo.mid --gap-encoding pad   # experimental
 
 Dependencias: solo biblioteca estándar (lee el MIDI con un parser propio).
-Véase también: fingering_v3.py … fingering_v6.py (generan el JSON de entrada).
+Véase también: fingering.py … fingering.py (generan el JSON de entrada).
 """
 
 from __future__ import annotations
@@ -314,7 +314,7 @@ def load_physical_note_order(midi_path: Path, right_track: int, left_track: int)
     Synthesia interpreta también el tN: de su propio formato de fingers:
     como el índice de track crudo, incluyendo tracks vacíos de tempo/meta
     si los hay. Usar el índice "reindexado sin vacíos" (como hace
-    fingering_v3.py internamente al leer con pretty_midi) es un error
+    fingering.py internamente al leer con pretty_midi) es un error
     fácil de cometer y que produce justo el síntoma de "la digitación
     aparece en la mano equivocada, o no aparece en absoluto".
     """
@@ -499,7 +499,7 @@ def build_fingers_string(
     right_notes = [n for n in notes if n["hand"] == "right"]
     left_notes  = [n for n in notes if n["hand"] == "left"]
 
-    # El JSON de fingering_v3.py ya viene ordenado por (measure, beat, hand, pitch);
+    # El JSON de fingering.py ya viene ordenado por (measure, beat, hand, pitch);
     # al filtrar por mano se conserva ese orden. Dentro de cada acorde, sin
     # embargo, ese orden es por altura ascendente, que no tiene por qué
     # coincidir con el orden físico real de los eventos note-on en el MIDI
@@ -633,10 +633,10 @@ def write_tree(tree: ET.ElementTree, path: Path) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Convierte la salida JSON de fingering_v3.py a formato Synthesia (.synthesia)",
+        description="Convierte la salida JSON de fingering.py a formato Synthesia (.synthesia)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("json_file", help="JSON exportado por fingering_v3.py (--json)")
+    ap.add_argument("json_file", help="JSON exportado por fingering.py (--json)")
     ap.add_argument("-o", "--output", required=True, help="Ruta del fichero .synthesia a generar")
     ap.add_argument(
         "--hash",

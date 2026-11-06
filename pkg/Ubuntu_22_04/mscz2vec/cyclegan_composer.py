@@ -224,7 +224,7 @@ Dependencias
 mido, numpy, torch (la mayoría de subcomandos importa torch al ejecutarse;
 prepare, round-trip e inspect de .npz solo necesitan numpy y mido). Alternativa
 sin redes neuronales: cycle_gan_style_transfer.py; versión con ambos backends:
-cycle_gan_style_transfer_v3.py.
+cycle_gan_style_transfer.py.
 """
 
 import argparse

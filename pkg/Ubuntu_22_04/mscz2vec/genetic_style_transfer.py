@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 r"""
-genetic_style_transfer_v3.py — Style Transfer: transferencia de estilo musical
+genetic_style_transfer.py — Style Transfer: transferencia de estilo musical
 entre MIDIs mediante algoritmo genético + modelo de transformación aprendido
 (versión 3.0).
 
@@ -280,19 +280,19 @@ Ejemplos de uso
 ── Más modos ──
 
   # Entrenar el modelo v3
-  python genetic_style_transfer_v3.py train --src entrada.mid --dst valor
+  python genetic_style_transfer.py train --src entrada.mid --dst valor
 
   # Transformar un MIDI usando el modelo entrenado
-  python genetic_style_transfer_v3.py transform entrada.mid --model modelo.pt
+  python genetic_style_transfer.py transform entrada.mid --model modelo.pt
 
   # Mostrar detalle nota a nota de las transformaciones aplicadas
-  python genetic_style_transfer_v3.py verbose entrada.mid
+  python genetic_style_transfer.py verbose entrada.mid
 
   # Aplicar parámetros de transformación concretos (sin modelo)
-  python genetic_style_transfer_v3.py apply entrada.mid --params entrada.mid
+  python genetic_style_transfer.py apply entrada.mid --params entrada.mid
 
   # Como transform pero omitiendo los operadores indicados
-  python genetic_style_transfer_v3.py block entrada.mid --model modelo.pt \
+  python genetic_style_transfer.py block entrada.mid --model modelo.pt \
         --block entrada.mid
 
 ────────────────────────────────────────────────────────────────────────────

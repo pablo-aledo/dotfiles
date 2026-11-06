@@ -8,13 +8,13 @@ síntesis vía flujos normalizadores
 Fundamento
 ────────────────────────────────────────────────────────────────────────────
 QUÉ HACE:
-  Alternativa a la búsqueda evolutiva de genopatch_v2.py: en vez de
+  Alternativa a la búsqueda evolutiva de genopatch.py: en vez de
   resolver el problema inverso (sonido → parámetros) desde cero en cada
   `match`, entrena UNA VEZ un flujo condicional p(θ|x) sobre pares
   sintéticos (θ~prior, x=render(θ)), y luego la inferencia es un solo
   forward pass — sin bucle evolutivo. Es "simulation-based inference"
   (SBI/neural posterior estimation) aplicado al simulador que ya es
-  genopatch_v2.ENGINES.
+  genopatch.ENGINES.
 
   A diferencia del GA, que colapsa a UN punto arbitrario cuando el
   problema no es identificable (ver informe de refit: add_bright_brass,
@@ -28,15 +28,15 @@ QUÉ HACE:
 ARQUITECTURA:
   RealNVP condicional: una red pequeña ("embedder") reduce el vector de
   features de audio (~2052 dims, el mismo que usa --fitness spectral en
-  genopatch_v2) a un embedding compacto (64 dims); 6 capas de
+  genopatch) a un embedding compacto (64 dims); 6 capas de
   acoplamiento afín (checkerboard mask) transforman θ normalizado
   (min-max a [-1,1] por parámetro) ↔ ruido base N(0,I), condicionadas en
   ese embedding. Entrenamiento por máxima verosimilitud (NLL), CPU-only,
   red pequeña (~450K parámetros) — nada que necesite GPU.
 
-ALCANCE — los 6 motores base de genopatch_v2.py (RAW_ENGINES)
+ALCANCE — los 6 motores base de genopatch.py (RAW_ENGINES)
   Entrenado SOLO sobre los parámetros base de cada motor (sin el wrapper
-  de FX vibrato/unison/drive de genopatch_v2) — el patch resultante trae
+  de FX vibrato/unison/drive de genopatch) — el patch resultante trae
   esos parámetros en su valor neutro (sin efecto). Entrenado a NOTA y
   DURACIÓN fijas por motor (ver CANONICAL / `info` del checkpoint):
 
@@ -68,8 +68,8 @@ COLAPSO DE MODO SILENCIOSO — nota distinta a la canónica
 
 FINGERPRINT DE FEATURES:
   El checkpoint guarda _FEAT_N_FFT/_FEAT_HOP/pesos de vibrato de
-  genopatch_v2 vigentes al entrenar. `sample` verifica que coincidan con
-  los actuales antes de usar el checkpoint — si genopatch_v2.py cambia
+  genopatch vigentes al entrenar. `sample` verifica que coincidan con
+  los actuales antes de usar el checkpoint — si genopatch.py cambia
   esos parámetros (ya ha pasado una vez, 1024→2048), un checkpoint viejo
   falla alto y claro en vez de dar muestras basura calladamente.
 
@@ -80,7 +80,7 @@ LIMITACIONES:
   · No modela el wrapper de FX (vibrato/unison/drive) — los patches
     salen con esos parámetros en su default neutro.
   · fm2 es notablemente peor que el resto — no lo trates como sustituto
-    fiable de `genopatch_v2.py match` con ese motor todavía.
+    fiable de `genopatch.py match` con ese motor todavía.
   · layered_fm_add no tiene checkpoint — no está en SUPPORTED_ENGINES.
   · El aviso de colapso de modo es una heurística (varianza casi nula +
     valor en el límite) — puede haber falsos negativos (colapso a un
@@ -94,10 +94,10 @@ Módulo importable:
 ────────────────────────────────────────────────────────────────────────────
 Modos de uso
 ────────────────────────────────────────────────────────────────────────────
-  train    genera N pares sintéticos (prior de genopatch_v2._random_params,
+  train    genera N pares sintéticos (prior de genopatch._random_params,
            mismo sesgo hacia el default que usa el GA) y entrena el flujo
   sample   WAV objetivo + checkpoint → N muestras de p(θ|x), como
-           patch.json (mismo formato que genopatch_v2, cero fricción con
+           patch.json (mismo formato que genopatch, cero fricción con
            `render`/`mutate`/`info` de ese script). Avisa si detecta
            colapso de modo.
   info     inspecciona un checkpoint (motor, nota/duración de
@@ -172,16 +172,16 @@ Ejemplos de uso
                                             # quédate con la mejor
     genopatch_flow.py info flow_additive.pt
 
-    # patch.json del flujo → seguir explorando con genopatch_v2.py:
-    genopatch_v2.py render samples/sample_01.json --note E4 --out e4.wav
-    genopatch_v2.py mutate samples/sample_01.json -n 8 --render \
+    # patch.json del flujo → seguir explorando con genopatch.py:
+    genopatch.py render samples/sample_01.json --note E4 --out e4.wav
+    genopatch.py mutate samples/sample_01.json -n 8 --render \
                     --out-dir variantes/
 
-  FORMATO patch.json — idéntico al de genopatch_v2.py, solo parámetros base
+  FORMATO patch.json — idéntico al de genopatch.py, solo parámetros base
     {"engine": "additive", "note": 60, "duration": 1.2, "velocity": 0.85,
      "params": {"amp_h1": 1.0, "amp_h2": 0.62, ...}}
 
-  DEPENDENCIAS  numpy  scipy  soundfile  torch (CPU)  genopatch_v2.py
+  DEPENDENCIAS  numpy  scipy  soundfile  torch (CPU)  genopatch.py
                 (debe estar en el mismo directorio o PYTHONPATH)
 """
 
@@ -211,17 +211,17 @@ def _script_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _import_genopatch_v2():
+def _import_genopatch():
     try:
-        import genopatch_v2 as gp
+        import genopatch as gp
         return gp
     except ImportError:
         sys.path.insert(0, str(_script_dir()))
         try:
-            import genopatch_v2 as gp
+            import genopatch as gp
             return gp
         except ImportError:
-            sys.exit("genopatch_v2.py no encontrado -- debe estar en el mismo "
+            sys.exit("genopatch.py no encontrado -- debe estar en el mismo "
                       "directorio o en PYTHONPATH.")
 
 
@@ -505,7 +505,7 @@ def train(engine_name: str, n_samples: int, epochs: int, out_path: str,
                   f"se necesitan miles para un flujo útil (ver informe de testing).")
     if epochs < 1:
         sys.exit(f"--epochs debe ser al menos 1 (recibido: {epochs})")
-    gp = _import_genopatch_v2()
+    gp = _import_genopatch()
     torch, nn = _import_torch()
 
     if verbose:
@@ -536,7 +536,7 @@ def _load_checkpoint(gp, torch, nn, path: str):
     if ckpt["fingerprint"] != current_fp:
         sys.exit(
             f"El checkpoint {path} se entreno con parametros de features distintos "
-            f"a los actuales de genopatch_v2.py:\n"
+            f"a los actuales de genopatch.py:\n"
             f"    checkpoint: {ckpt['fingerprint']}\n"
             f"    actual:     {current_fp}\n"
             f"  Reentrena el flujo.")
@@ -548,7 +548,7 @@ def _load_checkpoint(gp, torch, nn, path: str):
 
 def sample_from_target(target_wav: str, checkpoint_path: str, n: int, seed: int = 0
                          ) -> Tuple[List[Dict[str, float]], dict]:
-    gp = _import_genopatch_v2()
+    gp = _import_genopatch()
     torch, nn = _import_torch()
     sf = _import_soundfile()
 
@@ -620,7 +620,7 @@ def _check_collapse_warning(results: List[Dict[str, float]], gp, engine_name: st
 
 
 def cmd_sample(args):
-    gp = _import_genopatch_v2()
+    gp = _import_genopatch()
     sf = _import_soundfile()
     results, ckpt = sample_from_target(args.target_wav, args.checkpoint, args.n, seed=args.seed)
     engine_name = ckpt["engine"]
@@ -644,7 +644,7 @@ def cmd_sample(args):
 
 
 def cmd_info(args):
-    gp = _import_genopatch_v2()
+    gp = _import_genopatch()
     torch, nn = _import_torch()
     ckpt, _ = _load_checkpoint(gp, torch, nn, args.checkpoint)
     print(f"engine         {ckpt['engine']}")

@@ -7,7 +7,7 @@ cache de jev_composer (sustituto futuro de Jev/TypeSafe)
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
 ────────────────────────────────────────────────────────────────────────────
-  jev_composer_v4.py guarda en su cache cada consulta hecha a Jev con todos
+  jev_composer.py guarda en su cache cada consulta hecha a Jev con todos
   los datos para reconstruirla (estado, instrucciones, opciones y la
   distribución de probabilidad devuelta). Este script aprende de esas
   entradas a reproducir esa distribución sin llamar a la API.
@@ -52,7 +52,7 @@ Modos de uso (subcomandos)
 ────────────────────────────────────────────────────────────────────────────
 Entradas y salidas
 ────────────────────────────────────────────────────────────────────────────
-  prepare    Entrada: --cache-file (JSONL de jev_composer_v4; las entradas sin
+  prepare    Entrada: --cache-file (JSONL de jev_composer; las entradas sin
              estado/opciones, de versiones anteriores, se omiten). Salida en
              --data-dir: dataset.npz y dataset_meta.json. Separa validación por
              descripción de obra (nunca la misma obra en train y validación).
@@ -67,7 +67,7 @@ Entradas y salidas
   Uso con jev_composer (el modelo local sustituye a la API):
       export OPENROUTER_API_KEY=local            # cualquier valor
       python jev_local.py serve --model-dir model/ &
-      python jev_composer_v4.py componer "..." --model local-v1 \
+      python jev_composer.py componer "..." --model local-v1 \
           --url http://127.0.0.1:8808/api/alpha/decisions
   Usa un --model distinto del de Jev: así la cache no mezcla respuestas del
   modelo local con las de Jev. Para reentrenar sin ellas, prepare las filtra
@@ -84,7 +84,7 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 
 @params v1
 [prepare]
---cache-file   file  default=~/.cache/jev_composer/queries.jsonl io=in ext=jsonl  # Cache JSONL de jev_composer_v4
+--cache-file   file  default=~/.cache/jev_composer/queries.jsonl io=in ext=jsonl  # Cache JSONL de jev_composer
 --data-dir     dir   io=out required  # Directorio de salida del dataset
 --model-filter str   # Usar solo entradas hechas con este modelo (default: todas)
 --sources      list  of=enum values=api|train  # Orígenes a incluir (default: api train)
@@ -1208,7 +1208,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ── prepare ───────────────────────────────────────────────────────────────
     p = sub.add_parser('prepare', help='Cache de jev_composer → dataset de rasgos (.npz)')
     p.add_argument('--cache-file', default=DEFAULT_CACHE, metavar='FILE',
-                   help=f'Cache JSONL de jev_composer_v4 (default: {DEFAULT_CACHE})')
+                   help=f'Cache JSONL de jev_composer (default: {DEFAULT_CACHE})')
     p.add_argument('--data-dir', required=True, metavar='DIR',
                    help='Directorio de salida del dataset')
     p.add_argument('--model-filter', metavar='STR',

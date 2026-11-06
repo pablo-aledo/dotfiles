@@ -1,77 +1,102 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-r"""
-unifier.py — Unifier: unificador de secciones MIDI en una composición
-coherente
-(versión 1.1).
+"""
+unifier.py — Unifier: fusión coherente de secciones-ancla MIDI en una obra
+unificada
+(versión 3.0).
 
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
 ────────────────────────────────────────────────────────────────────────────
-Cuando compones pegando secciones de obras distintas como anclas
-emocionales, la unión suele sonar a collage: faltan motivos comunes,
-la armonía no encaja, cambia el pulso y la instrumentación es inconexa.
-UNIFIER establece un ADN musical compartido y lo inyecta de forma
-dosificada en cada sección, cosiéndolas con transiciones coherentes para
-que el resultado suene como una obra unificada.
+v3.0 = v2.0 + dos capacidades recuperadas de v1.1:
+  · MODO RECOMBINE  — usa las secciones como donantes de ADN y regenera
+    una obra nueva coherente (progresión + motivo transplantado + bajo +
+    contrapunto + patrones por emoción), en vez de solo pegar con pegamento.
+  · PLAN TONAL POR EMOCIÓN — cada sección viaja a una tónica sesgada por
+    su emoción (subdominante/dominante/mediante/relativa) en vez de una
+    sola tonalidad global. Más viaje de color, menos unidad (opcional).
 
-ADN COMPARTIDO (deducido si no se indica):
-[A1] Motivo semilla  — el más saliente entre las secciones (o MIDI dado)
-[A2] Plan tonal      — tonalidad hogar + modulaciones lógicas por emoción
-[A3] Plantilla orch. — piano / cuarteto / cuerdas / cámara / full
-[A4] Arco de tensión — curva tipo 'arch' sobre las secciones
+v3.0 hereda de v2.0: ancla explícita, tempo global con rampas, groove del
+  ancla (16 subdivisiones), protección del canal 9, salida tipo 1 por
+  roles, arco áureo informado por energía, score honesto (sin puntos
+  regalados), Krumhansl propio (sin music21), crossfade en costuras.
+v3.0 hereda de v1.1: n-gramas de motivo, transformaciones, puntos
+  estructurales, nudge armónico con voice leading, puentes con pivote,
+  dosificación --glue, patrones de acompañamiento por emoción.
 
-EJES DE UNIFICACIÓN (dosificables con --glue, 0=intacto … 1=total):
-[M] Motivo           — siembra motivo (orig/invers/retrogr/aument)
-[H] Armonía          — transp. al plan + nudge de acordes no diatónicos
-[R] Ritmo            — alineación suave con el groove de referencia
-[I] Instrumentación  — remapeo al template común por rol (mel/bass/harm)
+MODOS (--mode):
+[glue]      Conserva el MIDI de cada ancla y le añade hilos comunes +
+            puentes + reorquestación ligera. Fiel a tus secciones.
+[recombine] Usa las secciones como donantes de ADN y regenera una obra
+            nueva coherente (progresión + motivo transplantado + bajo +
+            contrapunto). Más unificado, menos fiel.
+[auto]      Elige según lo diferentes que sean las tonalidades de origen.
 
-────────────────────────────────────────────────────────────────────────────
-Modos de uso
-────────────────────────────────────────────────────────────────────────────
-  [glue]      Conserva el MIDI de cada ancla y le añade hilos comunes
-              + puentes + reorquestación ligera. Fiel a tus secciones.
-  [recombine] Usa las secciones como donantes de ADN y regenera una obra
-              nueva coherente (progresión + motivo transplantado + bajo).
-  [auto]      Elige glue/recombine según lo diferentes que sean las secciones.
+PLAN TONAL (--tonal-plan):
+[global]   Una sola tonalidad hogar; secciones en modo opuesto van a la
+           RELATIVA (misma armadura). Máxima unidad.
+[emotion]  Cada sección viaja a una tónica sesgada por su emoción
+           (serenidad→subdom, triunfo→dom, angustia→mediante, etc.).
+           Más viaje de color emocional.
+[auto]     global si no hay emociones indicadas; emotion si las hay.
 
-  TRANSICIONES entre secciones: cadencia V7→I en la tonalidad destino +
-  declaración del motivo semilla (modo morph) o pivote de nota común.
-
-  AUTOCONTENIDO: no importa ni llama por subprocess a ningún otro script
-  del ecosistema. Toda la lógica (carga, análisis, transformación, salida)
-  vive en este fichero. Solo depende de mido, numpy y music21 (pip).
-
-────────────────────────────────────────────────────────────────────────────
-Entradas y salidas
-────────────────────────────────────────────────────────────────────────────
-  obra_unificada.mid          — MIDI unificado (un track, multicanal)
-  obra_unificada.report.json  — plan, ADN y score (con --report)
+DIMENSIONES DE UNIFICACIÓN (dosificables con --glue / --glue-preset):
+[M] motif    — motivo ancla sembrado transformado en puntos estructurales
+[H] harmony  — re-armonización diatónica con conducción de voces
+[R] rhythm   — imantación de ataques hacia el groove del ANCLA
+[D] dynamics — nivelación entre secciones + arco global con clímax único
+[K] tonal    — siempre activo: plan tonal (global o por emoción)
+[T] tempo    — siempre activo: tempo diana + --tempo-blend + rampas
+[I] instr    — siempre activo: un instrumento GM por rol en toda la obra
 
 ────────────────────────────────────────────────────────────────────────────
 Opciones
 ────────────────────────────────────────────────────────────────────────────
-    --section SPEC     Sección: "label:emotion:path" (repetible, orden fijo)
-    midis              MIDIs posicionales (orden fijo, 2–10 secciones)
-    --emotions LIST    Emociones por orden, separadas por coma
-    --mode MODE        glue | recombine | auto (default: glue)
-    --motif-seed FILE  MIDI con el motivo semilla (default: deduce)
-    --key KEY          Tonalidad hogar, ej: D, F# minor (default: deduce)
-    --template T       piano|string_quartet|strings|chamber|full|auto
-  --glue SPEC        motif=,harmony=,rhythm=,instrumentation= (0–1)
-    --glue-preset P   sutil | medio | fuerte (atajo de pegamento)
-    --bridge-bars N    Compases de cada puente (default: 2)
-    --bridge MODE      morph | pivot | auto (default: auto)
-    --recombine-bars N Compases por sección en modo recombine (default: 8)
-    --output FILE      MIDI de salida (default: obra_unificada.mid)
-    --seed N           Semilla aleatoria (default: 1)
-    --report           Score de coherencia antes→después + JSON
-    --dry-run          Mostrar el plan (ADN, tonal, motivo) sin generar MIDI
-    --verbose          Informe detallado del análisis y el ADN
-
-── Otras opciones del parser ──
-  --no-color
+  midis MIDIS […]             Fragmentos MIDI en el orden emocional deseado
+  --output OUTPUT             (defecto obra_unificada.mid)
+  --anchor ANCHOR             Índice del fragmento ancla (default: 0)
+  --key KEY                   Tonalidad global, p.ej. C, Am, Eb, F#m
+  --tempo TEMPO
+  --tempo-blend TEMPO_BLEND   (defecto 0.25)
+  --bridge-bars BRIDGE_BARS   (defecto 2)
+  --mode MODE                 glue=conserva MIDIs; recombine=obra nueva desde
+                              ADN; auto (defecto glue; valores:
+                              glue|recombine|auto)
+  --tonal-plan TONAL_PLAN     global=una tonalidad; emotion=viaje por emoción;
+                              auto (defecto auto; valores:
+                              global|emotion|auto)
+  --emotions EMOTIONS         Emociones por orden, separadas por coma (para
+                              MIDIs posicionales)
+  --recombine-bars RECOMBINE_BARS
+                              Compases por sección en modo recombine (defecto
+                              8)
+  --glue GLUE                 Dosificación:
+                              motif=0.7,harmony=0.6,rhythm=0.4,dynamics=0.6
+                              (ejes omitidos → preset)
+  --glue-preset GLUE_PRESET   (defecto medio; valores: sutil|medio|fuerte)
+  --motif-seed MOTIF_SEED     MIDI externo con el motivo semilla (anula el
+                              ancla)
+  --snap-strength SNAP_STRENGTH
+                              0=respetar cromatismo, 1=ajustar todo a la
+                              escala (defecto 0.0)
+  --climax-pos CLIMAX_POS     (defecto 0.618)
+  --arc-intensity ARC_INTENSITY
+                              (defecto 0.6)
+  --no-motif
+  --no-rhythm
+  --no-harmony
+  --no-humanize
+  --no-rit
+  --score                     Imprimir score de coherencia antes→después
+  --no-instr                  Ignorar instrumentos del ancla (paleta de
+                              cuerdas)
+  --no-bridges
+  --no-arc
+  --no-levels
+  --seed SEED                 (defecto 42)
+  --report                    Solo análisis y plan, sin transformar ni
+                              escribir
+  --json JSON                 Exportar decisiones y mapa a JSON
+  --dry-run
 
 ────────────────────────────────────────────────────────────────────────────
 Parámetros (spec)
@@ -84,126 +109,85 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 
 @params v1
 [*]
-midis            list  of=file io=in  # MIDIs de sección (orden fijo)
---section        str    # Sección: "label:emotion:path" (repetible)
---emotions       str    # Emociones separadas por coma (para MIDIs posicionales)
---mode           enum  default=glue values=glue|recombine|auto
---motif-seed     file  io=in ext=mid  # MIDI con el motivo semilla
---key            str    # Tonalidad hogar, ej: D, F# minor
---template       enum  default=auto values=piano|string_quartet|strings|chamber|full|auto
---glue           str   default=""  # motif=,harmony=,rhythm=,instrumentation=
---glue-preset    enum  values=sutil|medio|fuerte  # Preset de pegamento: sutil|medio|fuerte
---bridge-bars    int   default=2 min=0 unit=compases
---bridge         enum  default=auto values=morph|pivot|auto
---recombine-bars int   default=8 min=0 unit=compases  # compases por sección en modo recombine
+midis            list  of=file io=in ext=mid required  # Fragmentos MIDI en el orden emocional…
 --output         file  default=obra_unificada.mid io=out ext=mid
---seed           int   default=1
---report         bool  default=false
---dry-run        bool  default=false  # Mostrar el plan (ADN, tonal, motivo) sin generar MIDI
---verbose        bool  default=false
---no-color       bool  default=false
+--anchor         int   default=0  # Índice del fragmento ancla
+--key            str    # Tonalidad global, p.ej. C, Am, Eb, F#m
+--tempo          float
+--tempo-blend    float default=0.25 min=0 max=1
+--bridge-bars    int   default=2 min=0 unit=compases
+--mode           enum  default=glue values=glue|recombine|auto  # glue=conserva MIDIs…
+--tonal-plan     enum  default=auto values=global|emotion|auto  # global=una tonalidad…
+--emotions       str    # Emociones por orden, separadas por coma (para MIDIs posicionales)
+--recombine-bars int   default=8 min=0 unit=compases  # Compases por sección en modo recombine
+--glue           str    # Dosificación: motif=0.7,harmony=0.6,rhythm=0.4,dynamics=0.6 (ejes…
+--glue-preset    enum  default=medio values=sutil|medio|fuerte
+--motif-seed     file  io=in ext=mid  # MIDI externo con el motivo semilla (anula el ancla)
+--snap-strength  float default=0.0 typical=0..1  # 0=respetar cromatismo, 1=ajustar todo a la escala
+--climax-pos     float default=0.618
+--arc-intensity  float default=0.6 typical=0..1
+--no-motif       bool  default=false
+--no-rhythm      bool  default=false
+--no-harmony     bool  default=false
+--no-humanize    bool  default=false
+--no-rit         bool  default=false
+--score          bool  default=false  # Imprimir score de coherencia antes→después
+--no-instr       bool  default=false  # Ignorar instrumentos del ancla (paleta de cuerdas)
+--no-bridges     bool  default=false
+--no-arc         bool  default=false
+--no-levels      bool  default=false
+--seed           int   default=42
+--report         bool  default=false  # Solo análisis y plan, sin transformar ni escribir
+--json           file  io=out ext=json  # Exportar decisiones y mapa a JSON
+--dry-run        bool  default=false
 @end
 
 ────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
-  # 3 secciones con emoción indicada, tonalidad y plantilla fijas
-  python unifier.py \
-      --section "intro:serenidad:a.mid" \
-      --section "mid:melancolia:b.mid" \
-      --section "out:triunfo:c.mid" \
-      --mode glue --key D --template chamber \
-      --glue motif=0.7,harmony=0.8,rhythm=0.3,instrumentation=1.0 \
-      --output obra_unificada.mid --report
+    python unifier.py intro.mid nudo.mid climax.mid final.mid
+    python unifier.py a.mid b.mid c.mid --key Dm --anchor 1
+    python unifier.py a.mid b.mid --glue motif=0.8,harmony=0.7,rhythm=0.3
+    python unifier.py a.mid b.mid c.mid --glue-preset fuerte
+    python unifier.py a.mid b.mid c.mid --mode recombine
+    python unifier.py a.mid b.mid --tonal-plan emotion --emotions calidez,angustia
+    python unifier.py a.mid b.mid --motif-seed mi_motivo.mid
+    python unifier.py a.mid b.mid c.mid --report            # solo plan
 
-  # MIDIs posicionales + emociones por orden
-  python unifier.py a.mid b.mid c.mid --emotions serenidad,angustia,triunfo
-
-  # Deducción total: tonalidad, motivo, emoción e instrumentación se deducen
-  python unifier.py a.mid b.mid c.mid --mode auto
-
-  # Motivo semilla propio + 2 secciones, plantilla piano
-  python unifier.py \
-      --section "a:serenidad:vals.mid" \
-      --section "b:melancolia:blues.mid" \
-      --motif-seed mi_motivo.mid --key C --template piano \
-      --output obra.mid --report
-
-  # Recombine: obra nueva de 8 compases por sección
-  python unifier.py a.mid b.mid c.mid --mode recombine --recombine-bars 8
+  AUTOCONTENIDO: solo mido y numpy. Funciones copiadas/adaptadas de
+  mosaic_composer, stitcher, leitmotif_tracker, climax_engineer,
+  unifier_external v1.1 (voice leading, pivotes, n-gramas, score, patrones).
 
 ── Más modos ──
 
-  # Mostrar el plan (ADN, tonal, motivo) sin generar MIDI
-  python unifier.py --dry-run
-
-────────────────────────────────────────────────────────────────────────────
-Dependencias
-────────────────────────────────────────────────────────────────────────────
-  mido, numpy, music21 (todas pip, ya instaladas)
+  # --dry-run
+  python unifier.py entrada.mid entrada2.mid --dry-run
 """
 
-import os, sys, json, math, random, argparse
-from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Tuple, Optional
+import argparse
+import json
+import math
+import os
+import random
+import sys
 
-try:
-    import mido
-except ImportError:
-    sys.exit("Falta 'mido'. Instala con: pip install mido")
 import numpy as np
 
-# music21 es opcional para análisis de tonalidad; si no está, se usa heurística.
 try:
-    import music21
-    HAVE_M21 = True
-except Exception:
-    HAVE_M21 = False
+    from mido import MidiFile, MidiTrack, Message, MetaMessage, bpm2tempo
+except ImportError:
+    sys.exit("[unifier] Falta mido:  pip install mido")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Constantes
-# ─────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  CONSTANTES Y UTILIDADES DE CONSOLA
+# ══════════════════════════════════════════════════════════════════════════════
 
-EMOTIONS = {"angustia","calidez","esperanza","fragilidad","melancolia",
-            "serenidad","tension","triunfo"}
+TPB = 480                     # ticks per beat internos (todo se normaliza aquí)
+_SPARK = "▁▂▃▄▅▆▇█"
 
-NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
-
-# Intervalos (semitonos) que cada emoción "tira" hacia una región tonal.
-# (desplazamiento de tónica relativo al hogar, modo destino偏好)
-EMOTION_KEY_BIAS = {
-    "serenidad":   {"shift": +5, "mode": "same"},   # subdominante
-    "calidez":     {"shift": +5, "mode": "major"},
-    "esperanza":   {"shift": +7, "mode": "major"},  # dominante
-    "triunfo":     {"shift": +7, "mode": "major"},
-    "melancolia":  {"shift":  0, "mode": "minor"},  # relativa/paralela menor
-    "fragilidad":  {"shift":  0, "mode": "minor"},
-    "tension":     {"shift": +7, "mode": "minor"},
-    "angustia":    {"shift": +3, "mode": "minor"},  # mediant
-}
-
-# Progresiones por emoción (grados romanos) para modo recombine.
-PROGRESSIONS = {
-    "serenidad":   ["I","vi","IV","V"],
-    "calidez":     ["I","IV","vi","V"],
-    "esperanza":   ["IV","I","V","vi"],
-    "triunfo":     ["I","V","IV","I"],
-    "melancolia":  ["i","VI","III","VII"],
-    "fragilidad":  ["i","iv","i","v"],
-    "tension":     ["i","VII","VI","V"],
-    "angustia":    ["i","i","VI","V"],
-}
-
-# Plantillas orquestales: rol -> program GM.
-TEMPLATES = {
-    "piano":          {"melody":0, "counter":0, "harmony":0, "bass":0},
-    "string_quartet": {"melody":40, "counter":40, "harmony":41, "bass":42},
-    "strings":        {"melody":40, "counter":40, "harmony":41, "bass":43},
-    "chamber":        {"melody":73, "counter":68, "harmony":71, "bass":42},
-    "full":           {"melody":56, "counter":68, "harmony":48, "bass":43},
-}
-
-OUT_TPB = 480  # ticks por negra del MIDI de salida
+_COLORS = {"reset": "\033[0m", "bold": "\033[1m", "dim": "\033[2m",
+           "green": "\033[32m", "yellow": "\033[33m", "cyan": "\033[36m",
+           "magenta": "\033[35m", "red": "\033[31m"}
 
 
 def _ensure_parent(path):
@@ -216,828 +200,239 @@ def _ensure_parent(path):
             _os.makedirs(d, exist_ok=True)
     return path
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Modelos de datos
-# ─────────────────────────────────────────────────────────────────────────────
 
-@dataclass
-class Note:
-    pitch: int
-    start: float      # en beats (negra = 1)
-    dur: float        # en beats
-    velocity: int
-    channel: int
-    track: int
+def _c(k):
+    """Color ANSI si stdout es un TTY (mismo criterio que el resto del pipeline)."""
+    return _COLORS.get(k, "") if sys.stdout.isatty() else ""
 
 
-@dataclass
-class Section:
-    path: str
-    label: str
-    emotion: Optional[str] = None
-    notes: List[Note] = field(default_factory=list)
-    tpb: int = 480
-    tempo: float = 120.0
-    time_sig: Tuple[int,int] = (4,4)
-    tracks_meta: List[dict] = field(default_factory=list)
-    programs: Dict[int,int] = field(default_factory=dict)
-    # análisis
-    key_pc: int = 0
-    key_mode: str = "major"
-    key_name: str = "C major"
-    n_bars: int = 0
-    beats_per_bar: float = 4.0
-    melody_track: int = 0
-    melody_channel: int = 0
-    motif_intervals: List[int] = field(default_factory=list)
-    motif_durations: List[float] = field(default_factory=list)
-    motif_first_pitch: int = 60
-    motif_salience: float = 0.0
-    chords: List[Tuple[int,str]] = field(default_factory=list)  # (root_pc, quality)
-    density: float = 0.0
-    register: float = 60.0
-    # plan
-    target_key_pc: int = 0
-    target_mode: str = "major"
-    transpose_semis: int = 0
-    role_map: Dict[Tuple[int,int], str] = field(default_factory=dict)
+def sparkline(v: np.ndarray) -> str:
+    # ── copiada de climax_engineer.py ──
+    v = np.asarray(v, dtype=float)
+    if len(v) == 0 or v.max() <= v.min():
+        return _SPARK[0] * max(1, len(v))
+    x = (v - v.min()) / (v.max() - v.min())
+    return "".join(_SPARK[min(7, int(round(t * 7)))] for t in x)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MIDI I/O
-# ─────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  TEORÍA: ESCALAS, TONALIDADES, DISTANCIAS   (copiado de mosaic_composer /
+#  stitcher, con pequeñas adaptaciones)
+# ══════════════════════════════════════════════════════════════════════════════
 
-def load_midi(path: str) -> Tuple[List[Note], int, float, Tuple[int,int], List[dict], Dict[int,int]]:
-    """Carga un MIDI. Devuelve (notas, tpb, tempo, time_sig, tracks_meta, programs)."""
-    mid = mido.MidiFile(path)
-    tpb = mid.ticks_per_beat or 480
-    notes: List[Note] = []
-    tempo = 120.0
-    time_sig = (4, 4)
-    tracks_meta = []
-    programs: Dict[int, int] = {}
+SCALE_INTERVALS = {
+    "major":          [0, 2, 4, 5, 7, 9, 11],
+    "minor":          [0, 2, 3, 5, 7, 8, 10],
+    "dorian":         [0, 2, 3, 5, 7, 9, 10],
+    "phrygian":       [0, 1, 3, 5, 7, 8, 10],
+    "lydian":         [0, 2, 4, 6, 7, 9, 11],
+    "mixolydian":     [0, 2, 4, 5, 7, 9, 10],
+    "harmonic_minor": [0, 2, 3, 5, 7, 8, 11],
+}
 
-    for ti, track in enumerate(mid.tracks):
-        t = 0
-        name = ""
-        pending: Dict[Tuple[int,int], Tuple[int,int]] = {}
-        n_notes = 0
-        for msg in track:
-            t += msg.time
-            if msg.is_meta:
-                if msg.type == 'set_tempo':
-                    try:
-                        tempo = 60000000.0 / msg.tempo
-                    except ZeroDivisionError:
-                        pass
-                elif msg.type == 'time_signature':
-                    time_sig = (msg.numerator, msg.denominator)
-                elif msg.type == 'track_name':
-                    name = msg.name
-            elif msg.type == 'program_change':
-                programs[msg.channel] = msg.program
-            elif msg.type == 'note_on' and msg.velocity > 0:
-                pending[(msg.channel, msg.note)] = (t, msg.velocity)
-                n_notes += 1
-            elif (msg.type == 'note_off') or (msg.type == 'note_on' and msg.velocity == 0):
-                key = (msg.channel, msg.note)
-                st_v = pending.pop(key, None)
-                if st_v is not None:
-                    st, v = st_v
-                    start_b = st / tpb
-                    dur = (t - st) / tpb
-                    if dur <= 0:
-                        dur = 0.1
-                    notes.append(Note(msg.note, start_b, dur, v, msg.channel, ti))
-        tracks_meta.append({"idx": ti, "name": name, "n_notes": n_notes})
+NOTE_NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
 
-    notes.sort(key=lambda n: (n.start, -n.pitch))
-    return notes, tpb, tempo, time_sig, tracks_meta, programs
+NAME_MAP = {"C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5,
+            "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10,
+            "Bb": 10, "B": 11}
+
+# ── Emociones y sesgos de plan tonal por emoción (de v1.1) ──
+EMOTIONS = {"angustia", "calidez", "esperanza", "fragilidad", "melancolia",
+            "serenidad", "tension", "triunfo"}
+
+# Desplazamiento de tónica relativo al hogar + preferencia de modo destino.
+EMOTION_KEY_BIAS = {
+    "serenidad":   {"shift": +5, "mode": "same"},    # subdominante
+    "calidez":     {"shift": +5, "mode": "major"},
+    "esperanza":   {"shift": +7, "mode": "major"},    # dominante
+    "triunfo":     {"shift": +7, "mode": "major"},
+    "melancolia":  {"shift":  0, "mode": "minor"},    # relativa/paralela menor
+    "fragilidad":  {"shift":  0, "mode": "minor"},
+    "tension":     {"shift": +7, "mode": "minor"},
+    "angustia":    {"shift": +3, "mode": "minor"},     # mediant
+}
+
+# Progresiones por emoción (grados romanos) para modo recombine.
+PROGRESSIONS = {
+    "serenidad":   ["I", "vi", "IV", "V"],
+    "calidez":     ["I", "IV", "vi", "V"],
+    "esperanza":   ["IV", "I", "V", "vi"],
+    "triunfo":     ["I", "V", "IV", "I"],
+    "melancolia":  ["i", "VI", "III", "VII"],
+    "fragilidad":  ["i", "iv", "i", "v"],
+    "tension":     ["i", "VII", "VI", "V"],
+    "angustia":    ["i", "i", "VI", "V"],
+}
 
 
-def _emit_note_events(events, note, tpb):
-    on = round(note.start * tpb)
-    off = round((note.start + note.dur) * tpb)
-    if off <= on:
-        off = on + 1
-    events.append((on, 1, note.pitch, note.velocity, note.channel))   # 1 = note_on
-    events.append((off, 0, note.pitch, 0, note.channel))               # 0 = note_off
+def key_to_midi_root(key_str: str) -> int:
+    # ── copiada de mosaic_composer.py ──
+    parts = key_str.strip().split()
+    return NAME_MAP.get(parts[0], 0)
 
 
-def save_midi(path: str, notes: List[Note], tempo_map: List[Tuple[float,float,Tuple[int,int]]],
-              programs: Dict[int,int], tpb: int = OUT_TPB):
-    """
-    notes: notas en beats (start, dur).
-    tempo_map: lista de (beat_offset, tempo_bpm, (num,den)) por segmento.
-    programs: canal -> program GM.
-    """
-    mid = mido.MidiFile(ticks_per_beat=tpb)
-    track = mido.MidiTrack()
-    mid.tracks.append(track)
-
-    events = []  # (tick, kind, ...)
-    # meta events de tempo/time_sig al inicio de cada segmento
-    metas = []
-    for (boff, bpm, tsig) in tempo_map:
-        tick = round(boff * tpb)
-        mpq = int(round(60000000.0 / bpm)) if bpm > 0 else 500000
-        metas.append((tick, 'set_tempo', mpq))
-        metas.append((tick, 'time_signature', tsig))
-    # program changes al inicio
-    for ch, prog in programs.items():
-        events.append((0, 'prog', ch, prog))
-    # notas
-    for n in notes:
-        _emit_note_events(events, n, tpb)
-
-    # combinar y ordenar
-    all_ev = []
-    for e in metas:
-        all_ev.append(e)
-    for e in events:
-        all_ev.append(e)
-    # ordenar por tick; en empate: meta < prog < note_off < note_on
-    def order(e):
-        tick = e[0]
-        if isinstance(e[1], str) and e[1] in ('set_tempo','time_signature'):
-            pri = 0
-        elif e[1] == 'prog':
-            pri = 1
-        elif e[1] == 0:  # note_off
-            pri = 2
-        else:
-            pri = 3
-        return (tick, pri)
-    all_ev.sort(key=order)
-
-    cur = 0
-    for e in all_ev:
-        tick = e[0]
-        delta = max(0, tick - cur)
-        cur = tick
-        if isinstance(e[1], str) and e[1] == 'set_tempo':
-            track.append(mido.MetaMessage('set_tempo', tempo=e[2], time=delta))
-        elif isinstance(e[1], str) and e[1] == 'time_signature':
-            num, den = e[2]
-            track.append(mido.MetaMessage('time_signature', numerator=num,
-                                          denominator=den, time=delta))
-        elif e[1] == 'prog':
-            track.append(mido.Message('program_change', channel=e[2],
-                                      program=e[3], time=delta))
-        elif e[1] == 0:  # note_off
-            track.append(mido.Message('note_off', channel=e[4], note=e[2],
-                                      velocity=0, time=delta))
-        else:  # note_on
-            track.append(mido.Message('note_on', channel=e[4], note=e[2],
-                                      velocity=e[3], time=delta))
-    # end of track
-    track.append(mido.MetaMessage('end_of_track', time=0))
-    mid.save(_ensure_parent(path))
+def parse_key_arg(s: str) -> str:
+    """'Dm' → 'D minor', 'Eb' → 'Eb major', 'F# minor' → tal cual."""
+    s = s.strip()
+    if " " in s:
+        return s
+    if s.endswith("m") and s[:-1] in NAME_MAP:
+        return f"{s[:-1]} minor"
+    return f"{s} major"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Análisis musical
-# ─────────────────────────────────────────────────────────────────────────────
-
-def beats_per_bar_of(tsig):
-    num, den = tsig
-    return num * (4.0 / den)
-
-
-def detect_key(section: Section) -> Tuple[int, str, str]:
-    """Devuelve (pitch_class, mode, name). Usa music21 si está; si no, heurística."""
-    if HAVE_M21 and section.notes:
-        try:
-            score = music21.stream.Score()
-            part = music21.stream.Part()
-            for n in section.notes:
-                # solo un subset para rapidez si hay muchísimas
-                note = music21.note.Note(n.pitch)
-                note.offset = n.start
-                note.quarterLength = max(n.dur, 0.25)
-                part.append(note)
-            score.append(part)
-            k = score.analyze('key')
-            pc = k.tonic.pitchClass
-            mode = k.mode  # 'major' or 'minor'
-            name = f"{NOTE_NAMES[pc]} {mode}"
-            return pc, mode, name
-        except Exception:
-            pass
-    # heurística: pitch-class más frecuente en downbeats + modal (mayor/menor)
-    pc_hist = np.zeros(12)
-    maj = np.array([1,0,0,0,1,0,0,1,0,0,0,0], dtype=float)
-    minor = np.array([1,0,0,1,0,0,0,1,0,0,0,0], dtype=float)
-    for n in section.notes:
-        pc_hist[n.pitch % 12] += n.dur
-    if pc_hist.sum() == 0:
-        return 0, "major", "C major"
-    # probar cada tónica
-    best = None
-    for r in range(12):
-        rotated = np.roll(pc_hist, -r)
-        score_maj = (rotated * maj).sum()
-        score_min = (rotated * minor).sum()
-        for mode, sc in (("major", score_maj), ("minor", score_min)):
-            if best is None or sc > best[0]:
-                best = (sc, r, mode)
-    _, pc, mode = best
-    return pc, mode, f"{NOTE_NAMES[pc]} {mode}"
+def _get_scale(key_str: str) -> list:
+    # ── copiada de mosaic_composer.py ──
+    parts = key_str.strip().lower().split()
+    root = key_to_midi_root(key_str)
+    mode = "major"
+    for m in SCALE_INTERVALS:
+        if m in " ".join(parts):
+            mode = m
+            break
+    if "minor" in parts and "harmonic" not in parts:
+        mode = "minor"
+    intervals = SCALE_INTERVALS[mode]
+    pitches = []
+    for octave in range(-1, 9):
+        for iv in intervals:
+            p = root + iv + octave * 12
+            if 21 <= p <= 108:
+                pitches.append(p)
+    return sorted(set(pitches))
 
 
-def detect_melody_track(section: Section) -> Tuple[int, int]:
-    """Elige (track_idx, channel) de melodía: mayor pitch medio con bastantes notas."""
-    by_track = {}
-    for n in section.notes:
-        key = (n.track, n.channel)
-        by_track.setdefault(key, []).append(n)
-    if not by_track:
-        return 0, 0
-    totals = {k: (np.mean([n.pitch for n in v]), len(v)) for k, v in by_track.items()}
-    max_notes = max(t[1] for t in totals.values()) or 1
-    best = None
-    for k, (meanp, cnt) in totals.items():
-        if cnt < 0.1 * max_notes:
-            continue
-        score = meanp + 5 * math.log(cnt + 1)
-        if best is None or score > best[0]:
-            best = (score, k)
-    if best is None:
-        best = (0, max(totals.items(), key=lambda kv: kv[1][1])[0])
-    return best[1]
+def _snap_to_scale(pitch: int, scale: list) -> int:
+    # ── copiada de mosaic_composer.py ──
+    if not scale:
+        return int(np.clip(pitch, 21, 108))
+    return min(scale, key=lambda p: (abs(p - pitch), p))
 
 
-def extract_melody_intervals(section: Section) -> Tuple[List[int], List[float], int]:
-    """Extrae secuencia de intervalos de la melodía y duraciones."""
-    mel = [n for n in section.notes if n.track == section.melody_track
-           and n.channel == section.melody_channel]
-    if len(mel) < 4:
-        # fallback: usar todas las notas ordenadas
-        mel = sorted(section.notes, key=lambda n: (n.start, -n.pitch))
-        if len(mel) < 4:
-            return [], [], 60
-    mel.sort(key=lambda n: (n.start, -n.pitch))
-    # reducir a monofónico: una nota por onset (la más aguda)
-    reduced = []
-    last_start = None
-    bucket = []
-    for n in mel:
-        if last_start is None or abs(n.start - last_start) < 0.05:
-            bucket.append(n)
-            last_start = n.start if last_start is None else last_start
-        else:
-            if bucket:
-                reduced.append(max(bucket, key=lambda x: x.pitch))
-            bucket = [n]
-            last_start = n.start
-    if bucket:
-        reduced.append(max(bucket, key=lambda x: x.pitch))
-    if len(reduced) < 2:
-        return [], [], 60
-    intervals = [reduced[i+1].pitch - reduced[i].pitch for i in range(len(reduced)-1)]
-    durs = [reduced[i+1].start - reduced[i].start for i in range(len(reduced)-1)]
-    if durs:
-        durs.append(reduced[-1].dur)
-    else:
-        durs = [0.5]
-    return intervals, durs, reduced[0].pitch
+def _fifth_distance(pc_a, pc_b):
+    # ── copiada de stitcher.py ──
+    diff = (pc_b - pc_a) % 12
+    fifth_steps = (diff * 7) % 12
+    return min(fifth_steps, 12 - fifth_steps)
 
 
-def find_motif(intervals: List[int], durs: List[float]) -> Tuple[List[int], List[float], float]:
-    """Encuentra el motivo más saliente (intervalos + duraciones + saliencia)."""
-    if len(intervals) < 3:
-        return [], [], 0.0
-    best = None
-    for L in range(3, min(8, len(intervals))):
-        counts: Dict[Tuple[int,...], List[int]] = {}
-        for i in range(len(intervals) - L + 1):
-            key = tuple(intervals[i:i+L])
-            counts.setdefault(key, []).append(i)
-        for key, idxs in counts.items():
-            if len(idxs) >= 2:
-                # saliencia: repeticiones * longitud * distintividad (no todo ceros)
-                nonzero = sum(1 for x in key if x != 0)
-                distinct = 1.0 if nonzero >= 1 else 0.4
-                sal = len(idxs) * L * distinct
-                if best is None or sal > best[0]:
-                    best = (sal, L, key, idxs[0])
-    if best is None:
-        # tomar los primeros 3-4 intervalos como motivo
-        L = min(4, len(intervals))
-        return list(intervals[:L]), list(durs[:L]), 1.0
-    sal, L, key, idx = best
-    return list(key), list(durs[idx:idx+L]), sal
+def detect_key_notes(all_pitches: list) -> str:
+    """Krumhansl sobre una lista de pitches (adaptado de
+    mosaic_composer.detect_key_simple para trabajar con notas ya extraídas)."""
+    pitch_counts = np.zeros(12)
+    for p in all_pitches:
+        pitch_counts[p % 12] += 1
+    if pitch_counts.sum() == 0:
+        return "C major"
+    major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09,
+                              2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+    minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53,
+                              2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+    best_key, best_score, best_mode = 0, -np.inf, "major"
+    for root in range(12):
+        rolled = np.roll(pitch_counts, -root)
+        rolled = rolled / (rolled.sum() + 1e-9)
+        maj = np.corrcoef(rolled, major_profile / major_profile.sum())[0, 1]
+        mnr = np.corrcoef(rolled, minor_profile / minor_profile.sum())[0, 1]
+        if maj > best_score:
+            best_score, best_key, best_mode = maj, root, "major"
+        if mnr > best_score:
+            best_score, best_key, best_mode = mnr, root, "minor"
+    return f"{NOTE_NAMES[best_key]} {best_mode}"
 
 
-def identify_chord(pcs: set) -> Tuple[int, str]:
-    """Identifica (root_pc, quality) de un conjunto de pitch classes."""
+# ══════════════════════════════════════════════════════════════════════════════
+#  HUELLAS DE MOTIVO   (copiado de leitmotif_tracker.py)
+# ══════════════════════════════════════════════════════════════════════════════
+
+CHORD_TEMPLATES = {
+    "major": {0, 4, 7},  "minor": {0, 3, 7},  "dom7": {0, 4, 7, 10},
+    "maj7":  {0, 4, 7, 11}, "min7": {0, 3, 7, 10}, "dim": {0, 3, 6},
+    "sus4":  {0, 5, 7},  "power": {0, 7},
+}
+
+
+def identify_chord(pcs: set):
+    # ── copiada de unifier_external.py ──
     if not pcs:
         return 0, "none"
-    templates = {
-        "major":  {0, 4, 7},
-        "minor":  {0, 3, 7},
-        "dom7":   {0, 4, 7, 10},
-        "maj7":   {0, 4, 7, 11},
-        "min7":   {0, 3, 7, 10},
-        "dim":    {0, 3, 6},
-        "sus4":   {0, 5, 7},
-        "power":  {0, 7},
-    }
     best = None
     for r in range(12):
         rel = {(p - r) % 12 for p in pcs}
-        for q, t in templates.items():
-            inter = len(rel & t)
-            missing = len(t - rel)
-            extra = len(rel - t)
-            score = inter - 0.5 * extra - 0.3 * missing
+        for q, t in CHORD_TEMPLATES.items():
+            score = len(rel & t) - 0.5 * len(rel - t) - 0.3 * len(t - rel)
             if best is None or score > best[0]:
                 best = (score, r, q)
     return best[1], best[2]
 
 
-def chords_per_bar(section: Section) -> List[Tuple[int, str]]:
-    """Acordes por compás (root_pc, quality)."""
-    bpb = section.beats_per_bar
-    if section.n_bars == 0 or not section.notes:
-        return []
-    # agrupar notas por compás
-    bars = [[] for _ in range(section.n_bars)]
-    for n in section.notes:
-        b = int(n.start / bpb)
-        if 0 <= b < section.n_bars:
-            bars[b].append(n)
-    result = []
-    for bar in bars:
-        pcs = {n.pitch % 12 for n in bar}
-        result.append(identify_chord(pcs))
-    return result
-
-
-def deduce_emotion(section: Section) -> str:
-    """Deduce emoción a partir de modo, tempo, registro, densidad, disonancia."""
-    minor = section.key_mode == "minor"
-    tempo = section.tempo
-    reg = section.register
-    dens = section.density
-    # disonancia aproximada: acordes no mayor/menor
-    nondia = sum(1 for r, q in section.chords if q not in ("major","minor","none")) / max(1, len(section.chords))
-    scores = {}
-    for e in EMOTIONS:
-        s = 0.0
-        if minor:
-            if e in ("melancolia","fragilidad","angustia","tension"): s += 1.5
-            if e in ("triunfo","esperanza"): s -= 0.5
-        else:
-            if e in ("triunfo","esperanza","calidez","serenidad"): s += 1.0
-            if e in ("angustia","melancolia"): s -= 0.5
-        if tempo < 80:
-            if e in ("melancolia","fragilidad","serenidad"): s += 1.0
-            if e in ("triunfo","tension"): s -= 0.5
-        elif tempo > 120:
-            if e in ("triunfo","tension","esperanza"): s += 1.0
-            if e in ("serenidad","fragilidad"): s -= 0.5
-        if reg > 72:
-            if e in ("triunfo","esperanza","tension"): s += 0.5
-        elif reg < 55:
-            if e in ("melancolia","angustia","fragilidad"): s += 0.5
-        if dens > 6:
-            if e in ("tension","angustia","triunfo"): s += 0.5
-        elif dens < 2:
-            if e in ("fragilidad","serenidad"): s += 0.5
-        if nondia > 0.3:
-            if e in ("tension","angustia"): s += 0.5
-        scores[e] = s
-    return max(scores.items(), key=lambda kv: kv[1])[0]
-
-
-def build_fingerprint(section: Section):
-    """Rellena los campos de análisis de la sección."""
-    section.beats_per_bar = beats_per_bar_of(section.time_sig)
-    if section.notes:
-        total_beats = max(n.start + n.dur for n in section.notes)
-        section.n_bars = max(1, int(math.ceil(total_beats / section.beats_per_bar)))
-        section.register = float(np.mean([n.pitch for n in section.notes]))
-        section.density = len(section.notes) / max(1, section.n_bars)
-    pc, mode, name = detect_key(section)
-    section.key_pc, section.key_mode, section.key_name = pc, mode, name
-    section.melody_track, section.melody_channel = detect_melody_track(section)
-    intervals, durs, first = extract_melody_intervals(section)
-    section.motif_intervals, section.motif_durations, section.motif_salience = find_motif(intervals, durs)
-    section.motif_first_pitch = first
-    section.chords = chords_per_bar(section)
-    if section.emotion is None:
-        section.emotion = deduce_emotion(section)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Decisión de ADN compartido
-# ─────────────────────────────────────────────────────────────────────────────
-
-def name_to_pc(name: str) -> Tuple[int, str]:
-    """Convierte "D" o "F# minor" en (pc, mode)."""
-    name = name.strip()
-    mode = "major"
-    if "minor" in name.lower() or "m" == name[-1:]:
-        mode = "minor"
-    if "minor" in name.lower():
-        name = name.lower().replace("minor", "").replace(" ", "")
-    if name and name[0] in "ABCDEFG":
-        letter = name[0].upper()
-        pc = {"C":0,"D":2,"E":4,"F":5,"G":7,"A":9,"B":11}[letter]
-        if len(name) > 1 and name[1] == '#':
-            pc = (pc + 1) % 12
-        elif len(name) > 1 and name[1] == 'b':
-            pc = (pc - 1) % 12
-        return pc, mode
-    return 0, "major"
-
-
-def choose_motif_seed(sections: List[Section], user_seed: Optional[str]) -> Tuple[List[int], List[float], int, str]:
-    """Elige el motivo semilla: usuario o el más saliente (mejora v1.1:
-    extrae el motivo saliente también del seed, no los primeros intervalos)."""
-    if user_seed:
-        try:
-            notes, tpb, tempo, tsig, tmeta, progs = load_midi(user_seed)
-            s = Section(path=user_seed, label="seed", notes=notes, tpb=tpb,
-                        tempo=tempo, time_sig=tsig, tracks_meta=tmeta, programs=progs)
-            build_fingerprint(s)
-            if s.motif_intervals:
-                return s.motif_intervals, s.motif_durations, s.motif_first_pitch, user_seed
-            # fallback: primeros intervalos
-            intervals, durs, first = extract_melody_intervals(s)
-            return intervals[:8], durs[:8], first, user_seed
-        except Exception as e:
-            print(f"  [WARN] no se pudo cargar motivo semilla {user_seed}: {e}")
-    best = max(sections, key=lambda s: s.motif_salience)
-    return (best.motif_intervals, best.motif_durations, best.motif_first_pitch, best.path)
-
-
-def build_tonal_plan(sections: List[Section], home_key: Optional[str]) -> List[Tuple[int,str]]:
-    """
-    Para cada sección, decide (target_pc, target_mode).
-    Estrategia: hogar = home_key o la tonalidad de la sección más larga.
-    Cada sección se transporta a una tónica cercana al hogar sesgada por emoción.
-    """
-    if home_key:
-        home_pc, home_mode = name_to_pc(home_key)
-    else:
-        # sección más larga
-        longest = max(sections, key=lambda s: s.n_bars)
-        home_pc, home_mode = longest.key_pc, longest.key_mode
-    plan = []
-    for s in sections:
-        bias = EMOTION_KEY_BIAS.get(s.emotion or "serenidad",
-                                    {"shift": 0, "mode": "same"})
-        # tónica destino: hogar + shift, pero preservando el modo original salvo preferencia
-        target_pc = (home_pc + bias["shift"]) % 12
-        if bias["mode"] == "same":
-            target_mode = s.key_mode
-        elif bias["mode"] == "major":
-            target_mode = "major"
-        else:
-            target_mode = "minor"
-        # si la emoción no pide cambio de modo, conservar el de la sección
-        if bias["mode"] == "same":
-            target_mode = s.key_mode
-        s.target_key_pc = target_pc
-        s.target_mode = target_mode
-        # transposición: llevar tónica original a destino
-        shift = (target_pc - s.key_pc) % 12
-        if shift > 6:
-            shift -= 12
-        s.transpose_semis = shift
-        plan.append((target_pc, target_mode))
-    return plan
-
-
-def detect_roles(section: Section) -> Dict[Tuple[int,int], str]:
-    """Asigna rol (melody/counter/harmony/bass) por (track,channel)."""
-    by_tc = {}
-    for n in section.notes:
-        by_tc.setdefault((n.track, n.channel), []).append(n)
-    if not by_tc:
-        return {}
-    stats = {}
-    for k, v in by_tc.items():
-        pitches = [n.pitch for n in v]
-        # polifonía aproximada
-        poly = max_overlap(v)
-        stats[k] = {"meanp": np.mean(pitches), "n": len(v), "poly": poly}
-    # melodía: ya detectada
-    mel_tc = (section.melody_track, section.melody_channel)
-    roles = {}
-    roles[mel_tc] = "melody"
-    # bass: pitch medio más bajo
-    candidates = [k for k in stats if k != mel_tc]
-    if candidates:
-        bass_tc = min(candidates, key=lambda k: stats[k]["meanp"])
-        roles[bass_tc] = "bass"
-        # harmony: el más polifónico de los restantes
-        rest = [k for k in candidates if k != bass_tc]
-        for k in rest:
-            if stats[k]["poly"] >= 2:
-                roles[k] = "harmony"
-            else:
-                roles[k] = "counter"
-    section.role_map = roles
-    return roles
-
-
-def max_overlap(notes: List[Note]) -> int:
-    if not notes:
-        return 0
-    events = []
-    for n in notes:
-        events.append((n.start, 1))
-        events.append((n.start + n.dur, -1))
-    events.sort()
-    cur = 0
-    mx = 0
-    for _, d in events:
-        cur += d
-        mx = max(mx, cur)
-    return mx
-
-
-def choose_template(sections: List[Section], user_template: Optional[str]) -> Dict[str,int]:
-    if user_template and user_template in TEMPLATES:
-        return dict(TEMPLATES[user_template])
-    if user_template == "auto" or user_template is None:
-        # deducir de los programas presentes
-        all_progs = set()
-        for s in sections:
-            all_progs.update(s.programs.values())
-        # mapear a familias
-        has_strings = any(40 <= p <= 47 or p == 43 or p == 48 for p in all_progs)
-        has_piano = 0 in all_progs
-        has_winds = any(64 <= p <= 79 for p in all_progs)
-        if has_piano and not has_strings and not has_winds:
-            return dict(TEMPLATES["piano"])
-        if has_strings and not has_winds:
-            return dict(TEMPLATES["string_quartet"])
-        if has_winds and has_strings:
-            return dict(TEMPLATES["chamber"])
-        if has_winds:
-            return dict(TEMPLATES["chamber"])
-        return dict(TEMPLATES["string_quartet"])
-    return dict(TEMPLATES["chamber"])
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Helpers: conducción de voces, distancia tonal, puntos estructurales, ritmo,
-# validación y humanización (mejoras v1.1)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def triad_pcs(root_pc: int, quality: str) -> set:
-    """Pitch classes de un acorde dado (root, quality)."""
+    # ── copiada de unifier_external.py ──
     r = root_pc % 12
     if quality in ("minor", "min7"):
-        return {r, (r+3)%12, (r+7)%12}
+        return {r, (r + 3) % 12, (r + 7) % 12}
     if quality == "dim":
-        return {r, (r+3)%12, (r+6)%12}
+        return {r, (r + 3) % 12, (r + 6) % 12}
     if quality == "sus4":
-        return {r, (r+5)%12, (r+7)%12}
+        return {r, (r + 5) % 12, (r + 7) % 12}
     if quality == "dom7":
-        return {r, (r+4)%12, (r+7)%12, (r+10)%12}
+        return {r, (r + 4) % 12, (r + 7) % 12, (r + 10) % 12}
     if quality == "maj7":
-        return {r, (r+4)%12, (r+7)%12, (r+11)%12}
+        return {r, (r + 4) % 12, (r + 7) % 12, (r + 11) % 12}
     if quality == "power":
-        return {r, (r+7)%12}
-    # major / default / none
-    return {r, (r+4)%12, (r+7)%12}
+        return {r, (r + 7) % 12}
+    return {r, (r + 4) % 12, (r + 7) % 12}
 
 
-def chord_pcs_at_bar(section: Section, bar_idx: int, transposed: bool = True) -> Optional[set]:
-    """Pitch classes del acorde de un compás (ya transportado si transposed=True)."""
-    if bar_idx < 0 or bar_idx >= len(section.chords):
-        return None
-    root, q = section.chords[bar_idx]
-    if transposed:
-        root = (root + section.transpose_semis) % 12
-    return triad_pcs(root, q)
+def scale_pcs_set(key_str: str) -> set:
+    """Pitch classes de la escala de una tonalidad (major/minor)."""
+    root = key_to_midi_root(key_str)
+    ivs = SCALE_INTERVALS["minor" if "minor" in key_str else "major"]
+    return {(root + i) % 12 for i in ivs}
 
 
-def voice_lead_chord(target_pcs: set, prev_voices: List[int], center: int = 60,
-                      n_voices: int = 3) -> List[int]:
-    """
-    Realiza un acorde con conducción de voces mínima desde prev_voices:
-    mantiene tonos comunes y mueve el resto al pitch más cercano perteneciente
-    al acorde. Devuelve lista de pitches ordenados.
-    """
+def voice_lead_chord(target_pcs: set, prev_voices: list, center: int = 60,
+                     n_voices: int = 3) -> list:
+    # ── copiada de unifier_external.py ──
     if not target_pcs:
         return list(prev_voices) if prev_voices else []
     nv = n_voices if not prev_voices else max(n_voices, len(prev_voices))
-    out: List[int] = []
-    used: set = set()
+    out, used = [], set()
     if prev_voices:
-        # 1) mantener tonos comunes en su misma octava
-        for v in prev_voices:
+        for v in prev_voices:                       # 1) tonos comunes se quedan
             if (v % 12) in target_pcs and v not in used:
                 out.append(v)
                 used.add(v)
-        # 2) rellenar voces restantes moviendo desde el center
-        while len(out) < nv:
+        while len(out) < nv:                        # 2) resto: mínimo movimiento
             best = None
             for p in range(center - 14, center + 14):
                 if (p % 12) in target_pcs and p not in used and 0 <= p <= 127:
-                    score = abs(p - center)
-                    if best is None or score < best[0]:
-                        best = (score, p)
+                    if best is None or abs(p - center) < best[0]:
+                        best = (abs(p - center), p)
             if best is None:
                 break
-            out.append(best[1]); used.add(best[1])
+            out.append(best[1])
+            used.add(best[1])
     else:
-        # sin previo: distribuir alrededor del center
         offsets = [0, 4, -3, 7, -7, 3]
         for i in range(nv):
-            target = center + (offsets[i] if i < len(offsets) else (i - nv//2)*4)
+            target = center + (offsets[i] if i < len(offsets)
+                               else (i - nv // 2) * 4)
             best = None
             for p in range(target - 7, target + 8):
                 if (p % 12) in target_pcs and p not in used and 0 <= p <= 127:
-                    score = abs(p - target)
-                    if best is None or score < best[0]:
-                        best = (score, p)
+                    if best is None or abs(p - target) < best[0]:
+                        best = (abs(p - target), p)
             if best:
-                out.append(best[1]); used.add(best[1])
+                out.append(best[1])
+                used.add(best[1])
     return sorted(out)
 
 
-def key_distance(k1: Tuple[int,str], k2: Tuple[int,str]) -> float:
-    """Distancia tonal: semitonos (círculo cromático) + penalización de modo."""
-    pc1, m1 = k1; pc2, m2 = k2
-    d = abs(pc1 - pc2) % 12
-    d = min(d, 12 - d)
-    if m1 != m2:
-        d += 1.0
-    return float(d)
-
-
-def find_pivot_chord(key_a: Tuple[int,str], key_b: Tuple[int,str]) -> Optional[set]:
-    """Acorde pivote común a ambas tonalidades (modulación suave)."""
-    sa = scale_pitches(*key_a)
-    sb = scale_pitches(*key_b)
-    common = sa & sb
-    if not common:
-        # recurrir a tónica de B como pivote forzado
-        return triad_pcs(key_b[0], "major" if key_b[1]=="major" else "minor")
-    # preferir tónica/dominante de A o B
-    prefs = [key_a[0], (key_a[0]+7)%12, key_b[0], (key_b[0]+7)%12]
-    q = "major" if key_a[1] == "major" else "minor"
-    for pref in prefs:
-        if pref in common:
-            return triad_pcs(pref, q)
-    r = sorted(common)[0]
-    return triad_pcs(r, q)
-
-
-def find_structural_points(section: Section, strength: float) -> List[float]:
-    """
-    Puntos estructurales para inyectar el motivo: inicio, final, límites de
-    frase (silencios en la melodía) y cadencias cada 4 compases.
-    """
-    bpb = section.beats_per_bar
-    total = section.n_bars * bpb
-    if total <= 0:
-        return []
-    pts = {0.0}
-    motif_len = sum(section.motif_durations) if section.motif_durations else 1.0
-    pts.add(max(0.0, total - motif_len - 0.5))
-    mel = sorted([n for n in section.notes
-                  if n.track == section.melody_track and n.channel == section.melody_channel],
-                 key=lambda n: n.start)
-    # límites de frase: silencios > medio compás en la melodía
-    for i in range(1, len(mel)):
-        gap = mel[i].start - (mel[i-1].start + mel[i-1].dur)
-        if gap > bpb * 0.5:
-            pts.add(mel[i].start)
-    # cadencias: inicio de cada 4 compases
-    for bar in range(0, section.n_bars, 4):
-        pts.add(bar * bpb)
-    pts = sorted(p for p in pts if 0.0 <= p <= total)
-    # limitar por strength
-    n_inj = max(1, int(round(strength * 5)))
-    if len(pts) > n_inj:
-        step = len(pts) / n_inj
-        pts = [pts[int(i*step)] for i in range(n_inj)]
-    return pts
-
-
-def apply_rhythm_glue(notes: List[Note], grid: float, strength: float) -> List[Note]:
-    """
-    Cuantización suave: acerca los onsets cercanos a la rejilla (grid en beats)
-    proporcionalmente a strength. 0 = intacto, 1 = snap total dentro de tolerancia.
-    No mueve notas lejanas a la rejilla (conserva síncopas intencionadas).
-    """
-    if strength <= 0.05 or grid <= 0:
-        return notes
-    tol = 0.18 * strength
-    out = []
-    for n in notes:
-        start = n.start
-        nearest = round(start / grid) * grid
-        if abs(start - nearest) <= tol:
-            start = nearest
-        out.append(Note(n.pitch, start, n.dur, n.velocity, n.channel, n.track))
-    return out
-
-
-def snap_to_scale(notes: List[Note], scale_pcs: set, channel: int) -> List[Note]:
-    """Nudge notas fuera de escala al tono de escala más cercano (canal dado)."""
-    if not scale_pcs:
-        return notes
-    out = []
-    for n in notes:
-        if n.channel == channel and (n.pitch % 12) not in scale_pcs:
-            best = None
-            for d in (-1, 1, -2, 2):
-                p = n.pitch + d
-                if 0 <= p <= 127 and (p % 12) in scale_pcs:
-                    if best is None or abs(d) < abs(best):
-                        best = d
-            if best is not None:
-                n = Note(n.pitch + best, n.start, n.dur, n.velocity, n.channel, n.track)
-        out.append(n)
-    return out
-
-
-def validate_and_fix(notes: List[Note]) -> List[Note]:
-    """Elimina duplicados exactos, fija rango/velocity/dur inválidos."""
-    seen = set()
-    cleaned = []
-    for n in notes:
-        key = (n.pitch, round(n.start, 3), n.channel)
-        if key in seen:
-            continue
-        seen.add(key)
-        if n.pitch < 0: n.pitch = 0
-        if n.pitch > 127: n.pitch = 127
-        if n.velocity < 1: n.velocity = 1
-        if n.velocity > 127: n.velocity = 127
-        if n.dur <= 0: n.dur = 0.1
-        cleaned.append(n)
-    return cleaned
-
-
-def humanize(notes: List[Note], seed: int):
-    """Micro-timing + variación de velocity sutil (no destructivo)."""
-    rng = random.Random(seed)
-    for n in notes:
-        n.start += rng.uniform(-0.012, 0.012)
-        n.velocity = max(20, min(125, n.velocity + rng.randint(-6, 6)))
-
-
-def add_final_rit(tempo_map: List[Tuple[float,float,Tuple[int,int]]], total_beats: float):
-    """Añade un ritardando final al tempo_map (85% y 95% de la obra)."""
-    if not tempo_map or total_beats <= 0:
-        return
-    last_tempo = tempo_map[-1][1]
-    last_ts = tempo_map[-1][2]
-    r1 = total_beats * 0.85
-    r2 = total_beats * 0.95
-    tempo_map.append((r1, last_tempo * 0.85, last_ts))
-    tempo_map.append((r2, last_tempo * 0.70, last_ts))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Transformaciones (glue)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def transpose_notes(notes: List[Note], semis: int) -> List[Note]:
-    if semis == 0:
-        return [Note(n.pitch, n.start, n.dur, n.velocity, n.channel, n.track) for n in notes]
-    out = []
-    for n in notes:
-        p = n.pitch + semis
-        if 0 <= p <= 127:
-            out.append(Note(p, n.start, n.dur, n.velocity, n.channel, n.track))
-    return out
-
-
-def remap_instruments(section: Section, template: Dict[str,int], strength: float) -> Dict[int,int]:
-    """
-    Remapea programas al template. Devuelve dict canal->program para la salida.
-    La fuerza controla si se aplica (>=0.5) o se conservan originales.
-    """
-    out = {}
-    if strength >= 0.5:
-        for (tr, ch), role in section.role_map.items():
-            prog = template.get(role, template.get("harmony", 0))
-            out[ch] = prog
-        # canales sin rol asignado -> harmony
-        for ch in section.programs:
-            if ch not in out:
-                out[ch] = template.get("harmony", 0)
-    else:
-        out = dict(section.programs)
-    return out
-
-
-def motif_transform(intervals: List[int], durs: List[float], kind: str) -> Tuple[List[int], List[float]]:
+def motif_transform(intervals: list, durs: list, kind: str):
+    # ── copiada de unifier_external.py ──
     if not intervals:
         return [], []
-    if kind == "original":
-        return list(intervals), list(durs)
     if kind == "retrograde":
         return list(reversed(intervals)), list(reversed(durs))
     if kind == "inversion":
@@ -1047,344 +442,325 @@ def motif_transform(intervals: List[int], durs: List[float], kind: str) -> Tuple
     return list(intervals), list(durs)
 
 
-def realize_motif(intervals: List[int], durs: List[float], start_pitch: int,
-                  start_beat: float, channel: int) -> List[Note]:
-    """Convierte intervalos+duraciones en notas absolutas desde start_pitch."""
-    notes = []
-    p = start_pitch
-    t = start_beat
-    for i, iv in enumerate(intervals):
-        d = durs[i] if i < len(durs) else durs[-1] if durs else 0.5
-        notes.append(Note(p, t, d * 0.9, 70, channel, 0))
-        p = max(0, min(127, p + iv))
-        t += d
-    return notes
+# ══════════════════════════════════════════════════════════════════════════════
+#  [1] ANÁLISIS DE FRAGMENTOS
+# ══════════════════════════════════════════════════════════════════════════════
+#  Representación de nota:  [t_on, note, vel, dur]   (ticks normalizados a 480)
+#  Un fragmento agrupa streams por (track, channel) y les asigna rol.
 
+class Fragment:
+    def __init__(self, path):
+        self.path = path
+        self.name = os.path.splitext(os.path.basename(path))[0]
+        self.streams = {}        # (trk, ch) -> {"notes": [...], "program": int|None}
+        self.roles = {}          # (trk, ch) -> "melodia"|"bajo"|"armonia"|"contrapunto"|"percusion"
+        self.key = "C major"
+        self.tempo_bpm = 120.0
+        self.bars = 0
+        self.bar_ticks = TPB * 4
+        self.tension = 0.5
+        self.transpose = 0       # decidido en el plan tonal
+        self.vel_mean = 64.0
+        self.motif = None        # solo el ancla: [(pitch, onset_rel, dur, vel_rel)]
+        self.emotion = None      # emocional indicada o deducida (de v1.1)
+        self.target_key = None    # tonalidad destino (plan por emoción)
+        self.motif_notes = []     # siembras (rol "motifo")
 
-def scale_pitches(key_pc: int, mode: str) -> set:
-    if mode == "minor":
-        intervals = {0,2,3,5,7,8,10}
-    else:
-        intervals = {0,2,4,5,7,9,11}
-    return {(key_pc + i) % 12 for i in intervals}
+    # ---- carga -------------------------------------------------------------
 
+    def load(self):
+        mid = MidiFile(self.path)
+        src_tpb = mid.ticks_per_beat or 480
+        k = TPB / src_tpb                       # factor de normalización de ticks
+        ts_num, ts_den = 4, 4
+        max_tick = 0
 
-def inject_motif(section: Section, motif_intervals: List[int], motif_durs: List[float],
-                 first_pitch: int, strength: float, channel: int = 15) -> List[Note]:
-    """
-    Inyecta el motivo (transformado) en puntos estructurales reales: inicio,
-    final, límites de frase (silencios) y cadencias. Cada realización se ajusta
-    a la armonía local del compás y a la escala destino, a velocity baja como
-    hilo. (Mejora v1.1: puntos estructurales + ajuste armónico.)
-    """
-    if strength <= 0.05 or not motif_intervals:
-        return []
-    bpb = section.beats_per_bar
-    total = section.n_bars * bpb
-    if total <= 0:
-        return []
-    points = find_structural_points(section, strength)
-    kinds = ["original", "inversion", "retrograde", "augmentation", "original"]
-    out = []
-    shift = section.transpose_semis
-    base_pitch = first_pitch + shift
-    sc = scale_pitches(section.target_key_pc, section.target_mode)
-    root_pc = section.target_key_pc
-    chord_tones = {root_pc,
-                   (root_pc + (3 if section.target_mode == "minor" else 4)) % 12,
-                   (root_pc + 7) % 12}
-    for i, pt in enumerate(points):
-        if pt < 0 or pt > total:
-            continue
-        kind = kinds[i % len(kinds)]
-        ivs, durs = motif_transform(motif_intervals, motif_durs, kind)
-        # acorde local del compás donde cae la inyección
-        bar = int(pt / bpb)
-        local = chord_pcs_at_bar(section, bar) or chord_tones
-        # ajustar primera nota a tono del acorde local
-        candidate = base_pitch
-        while candidate % 12 not in local and candidate < 120:
-            candidate += 1
-        vel = int(50 + 25 * strength)
-        notes = realize_motif(ivs, durs, candidate, pt, channel)
-        # snap a escala (evita choques disonantes) y ajusta velocity
-        notes = snap_to_scale(notes, sc, channel)
-        for n in notes:
-            n.velocity = vel
-            # recortar notas que exceden el final de la sección
-            if n.start >= total:
-                n.dur = max(0.1, total - n.start)
-        # descartar notas que caen fuera
-        notes = [n for n in notes if n.start < total]
-        out.extend(notes)
-    return out
+        for ti, track in enumerate(mid.tracks):
+            t = 0
+            pending = {}                        # (ch,note) -> (t_on, vel)
+            for msg in track:
+                t += msg.time
+                if msg.type == "set_tempo" and self.tempo_bpm == 120.0:
+                    self.tempo_bpm = round(60_000_000 / msg.tempo, 1)
+                elif msg.type == "time_signature":
+                    ts_num, ts_den = msg.numerator, msg.denominator
+                elif msg.type == "program_change":
+                    st = self.streams.setdefault(
+                        (ti, msg.channel), {"notes": [], "program": None})
+                    if st["program"] is None:
+                        st["program"] = msg.program
+                elif msg.type == "note_on" and msg.velocity > 0:
+                    pending[(msg.channel, msg.note)] = (t, msg.velocity)
+                elif msg.type == "note_off" or (msg.type == "note_on"
+                                                and msg.velocity == 0):
+                    key = (msg.channel, msg.note)
+                    if key in pending:
+                        t_on, vel = pending.pop(key)
+                        st = self.streams.setdefault(
+                            (ti, msg.channel), {"notes": [], "program": None})
+                        st["notes"].append([int(round(t_on * k)), msg.note, vel,
+                                            max(1, int(round((t - t_on) * k)))])
+                        max_tick = max(max_tick, int(round(t * k)))
 
+        self.streams = {sid: st for sid, st in self.streams.items()
+                        if st["notes"]}
+        if not self.streams:
+            sys.exit(f"[unifier] {self.path}: no contiene notas.")
+        for st in self.streams.values():
+            st["notes"].sort()
 
-def nudge_harmony(section: Section, notes: List[Note], strength: float) -> List[Note]:
-    """
-    Reharmonización conservadora con conducción de voces: en compases cuyo
-    acorde es no diatónico, sustituye la armonía por un acorde diatónico que
-    encaje con la melodía, manteniendo tonos comunes entre compases contiguos
-    para un movimiento suave. (Mejora v1.1: voice leading.)
-    """
-    if strength < 0.5 or not notes:
-        return notes
-    sc = scale_pitches(section.target_key_pc, section.target_mode)
-    bpb = section.beats_per_bar
-    mel_tc = (section.melody_track, section.melody_channel)
-    harmony_tcs = {tc for tc, r in section.role_map.items() if r == "harmony"}
-    if not harmony_tcs:
-        return notes
-    n_bars = section.n_bars
-    bars = [[] for _ in range(n_bars)]
-    for n in notes:
-        b = int(n.start / bpb)
-        if 0 <= b < n_bars:
-            bars[b].append(n)
-    new_notes: List[Note] = []
-    prev_voices: List[int] = []
-    # voces de armonía de referencia (canal del primer harmony_tc)
-    ref_ch = next(iter(harmony_tcs))[1]
-    for b, bar in enumerate(bars):
-        mel_pcs = {n.pitch % 12 for n in bar if (n.track, n.channel) == mel_tc}
-        harm = [n for n in bar if (n.track, n.channel) in harmony_tcs]
-        chord_pc, q = section.chords[b] if b < len(section.chords) else (0, "none")
-        chord_pc = (chord_pc + section.transpose_semis) % 12
-        nondiatonic = chord_pc not in sc
-        if nondiatonic and harm:
-            # elegir acorde diatónico que mejor encaje con la melodía
-            candidates = []
-            for deg, shift in [("I", 0), ("IV", 5), ("V", 7),
-                               ("vi", 9 if section.target_mode == "major" else 9)]:
-                root = (section.target_key_pc + shift) % 12
-                if root not in sc:
-                    continue
-                third = 3 if (deg[0].islower() or section.target_mode == "minor") else 4
-                triad = {root, (root + third) % 12, (root + 7) % 12}
-                overlap = len(mel_pcs & triad)
-                # bonus si comparte tonos con la armonía previa (voice leading)
-                common_prev = sum(1 for v in prev_voices if (v % 12) in triad)
-                candidates.append((overlap * 2 + common_prev, root, third, triad))
-            if candidates:
-                candidates.sort(reverse=True)
-                _, root, third, triad = candidates[0]
-                # re-voice con conducción de voces desde prev_voices
-                center = int(np.mean([n.pitch for n in harm])) if harm else 55
-                voices = voice_lead_chord(triad, prev_voices, center=center, n_voices=min(3, len(harm)))
-                # distribuir las notas de armonía originales sobre las voces nuevas
-                replaced = []
-                harm_sorted = sorted(harm, key=lambda n: n.pitch)
-                for i, n in enumerate(harm_sorted):
-                    v = voices[i] if i < len(voices) else voices[-1]
-                    replaced.append(Note(v, n.start, n.dur, n.velocity, n.channel, n.track))
-                prev_voices = voices
-                new_notes.extend(replaced)
-                new_notes.extend([n for n in bar if (n.track, n.channel) not in harmony_tcs])
+        self.bar_ticks = int(TPB * ts_num * (4 / ts_den))
+        self.bars = max(1, math.ceil(max_tick / self.bar_ticks))
+        self._analyze()
+        return self
+
+    # ---- análisis ------------------------------------------------------------
+
+    def _pitched_streams(self):
+        return {sid: st for sid, st in self.streams.items() if sid[1] != 9}
+
+    def _analyze(self):
+        pitched = self._pitched_streams()
+        all_pitches = [n[1] for st in pitched.values() for n in st["notes"]]
+        all_vels = [n[2] for st in self.streams.values() for n in st["notes"]]
+        self.key = detect_key_notes(all_pitches) if all_pitches else "C major"
+        self.vel_mean = float(np.mean(all_vels)) if all_vels else 64.0
+        self.register = float(np.mean(all_pitches)) if all_pitches else 60.0
+        self.density = (len(all_pitches) / max(1, self.bars)) if all_pitches else 0.0
+        self.tension = self._estimate_tension()
+        self._detect_roles()
+        self.chords = self._chords_per_bar()
+        # deducción de emoción si no se indicó (de v1.1)
+        if self.emotion is None:
+            self.emotion = self._deduce_emotion()
+
+    def _deduce_emotion(self) -> str:
+        """Heurística de emoción a partir de modo, tempo, registro, densidad,
+        disonancia (de v1.1, adaptada a Fragment)."""
+        minor = "minor" in self.key
+        tempo = self.tempo_bpm
+        reg = getattr(self, "register", 60.0)
+        dens = getattr(self, "density", 0.0)
+        nondia = sum(1 for r, q in self.chords
+                     if q not in ("major", "minor", "none")) / max(1, len(self.chords))
+        scores = {}
+        for e in EMOTIONS:
+            s = 0.0
+            if minor:
+                if e in ("melancolia", "fragilidad", "angustia", "tension"): s += 1.5
+                if e in ("triunfo", "esperanza"): s -= 0.5
+            else:
+                if e in ("triunfo", "esperanza", "calidez", "serenidad"): s += 1.0
+                if e in ("angustia", "melancolia"): s -= 0.5
+            if tempo < 80:
+                if e in ("melancolia", "fragilidad", "serenidad"): s += 1.0
+                if e in ("triunfo", "tension"): s -= 0.5
+            elif tempo > 120:
+                if e in ("triunfo", "tension", "esperanza"): s += 1.0
+                if e in ("serenidad", "fragilidad"): s -= 0.5
+            if reg > 72:
+                if e in ("triunfo", "esperanza", "tension"): s += 0.5
+            elif reg < 55:
+                if e in ("melancolia", "angustia", "fragilidad"): s += 0.5
+            if dens > 6:
+                if e in ("tension", "angustia", "triunfo"): s += 0.5
+            elif dens < 2:
+                if e in ("fragilidad", "serenidad"): s += 0.5
+            if nondia > 0.3:
+                if e in ("tension", "angustia"): s += 0.5
+            scores[e] = s
+        return max(scores.items(), key=lambda kv: kv[1])[0]
+
+    def _chords_per_bar(self):
+        """(root_pc, quality) por compás, pcs ponderados por duración
+        (adaptado de unifier_external.chords_per_bar)."""
+        bars = [set() for _ in range(self.bars)]
+        weights = [{} for _ in range(self.bars)]
+        for sid, st in self.streams.items():
+            if sid[1] == 9:
                 continue
-        # mantener armonía original; actualizar prev_voices con sus pitches
-        if harm:
-            prev_voices = sorted(n.pitch for n in harm)[:4]
-        new_notes.extend(bar)
-    new_notes.sort(key=lambda n: (n.start, -n.pitch))
-    return new_notes
+            for n in st["notes"]:
+                b = min(n[0] // self.bar_ticks, self.bars - 1)
+                pc = n[1] % 12
+                weights[b][pc] = weights[b].get(pc, 0) + n[3]
+        out = []
+        for b in range(self.bars):
+            if not weights[b]:
+                out.append((0, "none"))
+                continue
+            top = sorted(weights[b], key=weights[b].get, reverse=True)[:4]
+            out.append(identify_chord(set(top)))
+        return out
+
+    def _estimate_tension(self) -> float:
+        # ── adaptada de mosaic_composer.estimate_tension ──
+        events = sorted((n[0], n[1]) for st in self.streams.values()
+                        for n in st["notes"])
+        if not events:
+            return 0.5
+        total_time = events[-1][0] + 1
+        all_pitches = [p for _, p in events]
+        chromatic_ratio = len(set(p % 12 for p in all_pitches)) / 12.0
+        density = min(1.0, len(events) / max(1, total_time / TPB) / 8)
+        return float(np.clip(0.4 * chromatic_ratio + 0.6 * density, 0, 1))
+
+    def _detect_roles(self):
+        # ── adaptada de orchestral_colorist.detect_roles a streams (trk,ch) ──
+        stats = {}
+        for sid, st in self.streams.items():
+            if sid[1] == 9:
+                self.roles[sid] = "percusion"
+                continue
+            ns = st["notes"]
+            mean_p = sum(n[1] for n in ns) / len(ns)
+            total = sum(n[3] for n in ns)
+            span = (max(n[0] + n[3] for n in ns) - min(n[0] for n in ns)) or 1
+            stats[sid] = (mean_p, total / span)      # (registro medio, polifonía)
+        rest = sorted(stats)
+        if len(rest) == 1:                            # una sola voz → melodía
+            self.roles[rest[0]] = "melodia"
+            return
+        if rest:
+            bass = min(rest, key=lambda s: stats[s][0])
+            self.roles[bass] = "bajo"
+            rest.remove(bass)
+        if rest:
+            mel = max(rest, key=lambda s: stats[s][0])
+            self.roles[mel] = "melodia"
+            rest.remove(mel)
+        if rest:
+            harm = max(rest, key=lambda s: stats[s][1])
+            self.roles[harm] = "armonia"
+            rest.remove(harm)
+        for s in rest:
+            self.roles[s] = "contrapunto"
+
+    # ---- accesos -------------------------------------------------------------
+
+    def melody_notes(self):
+        for sid, role in self.roles.items():
+            if role == "melodia":
+                return self.streams[sid]["notes"]
+        pitched = self._pitched_streams()
+        if pitched:
+            return next(iter(pitched.values()))["notes"]
+        return []
+
+    def role_program(self, role):
+        for sid, r in self.roles.items():
+            if r == role:
+                return self.streams[sid].get("program")
+        return None
+
+    def apply_transpose(self):
+        if self.transpose == 0:
+            return
+        for sid, st in self.streams.items():
+            if sid[1] == 9:
+                continue
+            for n in st["notes"]:
+                n[1] = int(np.clip(n[1] + self.transpose, 0, 127))
 
 
-def apply_arc_dynamics(notes: List[Note], arc: List[float], total_beats: float):
-    """Reescala velocities según un arco de tensión [0,1]."""
-    if not arc or not notes or total_beats <= 0:
-        return
-    for n in notes:
-        frac = min(1.0, n.start / total_beats)
-        idx = frac * (len(arc) - 1)
-        lo = int(idx)
-        hi = min(lo + 1, len(arc) - 1)
-        a = arc[lo] + (arc[hi] - arc[lo]) * (idx - lo)
-        # mapear tensión a velocity: base 60 + 50*tensión
-        base = 55 + 55 * a
-        n.velocity = max(20, min(120, int(base * (n.velocity / 90.0 if n.velocity else 0.8))))
+# ══════════════════════════════════════════════════════════════════════════════
+#  [2] PLAN TONAL — transposición mínima a la tonalidad global
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _minimal_shift(from_pc: int, to_pc: int) -> int:
+    """Desplazamiento en semitonos con valor absoluto mínimo (rango −6..+6)."""
+    d = (to_pc - from_pc) % 12
+    return d - 12 if d > 6 else d
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Puentes (bridges)
-# ─────────────────────────────────────────────────────────────────────────────
+def plan_tonal(fragments, target_key: str):
+    """Asigna .transpose a cada fragmento.
 
-def make_bridge(sec_a: Section, sec_b: Section, motif_intervals: List[int],
-                motif_durs: List[float], first_pitch: int, bridge_bars: int,
-                mode: str, channel: int = 15) -> Tuple[List[Note], float, Tuple[int,int], Dict[int,int]]:
+    Si el modo coincide: tónica del fragmento → tónica global.
+    Si difiere: se lleva a la RELATIVA de la tonalidad global (misma armadura,
+    escala compartida) para que conserve su color modal sin chocar.
     """
-    Puente coherente entre A y B (mejoras v1.1):
-      endA (último acorde de A, transportado) → pivote común a ambas
-      tonalidades → V7/B → startB (primer acorde de B, transportado).
-    Conducción de voces suave + bajo walking + motivo sobre el puente.
-    """
-    bpb = sec_b.beats_per_bar
-    dur = bridge_bars * bpb
-    tsig = sec_b.time_sig
-    key_a = (sec_a.target_key_pc, sec_a.target_mode)
-    key_b = (sec_b.target_key_pc, sec_b.target_mode)
-    # extremos reales (transportados al plan tonal)
-    endA_root = (sec_a.chords[-1][0] + sec_a.transpose_semis) % 12 if sec_a.chords else key_a[0]
-    endA_q = sec_a.chords[-1][1] if sec_a.chords else ("major" if key_a[1]=="major" else "minor")
-    endA = triad_pcs(endA_root, endA_q)
-    startB_root = (sec_b.chords[0][0] + sec_b.transpose_semis) % 12 if sec_b.chords else key_b[0]
-    startB_q = sec_b.chords[0][1] if sec_b.chords else ("major" if key_b[1]=="major" else "minor")
-    startB = triad_pcs(startB_root, startB_q)
-    pivot = find_pivot_chord(key_a, key_b) or startB
-    fifth_b = (key_b[0] + 7) % 12
-    v7_b = triad_pcs(fifth_b, "dom7")
-    # elegir root del pivote: pc del pivote más cercano a endA_root o a key_b[0]
-    pivot_root = min(pivot, key=lambda p: min(abs(p-endA_root)%12, abs(p-key_b[0])%12))
-    # secuencia de acordes: (beat_offset, pcs, bass_root)
-    if bridge_bars <= 1:
-        seq = [(0.0, v7_b, fifth_b), (bpb*0.5, startB, startB_root)]
+    t_root = key_to_midi_root(target_key)
+    t_minor = "minor" in target_key
+    decisions = []
+    for f in fragments:
+        f_root = key_to_midi_root(f.key)
+        f_minor = "minor" in f.key
+        if f_minor == t_minor:
+            goal_pc = t_root
+        elif f_minor:                       # fragmento menor, obra mayor → relativa menor
+            goal_pc = (t_root + 9) % 12
+        else:                               # fragmento mayor, obra menor → relativa mayor
+            goal_pc = (t_root + 3) % 12
+        f.transpose = _minimal_shift(f_root, goal_pc)
+        mode = "minor" if f_minor else "major"
+        decisions.append({
+            "fragment": f.name, "detected_key": f.key,
+            "target_pc": NOTE_NAMES[goal_pc] + (" minor" if f_minor else " major"),
+            "transpose": f.transpose,
+            "fifths_dist_before": _fifth_distance(f_root, t_root),
+        })
+        f.apply_transpose()
+    return decisions
+
+
+def plan_tonal_emotion(fragments, anchor, target_key):
+    """Plan tonal por emoción (de v1.1): cada sección viaja a una tónica
+    sesgada por su emoción respecto al hogar (del ancla o --key). El modo
+    se conserva salvo preferencia de emoción. Devuelve decisiones + fija
+    .target_key y .transpose en cada fragmento."""
+    if target_key:
+        home_pc = key_to_midi_root(target_key)
+        home_minor = "minor" in target_key
     else:
-        seq = [(0.0, endA, endA_root),
-               (bpb*0.5, pivot, pivot_root),
-               (bpb, v7_b, fifth_b),
-               (bpb*1.5, startB, startB_root)]
-    notes: List[Note] = []
-    programs = {0: 73, 2: 71, 3: 42, channel: 40}  # flauta, clarinete, cello, violín
-    prev_voices: List[int] = []
-    # realizar acordes con voice leading + bajo
-    for (off, pcs, bass_root) in seq:
-        dur_ch = min(bpb*0.48, bpb - (off % bpb) - 0.05)
-        if dur_ch <= 0:
-            dur_ch = bpb * 0.45
-        voices = voice_lead_chord(pcs, prev_voices, center=62, n_voices=3)
-        prev_voices = voices
-        for v in voices:
-            notes.append(Note(v, off, dur_ch, 65, 2, 0))
-        # bajo: raíz en registro grave, ligero walk hacia el siguiente
-        bass_pitch = 36 + (bass_root % 12)
-        notes.append(Note(bass_pitch, off, dur_ch, 78, 3, 0))
-    # motivo sobre el puente, transportado a la tonalidad destino B
-    if motif_intervals:
-        shift = (key_b[0] - sec_a.key_pc) % 12
-        if shift > 6:
-            shift -= 12
-        base = first_pitch + shift
-        while base % 12 not in startB and base < 120:
-            base += 1
-        mnotes = realize_motif(motif_intervals, motif_durs, base, 0.0, channel)
-        sc_b = scale_pitches(*key_b)
-        mnotes = snap_to_scale(mnotes, sc_b, channel)
-        for n in mnotes:
-            n.velocity = 72
-        mnotes = [n for n in mnotes if n.start < dur]
-        notes.extend(mnotes)
-    notes.sort(key=lambda n: (n.start, -n.pitch))
-    return notes, dur, tsig, programs
+        home_pc = key_to_midi_root(anchor.key)
+        home_minor = "minor" in anchor.key
+    decisions = []
+    for f in fragments:
+        bias = EMOTION_KEY_BIAS.get(f.emotion or "serenidad",
+                                    {"shift": 0, "mode": "same"})
+        target_pc = (home_pc + bias["shift"]) % 12
+        if bias["mode"] == "same":
+            target_mode = "minor" if "minor" in f.key else "major"
+        elif bias["mode"] == "major":
+            target_mode = "major"
+        else:
+            target_mode = "minor"
+        f.target_key = f"{NOTE_NAMES[target_pc]} {target_mode}"
+        f_root = key_to_midi_root(f.key)
+        shift = _minimal_shift(f_root, target_pc)
+        f.transpose = shift
+        f.apply_transpose()
+        decisions.append({
+            "fragment": f.name, "detected_key": f.key,
+            "emotion": f.emotion, "target_key": f.target_key,
+            "transpose": f.transpose, "plan": "emotion",
+        })
+    return decisions
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Modo glue
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Grados y progresiones para modo recombine (de v1.1, adaptados) ──
 
-def run_glue(sections, motif_iv, motif_durs, motif_first, template, glue, bridge_bars, bridge_mode, seed=1):
-    """Aplica adaptación por sección y concatena con puentes (mejoras v1.1).
-    Incluye glue rítmico, validación, humanización y ritardando final."""
-    output_notes = []
-    tempo_map = []
-    programs_out = {}
-    cur_beat = 0.0
-    motif_channel = 15
-    arc = build_arc(len(sections))
-    # rejilla rítmica de referencia: negra o corchea según compás
-    grid = 0.5  # corcheas
-
-    for i, s in enumerate(sections):
-        detect_roles(s)
-        # 1. transponer al plan tonal
-        adapted = transpose_notes(s.notes, s.transpose_semis)
-        # 2. glue rítmico (cuantización suave a la rejilla común)
-        if glue["rhythm"] > 0.05:
-            adapted = apply_rhythm_glue(adapted, grid, glue["rhythm"])
-        # 3. nudge armónico con voice leading
-        if glue["harmony"] >= 0.5:
-            adapted = nudge_harmony(s, adapted, glue["harmony"])
-        # 4. inyectar motivo en puntos estructurales
-        injected = inject_motif(s, motif_iv, motif_durs, motif_first,
-                                glue["motif"], channel=motif_channel)
-        # 5. reasignar instrumentos
-        progs = remap_instruments(s, template, glue["instrumentation"])
-        # 6. arco de dinámicas local
-        sec_total = s.n_bars * s.beats_per_bar
-        local_arc = arc[i:i+2] if i+1 < len(arc) else [arc[-1], arc[-1]]
-        local_arc_full = np.linspace(local_arc[0], local_arc[1], max(2, s.n_bars)).tolist()
-        apply_arc_dynamics(adapted, local_arc_full, sec_total)
-        apply_arc_dynamics(injected, local_arc_full, sec_total)
-        for n in adapted:
-            n.start += cur_beat
-            output_notes.append(n)
-        for n in injected:
-            n.start += cur_beat
-            output_notes.append(n)
-        tempo_map.append((cur_beat, s.tempo, s.time_sig))
-        for ch, p in progs.items():
-            programs_out.setdefault(ch, p)
-        programs_out[motif_channel] = template.get("melody", 0)
-        cur_beat += sec_total
-        # puente si no es la última
-        if i < len(sections) - 1:
-            bnotes, bdur, btsig, bprogs = make_bridge(
-                s, sections[i+1], motif_iv, motif_durs, motif_first,
-                bridge_bars, bridge_mode, channel=motif_channel)
-            for n in bnotes:
-                n.start += cur_beat
-                output_notes.append(n)
-            tempo_map.append((cur_beat, sections[i+1].tempo * 0.92, btsig))
-            for ch, p in bprogs.items():
-                programs_out.setdefault(ch, p)
-            cur_beat += bdur
-
-    # mejora 8: validación + humanización + ritardando final
-    output_notes = validate_and_fix(output_notes)
-    humanize(output_notes, seed)
-    add_final_rit(tempo_map, cur_beat)
-    return output_notes, tempo_map, programs_out
-
-
-def build_arc(n_sections: int) -> List[float]:
-    """Arco de tensión tipo 'arch' sobre las secciones."""
-    if n_sections <= 1:
-        return [0.5, 0.5]
-    arc = []
-    for i in range(n_sections):
-        frac = i / (n_sections - 1)
-        # parábola: sube hasta ~0.62 y baja
-        val = 0.2 + 0.7 * (1 - (2*frac - 0.62)**2 / 0.62**2) if n_sections > 1 else 0.5
-        arc.append(max(0.1, min(1.0, val)))
-    return arc
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Modo recombine
-# ─────────────────────────────────────────────────────────────────────────────
-
-def degree_to_pc(degree: str, key_pc: int, mode: str) -> int:
-    """Convierte grado romano a pitch class."""
-    scale = (list(range(0,12,2)) + [4,5,7,9,11]) if mode == "major" else \
-            [0,2,3,5,7,8,10]
-    # mapeo simple
-    mapping_major = {"I":0,"ii":2,"iii":4,"IV":5,"V":7,"vi":9,"vii":11}
-    mapping_minor = {"i":0,"ii":2,"III":3,"iv":5,"V":7,"VI":8,"VII":10,
-                     "iV":5,"III":3}
+def degree_to_root_pc(degree: str, key_pc: int, mode: str) -> int:
+    """Convierte grado romano a pitch class de raíz."""
+    mapping_major = {"I": 0, "ii": 2, "iii": 4, "IV": 5, "V": 7,
+                     "vi": 9, "vii": 11}
+    mapping_minor = {"i": 0, "ii": 2, "III": 3, "iv": 5, "V": 7,
+                     "VI": 8, "VII": 10}
     m = mapping_major if mode == "major" else mapping_minor
     base = m.get(degree, 0)
     return (key_pc + base) % 12
 
 
 def triad_for_degree(degree: str, key_pc: int, mode: str) -> set:
-    root = degree_to_pc(degree, key_pc, mode)
-    # calidad: menor si grado en minúscula
+    root = degree_to_root_pc(degree, key_pc, mode)
     is_minor = degree[0].islower()
     third = 3 if is_minor else 4
-    return {root, (root+third)%12, (root+7)%12}
+    return {root, (root + third) % 12, (root + 7) % 12}
 
 
-def _pattern_for(emotion: str, mode: str, beats_per_bar: float) -> str:
-    """Elige un patrón de acompañamiento según emoción/modo/compás."""
-    if beats_per_bar == 3.0 or (beats_per_bar - 3.0) < 0.1:
+def _pattern_for(emotion: str, bar_ticks: int) -> str:
+    """Elige un patrón de acompañamiento según emoción y compás."""
+    if abs(bar_ticks - TPB * 3) < TPB * 0.2:
         return "waltz"
     if emotion in ("tension", "angustia"):
         return "walking"
@@ -1395,420 +771,1201 @@ def _pattern_for(emotion: str, mode: str, beats_per_bar: float) -> str:
     return "block"
 
 
-def _pattern_notes(pattern: str, triad_set: set, root: int, bar_start: float,
-                   bpb: float, channel: int, vel: int) -> List[Note]:
-    """Realiza un patrón de acompañamiento para un compás."""
+def _pattern_notes(pattern: str, triad_set: set, root: int, bar_start: int,
+                   bar_ticks: int, channel: int, vel: int):
+    """Realiza un patrón de acompañamiento para un compás (de v1.1, adaptado
+    a ticks). Devuelve lista de [t_on, pitch, vel, dur]."""
     tones = sorted(triad_set)[:3]
     if not tones:
         return []
-    out: List[Note] = []
+    out = []
     if pattern == "block":
         for pc in tones:
-            out.append(Note(52 + pc, bar_start, bpb * 0.92, vel, channel, 0))
+            out.append([bar_start, 52 + pc, vel, int(bar_ticks * 0.92)])
     elif pattern == "alberti":
-        seq = [tones[1], tones[0], tones[2], tones[0]] * 2  # 8 corcheas
-        step = bpb / 8.0
+        seq = [tones[1], tones[0], tones[2], tones[0]] * 2
+        step = bar_ticks / 8
         for i, pc in enumerate(seq):
-            out.append(Note(52 + pc, bar_start + i * step, step * 0.9, vel, channel, 0))
+            out.append([bar_start + int(i * step), 52 + pc, vel, int(step * 0.9)])
     elif pattern == "arpeggio":
         seq = [tones[0], tones[1], tones[2], tones[1]]
-        step = bpb / 4.0
+        step = bar_ticks / 4
         for i, pc in enumerate(seq):
-            out.append(Note(48 + pc, bar_start + i * step, step * 0.9, vel, channel, 0))
+            out.append([bar_start + int(i * step), 48 + pc, vel, int(step * 0.9)])
     elif pattern == "walking":
         seq = [root % 12, tones[0], tones[-1], (root + 2) % 12]
-        step = bpb / 4.0
+        step = bar_ticks / 4
         for i, pc in enumerate(seq):
-            out.append(Note(40 + pc, bar_start + i * step, step * 0.9, vel, channel, 0))
+            out.append([bar_start + int(i * step), 40 + pc, vel, int(step * 0.9)])
     elif pattern == "waltz":
-        out.append(Note(40 + (root % 12), bar_start, bpb * 0.9, vel, channel, 0))
+        out.append([bar_start, 40 + (root % 12), vel, int(bar_ticks * 0.9)])
         for pc in tones:
-            out.append(Note(52 + pc, bar_start + bpb / 3.0, bpb * 0.30, vel, channel, 0))
+            out.append([bar_start + bar_ticks // 3, 52 + pc, vel,
+                        int(bar_ticks * 0.30)])
     else:
         for pc in tones:
-            out.append(Note(52 + pc, bar_start, bpb * 0.92, vel, channel, 0))
+            out.append([bar_start, 52 + pc, vel, int(bar_ticks * 0.92)])
     return out
 
 
-def run_recombine(sections, motif_iv, motif_durs, motif_first, template,
-                  glue, bridge_bars, bars_per_section, seed=1):
-    """Genera una obra nueva coherente (mejoras v1.1):
-    patrón de acompañamiento por emoción + contrapunto derivado del motivo +
-    conducción de voces entre compases."""
-    output_notes = []
-    tempo_map = []
-    programs_out = {0: template.get("melody", 0),
-                    1: template.get("counter", 0),
-                    2: template.get("harmony", 0),
-                    3: template.get("bass", 0)}
-    cur_beat = 0.0
-    arc = build_arc(len(sections))
+# ══════════════════════════════════════════════════════════════════════════════
+#  [3] PLAN DE TEMPO
+# ══════════════════════════════════════════════════════════════════════════════
 
-    for i, s in enumerate(sections):
-        bpb = s.beats_per_bar
+def plan_tempo(fragments, target_bpm, blend: float):
+    """Tempo diana global; cada fragmento suena a
+    target*(1-blend) + propio*blend  (blend=0 → tempo único)."""
+    if target_bpm is None:
+        weighted = [(f.tempo_bpm, f.bars) for f in fragments]
+        seq = sorted(t for t, b in weighted for _ in range(b))
+        target_bpm = seq[len(seq) // 2] if seq else 120.0
+    plan = []
+    for f in fragments:
+        bpm = target_bpm * (1 - blend) + f.tempo_bpm * blend
+        plan.append(round(bpm, 1))
+    return round(target_bpm, 1), plan
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  [4] EXTRACCIÓN DEL MOTIVO ANCLA
+# ══════════════════════════════════════════════════════════════════════════════
+
+def extract_motif_ngram(frag, motif_seed_path=None, verbose=False):
+    """Motivo como (intervalos, duraciones_en_beats, primer_pitch, saliencia).
+    Busca la subsecuencia de intervalos exactamente repetida más saliente
+    (repeticiones × longitud × distintividad) — adaptado de
+    unifier_external.find_motif. Con --motif-seed usa un MIDI externo."""
+    if motif_seed_path:
+        seed = Fragment(motif_seed_path).load()
+        mel = seed.melody_notes()
+    else:
+        mel = frag.melody_notes()
+    if len(mel) < 4:
+        return None
+    pitches = [n[1] for n in mel]
+    durs_b = [n[3] / TPB for n in mel]
+    intervals = [pitches[i + 1] - pitches[i] for i in range(len(pitches) - 1)]
+
+    best = None
+    for L in range(3, min(8, len(intervals))):
+        counts = {}
+        for i in range(len(intervals) - L + 1):
+            counts.setdefault(tuple(intervals[i:i + L]), []).append(i)
+        for key, idxs in counts.items():
+            if len(idxs) >= 2:
+                nonzero = sum(1 for x in key if x != 0)
+                distinct = 1.0 if nonzero >= 1 else 0.4
+                sal = len(idxs) * L * distinct
+                if best is None or sal > best[0]:
+                    best = (sal, L, key, idxs[0])
+    if best is None:                                  # sin repetición exacta
+        L = min(5, len(intervals))
+        best = (1.0, L, tuple(intervals[:L]), 0)
+    sal, L, key, idx = best
+    motif = {"intervals": list(key),
+             "durs": durs_b[idx:idx + L + 1][:L],
+             "first_pitch": pitches[idx],
+             "salience": sal}
+    if not motif["durs"]:
+        motif["durs"] = [0.5] * L
+    if verbose:
+        src_name = os.path.basename(motif_seed_path) if motif_seed_path \
+            else frag.name
+        print(f"    motivo ({L} intervalos, saliencia {sal:.1f}, "
+              f"de {src_name}): {motif['intervals']}")
+    return motif
+
+
+def realize_motif_notes(intervals, durs, start_pitch, start_tick, scale,
+                        vel):
+    """Intervalos+duraciones(beats) → notas [t, pitch, vel, dur] en ticks.
+    Solo la nota INICIAL se ajusta a la escala global; después los intervalos
+    se aplican EXACTOS para preservar la identidad del motivo (si se ajustara
+    cada nota, el snap deformaría los intervalos y el hilo dejaría de ser
+    reconocible — y de contar en el score)."""
+    notes = []
+    p = _snap_to_scale(int(np.clip(start_pitch, 21, 108)), scale)
+    t = start_tick
+    for i, iv in enumerate(intervals):
+        d = durs[i] if i < len(durs) else (durs[-1] if durs else 0.5)
+        dt = max(60, int(d * TPB))
+        notes.append([int(t), int(np.clip(p, 21, 108)), vel, int(dt * 0.9)])
+        p += iv
+        t += dt
+    return notes
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  [5a] SIEMBRA MOTÍVICA
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _structural_points(frag, strength):
+    """Puntos de siembra: inicio, final, límites de frase (silencios en la
+    melodía > medio compás) y cada 4 compases — adaptado de
+    unifier_external.find_structural_points. Devuelve ticks."""
+    total = frag.bars * frag.bar_ticks
+    pts = {0}
+    mel = frag.melody_notes()
+    for i in range(1, len(mel)):
+        gap = mel[i][0] - (mel[i - 1][0] + mel[i - 1][3])
+        if gap > frag.bar_ticks * 0.5:
+            pts.add(mel[i][0])
+    for bar in range(0, frag.bars, 4):
+        pts.add(bar * frag.bar_ticks)
+    pts.add(max(0, total - 2 * frag.bar_ticks))
+    pts = sorted(p for p in pts if 0 <= p < total)
+    n_inj = max(1, int(round(strength * frag.bars / 6)))
+    if len(pts) > n_inj:
+        step = len(pts) / n_inj
+        pts = [pts[int(i * step)] for i in range(n_inj)]
+    return pts
+
+
+TRANSFORM_CYCLE = ["original", "inversion", "retrograde", "augmentation"]
+
+
+def seed_motif(frag, motif, scale, strength, rng, verbose=False):
+    """Siembra el motivo ancla TRANSFORMADO en puntos estructurales del
+    fragmento, primer pitch alineado al acorde local y al registro melódico.
+    Las notas van al rol 'motivo' (pista propia)."""
+    if not motif or strength <= 0.05:
+        return 0
+    pts = _structural_points(frag, strength)
+    mel = frag.melody_notes()
+    mel_mean = int(np.mean([n[1] for n in mel])) if mel else 72
+    frag.motif_notes = getattr(frag, "motif_notes", [])
+    injected, bars_used = 0, []
+    for i, pt in enumerate(pts):
+        kind = TRANSFORM_CYCLE[i % len(TRANSFORM_CYCLE)]
+        ivs, durs = motif_transform(motif["intervals"], motif["durs"], kind)
+        bar = min(pt // frag.bar_ticks, frag.bars - 1)
+        root, q = frag.chords[bar] if bar < len(frag.chords) else (0, "none")
+        local = triad_pcs((root + frag.transpose) % 12, q) \
+            if q != "none" else {p % 12 for p in scale}
+        base = motif["first_pitch"]
+        base += int(round((mel_mean - base) / 12.0)) * 12    # octavas al registro
+        guard = 0
+        while base % 12 not in local and guard < 12:         # tono del acorde
+            base += 1
+            guard += 1
+        vel = int(np.clip(frag.vel_mean * (0.55 + 0.3 * strength), 25, 100))
+        frag.motif_notes.extend(
+            realize_motif_notes(ivs, durs, base, pt, scale, vel))
+        injected += 1
+        bars_used.append(bar + 1)
+    if verbose and injected:
+        print(f"    {frag.name}: motivo × {injected} "
+              f"(compases {sorted(set(bars_used))})")
+    return injected
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  [5b] ATRACCIÓN RÍTMICA HACIA EL GROOVE DEL ANCLA
+# ══════════════════════════════════════════════════════════════════════════════
+
+def rhythm_grid(frag, subdivisions=16):
+    """Histograma de ataques por subdivisión de compás, ponderado por
+    velocidad (idea del rhythm_grid de midi_dna_unified, versión compacta)."""
+    grid = np.zeros(subdivisions)
+    sub_ticks = frag.bar_ticks / subdivisions
+    for st in frag.streams.values():
+        for n in st["notes"]:
+            slot = int((n[0] % frag.bar_ticks) / sub_ticks) % subdivisions
+            grid[slot] += n[2]
+    if grid.max() > 0:
+        grid /= grid.max()
+    return grid
+
+
+def attract_rhythm(frag, anchor_grid, strength, subdivisions=16):
+    """Mueve suavemente cada ataque hacia la casilla fuerte más próxima del
+    groove ancla. Movimiento acotado a media subdivisión: nunca destruye el
+    ritmo original, solo lo 'imanta'."""
+    if strength <= 0:
+        return 0
+    sub_ticks = frag.bar_ticks / subdivisions
+    strong = {i for i, w in enumerate(anchor_grid) if w >= 0.35}
+    if not strong:
+        return 0
+    moved = 0
+    for sid, st in frag.streams.items():
+        if frag.roles.get(sid) == "percusion":
+            continue
+        for n in st["notes"]:
+            in_bar = n[0] % frag.bar_ticks
+            slot_f = in_bar / sub_ticks
+            nearest = min(strong, key=lambda s: min(abs(slot_f - s),
+                                                    subdivisions - abs(slot_f - s)))
+            delta_slots = nearest - slot_f
+            if delta_slots > subdivisions / 2:
+                delta_slots -= subdivisions
+            elif delta_slots < -subdivisions / 2:
+                delta_slots += subdivisions
+            delta = delta_slots * sub_ticks
+            if 0 < abs(delta) <= sub_ticks * 0.5:     # solo ajustes finos
+                n[0] = max(0, int(n[0] + delta * strength))
+                moved += 1
+        st["notes"].sort()
+    return moved
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  [5c] NUDGE ARMÓNICO CON CONDUCCIÓN DE VOCES   (adaptado de
+#  unifier_external.nudge_harmony a la representación por streams)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def nudge_harmony(frag, target_key, strength, verbose=False):
+    """En compases cuyo acorde (ya transportado) es no diatónico en la
+    tonalidad global, re-voicea las notas del rol armonía hacia el acorde
+    diatónico que mejor encaja con la melodía, manteniendo tonos comunes
+    entre compases contiguos (conducción de voces)."""
+    if strength < 0.5:
+        return 0
+    sc = scale_pcs_set(target_key)
+    key_pc = key_to_midi_root(target_key)
+    minor = "minor" in target_key
+    harm_sids = [sid for sid, r in frag.roles.items() if r == "armonia"]
+    if not harm_sids:
+        return 0
+    mel = frag.melody_notes()
+    changed = 0
+    prev_voices = []
+    for b in range(frag.bars):
+        t0, t1 = b * frag.bar_ticks, (b + 1) * frag.bar_ticks
+        root, q = frag.chords[b] if b < len(frag.chords) else (0, "none")
+        if q == "none":
+            continue
+        root_t = (root + frag.transpose) % 12
+        if root_t in sc:                                  # ya diatónico
+            harm_now = [n for sid in harm_sids
+                        for n in frag.streams[sid]["notes"]
+                        if t0 <= n[0] < t1]
+            if harm_now:
+                prev_voices = sorted(n[1] for n in harm_now)[:4]
+            continue
+        mel_pcs = {n[1] % 12 for n in mel if t0 <= n[0] < t1}
+        candidates = []
+        for shift in (0, 5, 7, 9 if not minor else 8):    # I IV V vi/VI
+            r = (key_pc + shift) % 12
+            if r not in sc:
+                continue
+            third = 3 if (r + 3) % 12 in sc else 4
+            triad = {r, (r + third) % 12, (r + 7) % 12}
+            common_prev = sum(1 for v in prev_voices if (v % 12) in triad)
+            candidates.append((len(mel_pcs & triad) * 2 + common_prev,
+                               triad))
+        if not candidates:
+            continue
+        candidates.sort(key=lambda c: c[0], reverse=True)
+        triad = candidates[0][1]
+        for sid in harm_sids:
+            bar_notes = [n for n in frag.streams[sid]["notes"]
+                         if t0 <= n[0] < t1]
+            if not bar_notes:
+                continue
+            center = int(np.mean([n[1] for n in bar_notes]))
+            voices = voice_lead_chord(triad, prev_voices, center=center,
+                                      n_voices=min(3, len(bar_notes)))
+            for i, n in enumerate(sorted(bar_notes, key=lambda x: x[1])):
+                if voices:
+                    n[1] = voices[min(i, len(voices) - 1)]
+                    changed += 1
+            prev_voices = voices or prev_voices
+    if verbose and changed:
+        print(f"    {frag.name}: {changed} notas de armonía re-voiceadas")
+    return changed
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  [5d] NIVELES DINÁMICOS ENTRE FRAGMENTOS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def unify_levels(fragments):
+    """Reescala las velocidades de cada fragmento hacia la media global para
+    que ningún ancla 'grite' sobre las demás (se conserva la dinámica interna)."""
+    global_mean = float(np.mean([f.vel_mean for f in fragments]))
+    for f in fragments:
+        ratio = global_mean / max(1.0, f.vel_mean)
+        ratio = float(np.clip(ratio, 0.7, 1.4))
+        if abs(ratio - 1) < 0.03:
+            continue
+        for st in f.streams.values():
+            for n in st["notes"]:
+                n[2] = int(np.clip(n[2] * ratio, 12, 120))
+    return global_mean
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  [6] PUENTES: pedal de dominante + carrera de conexión + crossfade
+# ══════════════════════════════════════════════════════════════════════════════
+
+def build_bridge(frag_a, frag_b, bars, scale, target_key, vel_ref,
+                 motif=None):
+    """Puente v2 (merge): secuencia armónica con conducción de voces
+      último acorde de A → acorde PIVOTE → V7 global → primer acorde de B
+    + bajo por raíces + declaración del motivo ancla en crescendo.
+    Devuelve dict rol → notas (ticks relativos al inicio del puente)."""
+    bar_ticks = TPB * 4
+    total = bars * bar_ticks
+    key_pc = key_to_midi_root(target_key)
+    out = {"melodia": [], "motivo": [], "bajo": [], "armonia": []}
+
+    # --- extremos reales, ya transportados ---------------------------------
+    if frag_a.chords and frag_a.chords[-1][1] != "none":
+        ra, qa = frag_a.chords[-1]
+        endA = triad_pcs((ra + frag_a.transpose) % 12, qa)
+        endA_root = (ra + frag_a.transpose) % 12
+    else:
+        endA = triad_pcs(key_pc, "minor" if "minor" in target_key else "major")
+        endA_root = key_pc
+    if frag_b.chords and frag_b.chords[0][1] != "none":
+        rb, qb = frag_b.chords[0]
+        startB = triad_pcs((rb + frag_b.transpose) % 12, qb)
+        startB_root = (rb + frag_b.transpose) % 12
+    else:
+        startB = triad_pcs(key_pc, "minor" if "minor" in target_key else "major")
+        startB_root = key_pc
+    # con tonalidad global única el "pivote" clásico degenera: usamos el
+    # PREDOMINANTE (IV/iv) como paso intermedio endA → IV → V7 → startB
+    minor = "minor" in target_key
+    pivot_root = (key_pc + 5) % 12
+    pivot = triad_pcs(pivot_root, "minor" if minor else "major")
+    dom_pc = (key_pc + 7) % 12
+    v7 = triad_pcs(dom_pc, "dom7")
+
+    # --- secuencia (offset_ticks, pcs, bass_root) ----------------------------
+    if bars <= 1:
+        seq = [(0, v7, dom_pc), (bar_ticks // 2, startB, startB_root)]
+    else:
+        half = bars * bar_ticks // 4
+        seq = [(0, endA, endA_root), (half, pivot, pivot_root),
+               (2 * half, v7, dom_pc), (3 * half, startB, startB_root)]
+
+    prev_voices = []
+    for si, (off, pcs, bass_root) in enumerate(seq):
+        seg = (seq[si + 1][0] - off) if si + 1 < len(seq) else (total - off)
+        cres = 0.6 + 0.35 * (off / max(1, total))
+        voices = voice_lead_chord(pcs, prev_voices, center=62, n_voices=3)
+        prev_voices = voices
+        for v in voices:
+            out["armonia"].append([off, int(np.clip(v, 40, 90)),
+                                   int(vel_ref * 0.55 * cres + 20),
+                                   max(60, seg - 30)])
+        bass = 36 + bass_root
+        while bass > 52:
+            bass -= 12
+        out["bajo"].append([off, bass, int(vel_ref * 0.7 * cres + 15),
+                            max(60, seg - 30)])
+
+    # --- motivo ancla encima, hacia el registro de la melodía de B ----------
+    if motif and motif["intervals"]:
+        mel_b = frag_b.melody_notes()
+        reg = int(np.mean([n[1] for n in mel_b])) if mel_b else 72
+        base = motif["first_pitch"]
+        base += int(round((reg - base) / 12.0)) * 12
+        guard = 0
+        while base % 12 not in startB and guard < 12:
+            base += 1
+            guard += 1
+        notes = realize_motif_notes(motif["intervals"], motif["durs"],
+                                    base, 0, scale, int(vel_ref * 0.8))
+        span = notes[-1][0] + notes[-1][3] if notes else 1
+        for k, n in enumerate(notes):                 # crescendo hacia B
+            n[2] = int(np.clip(n[2] * (0.7 + 0.5 * n[0] / max(1, span)),
+                               25, 115))
+            if n[0] < total:
+                out["motivo"].append(n)
+    return out
+
+
+def crossfade(frag_a, frag_b):
+    """Último compás de A en decrescendo, primer compás de B con entrada suave."""
+    last_start = (frag_a.bars - 1) * frag_a.bar_ticks
+    for st in frag_a.streams.values():
+        for n in st["notes"]:
+            if n[0] >= last_start:
+                pos = (n[0] - last_start) / frag_a.bar_ticks
+                n[2] = int(np.clip(n[2] * (1.0 - 0.3 * pos), 12, 127))
+    for st in frag_b.streams.values():
+        for n in st["notes"]:
+            if n[0] < frag_b.bar_ticks:
+                pos = n[0] / frag_b.bar_ticks
+                n[2] = int(np.clip(n[2] * (0.8 + 0.2 * pos), 12, 127))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  [6b] MODO RECOMBINE  (de v1.1, adaptado a la representación de v2)
+#  Genera obra nueva coherente: progresión por emoción + motivo transplantado
+#  + contrapunto + bajo + patrón de acompañamiento, siguiendo el plan tonal
+#  y el arco. Devuelve role_notes + bridges + tempo_plan como run_glue.
+# ══════════════════════════════════════════════════════════════════════════════
+
+ROLE_CHANNELS = {"melodia": 0, "motivo": 4, "contrapunto": 1,
+                 "armonia": 2, "bajo": 3, "percusion": 9}
+ROLE_FALLBACK_PROGRAM = {"melodia": 40, "contrapunto": 41,     # violín, viola
+                         "armonia": 48, "bajo": 42}            # strings, cello
+
+
+def _realize_motif_recombine(intervals, durs, start_pitch, start_tick,
+                             bar_ticks, scale, vel):
+    """Realiza el motivo en ticks, ajustando SOLO la primera nota a la escala
+    (preserva intervalos para que el hilo sea reconocible)."""
+    notes = []
+    p = _snap_to_scale(int(np.clip(start_pitch, 21, 108)), scale)
+    t = start_tick
+    for i, iv in enumerate(intervals):
+        d = durs[i] if i < len(durs) else (durs[-1] if durs else 0.5)
+        dt = max(60, int(d * TPB))
+        notes.append([int(t), int(np.clip(p, 21, 108)), vel, int(dt * 0.9)])
+        p += iv
+        t += dt
+    return notes
+
+
+def run_recombine(fragments, anchor, motif, target_key, tempo_plan,
+                  glue, bridge_bars, bars_per_section, rng, verbose=False):
+    """Modo recombine: usa las secciones como donantes de ADN y regenera
+    una obra nueva coherente. Cada sección aporta su emoción → progresión +
+    patrón + motivo transplantado + contrapunto derivado. Puentes coherentes
+    entre secciones. Devuelve (role_notes, bridges, tempo_plan, total_bars,
+    layout, bar_ticks)."""
+    bar_ticks = TPB * 4  # salida siempre 4/4 para recombine
+    scale = _get_scale(target_key) if target_key else _get_scale(anchor.key)
+    role_notes = {r: [] for r in ROLE_CHANNELS}
+    bridges = []
+    layout = []
+    offset = 0
+    arc = build_arc(len(fragments))
+
+    for i, f in enumerate(fragments):
+        if f.target_key:
+            key_pc = key_to_midi_root(f.target_key)
+            mode = "minor" if "minor" in f.target_key else "major"
+        else:
+            key_pc = key_to_midi_root(f.key)
+            mode = "minor" if "minor" in f.key else "major"
+        sec_scale = _get_scale(f"{NOTE_NAMES[key_pc]} {mode}")
         n_bars = bars_per_section
-        sec_beats = n_bars * bpb
-        key_pc = s.target_key_pc
-        mode = s.target_mode
-        prog = PROGRESSIONS.get(s.emotion or "serenidad", ["I", "V", "vi", "IV"])
-        pattern = _pattern_for(s.emotion or "serenidad", mode, bpb)
-        tempo_map.append((cur_beat, s.tempo, s.time_sig))
-        local_arc = np.linspace(arc[i], arc[min(i+1, len(arc)-1)], max(2, n_bars)).tolist()
-        prev_voices: List[int] = []
+        prog = PROGRESSIONS.get(f.emotion or "serenidad", ["I", "V", "vi", "IV"])
+        pattern = _pattern_for(f.emotion or "serenidad", bar_ticks)
+        local_arc = np.linspace(arc[i], arc[min(i + 1, len(arc) - 1)],
+                                max(2, n_bars)).tolist()
+        prev_voices = []
         for b in range(n_bars):
-            bar_start = cur_beat + b * bpb
+            bar_start = offset + b * bar_ticks
             deg = prog[b % len(prog)]
             triad = triad_for_degree(deg, key_pc, mode)
-            root = degree_to_pc(deg, key_pc, mode)
+            root = degree_to_root_pc(deg, key_pc, mode)
             vel_h = int(45 + 30 * local_arc[b])
-            # armonía con patrón + voice leading del bloque base
-            base_voices = voice_lead_chord(triad, prev_voices, center=58, n_voices=3)
+            base_voices = voice_lead_chord(triad, prev_voices, center=58,
+                                           n_voices=3)
             prev_voices = base_voices
-            hnotes = _pattern_notes(pattern, triad, root, bar_start, bpb, 2, vel_h)
-            output_notes.extend(hnotes)
-            # bajo (si el patrón no es walking, raíz en beat 1)
+            role_notes["armonia"].extend(
+                _pattern_notes(pattern, triad, root, bar_start, bar_ticks,
+                               ROLE_CHANNELS["armonia"], vel_h))
             if pattern != "walking":
-                output_notes.append(Note(40 + (root % 12), bar_start, bpb * 0.9,
-                                         int(60 + 30 * local_arc[b]), 3, 0))
-            # melodía: motivo transplantado, transformación rotativa
-            if motif_iv:
+                role_notes["bajo"].append(
+                    [bar_start, 40 + (root % 12),
+                     int(60 + 30 * local_arc[b]), int(bar_ticks * 0.9)])
+            if motif and motif["intervals"]:
                 kinds = ["original", "inversion", "retrograde", "augmentation"]
                 kind = kinds[b % len(kinds)]
-                ivs, durs = motif_transform(motif_iv, motif_durs, kind)
-                base = motif_first + s.transpose_semis
+                ivs, durs = motif_transform(motif["intervals"],
+                                            motif["durs"], kind)
+                base = motif["first_pitch"] + f.transpose
                 while base % 12 not in triad and base < 120:
                     base += 1
-                mnotes = realize_motif(ivs, durs, base, bar_start, 0)
-                sc = scale_pitches(key_pc, mode)
-                mnotes = snap_to_scale(mnotes, sc, 0)
-                for n in mnotes:
-                    n.velocity = int(65 + 35 * local_arc[b])
-                mnotes = [n for n in mnotes if n.start < bar_start + bpb]
-                output_notes.extend(mnotes)
-                # contrapunto: inversión del motivo, una octava abajo, medio tempo
-                ivs_c, durs_c = motif_transform(motif_iv, motif_durs, "inversion")
+                mnotes = _realize_motif_recombine(
+                    ivs, durs, base, bar_start, bar_ticks, sec_scale,
+                    int(65 + 35 * local_arc[b]))
+                mnotes = [n for n in mnotes if n[0] < bar_start + bar_ticks]
+                role_notes["melodia"].extend(mnotes)
+                # contrapunto: inversión del motivo, octava abajo, doble duración
+                ivs_c, durs_c = motif_transform(motif["intervals"],
+                                                motif["durs"], "inversion")
                 durs_c = [d * 2 for d in durs_c]
                 base_c = max(48, base - 7)
                 while base_c % 12 not in triad and base_c < 110:
                     base_c += 1
-                cnotes = realize_motif(ivs_c, durs_c, base_c, bar_start, 1)
-                cnotes = snap_to_scale(cnotes, sc, 1)
-                for n in cnotes:
-                    n.velocity = int(55 + 25 * local_arc[b])
-                cnotes = [n for n in cnotes if n.start < bar_start + bpb]
-                output_notes.extend(cnotes)
-        cur_beat += sec_beats
-        # puente
-        if i < len(sections) - 1:
-            bnotes, bdur, btsig, bprogs = make_bridge(
-                s, sections[i+1], motif_iv, motif_durs, motif_first,
-                bridge_bars, "pivot", channel=15)
-            for ch, p in bprogs.items():
-                programs_out.setdefault(ch, p)
-            for n in bnotes:
-                n.start += cur_beat
-                output_notes.append(n)
-            tempo_map.append((cur_beat, sections[i+1].tempo * 0.92, btsig))
-            cur_beat += bdur
-
-    output_notes = validate_and_fix(output_notes)
-    humanize(output_notes, seed)
-    add_final_rit(tempo_map, cur_beat)
-    return output_notes, tempo_map, programs_out
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Score de coherencia (antes / después)  — mejora v1.1
-# ─────────────────────────────────────────────────────────────────────────────
-
-from collections import Counter
+                cnotes = _realize_motif_recombine(
+                    ivs_c, durs_c, base_c, bar_start, bar_ticks, sec_scale,
+                    int(55 + 25 * local_arc[b]))
+                cnotes = [n for n in cnotes if n[0] < bar_start + bar_ticks]
+                role_notes["contrapunto"].extend(cnotes)
+        layout.append((f.name, offset // bar_ticks,
+                       (offset + n_bars * bar_ticks) // bar_ticks))
+        offset += n_bars * bar_ticks
+        if i < len(fragments) - 1 and bridge_bars > 0:
+            vel_ref = float(np.mean([fr.vel_mean for fr in fragments]))
+            bkey = fragments[i + 1].target_key or target_key or anchor.key
+            bscale = _get_scale(bkey)
+            bnotes = build_bridge(f, fragments[i + 1], bridge_bars, bscale,
+                                  bkey, vel_ref, motif=motif)
+            bridges.append(bnotes)
+            layout.append((f"puente {i + 1}", offset // bar_ticks,
+                           (offset + bridge_bars * bar_ticks) // bar_ticks))
+            offset += bridge_bars * bar_ticks
+    total_bars = max(1, math.ceil(offset / bar_ticks))
+    if verbose:
+        print(f"    recombine: {len(fragments)} secciones × {bars_per_section}c, "
+              f"{sum(len(v) for v in role_notes.values())} notas generadas")
+    return role_notes, bridges, tempo_plan, total_bars, layout, bar_ticks
 
 
-def count_motif_in_notes(notes: List[Note], motif_iv: List[int]) -> int:
-    """Cuenta apariciones exactas del motivo en CUALQUIER canal (no solo melodía).
-    Así captura el motivo inyectado en su canal dedicado."""
-    if not motif_iv:
+# ══════════════════════════════════════════════════════════════════════════════
+#  [7] ENSAMBLAJE: pistas por rol + instrumentación única
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+
+def resolve_palette(anchor, no_instr):
+    """Un programa GM por rol para TODA la obra (del ancla; fallback cuerdas)."""
+    palette = {}
+    for role in ("melodia", "contrapunto", "armonia", "bajo"):
+        prog = None if no_instr else anchor.role_program(role)
+        if prog is None:
+            prog = ROLE_FALLBACK_PROGRAM[role]
+        palette[role] = prog
+    palette["motivo"] = palette["melodia"]        # el hilo suena al timbre melódico
+    return palette
+
+
+def assemble(fragments, bridges, tempo_plan, target_bpm, palette,
+             bridge_bars):
+    """Coloca fragmentos y puentes en el tiempo y devuelve:
+    role_notes (rol → notas absolutas), tempo_events [(tick, bpm)], total_bars."""
+    role_notes = {r: [] for r in ROLE_CHANNELS}
+    tempo_events = []
+    offset = 0
+    layout = []                                        # (nombre, bar_ini, bar_fin)
+    bar_ticks = TPB * 4
+
+    for i, f in enumerate(fragments):
+        tempo_events.append((offset, tempo_plan[i]))
+        for sid, st in f.streams.items():
+            role = f.roles.get(sid, "contrapunto")
+            for n in st["notes"]:
+                role_notes[role].append([offset + n[0], n[1], n[2], n[3]])
+        for n in getattr(f, "motif_notes", []):
+            role_notes["motivo"].append([offset + n[0], n[1], n[2], n[3]])
+        f_ticks = f.bars * f.bar_ticks
+        layout.append((f.name, offset // bar_ticks,
+                       (offset + f_ticks) // bar_ticks))
+        offset += f_ticks
+
+        if i < len(fragments) - 1 and bridge_bars > 0:
+            # rampa de tempo dentro del puente hacia el tempo del siguiente
+            b = bridges[i]
+            steps = max(2, bridge_bars * 2)
+            for s in range(steps):
+                tk = offset + int(s * bridge_bars * bar_ticks / steps)
+                bpm = tempo_plan[i] + (tempo_plan[i + 1] - tempo_plan[i]) \
+                    * (s / (steps - 1))
+                tempo_events.append((tk, bpm))
+            for role, notes in b.items():
+                for n in notes:
+                    role_notes[role].append([offset + n[0], n[1], n[2], n[3]])
+            layout.append((f"puente {i + 1}", offset // bar_ticks,
+                           (offset + bridge_bars * bar_ticks) // bar_ticks))
+            offset += bridge_bars * bar_ticks
+
+    for notes in role_notes.values():
+        notes.sort()
+    total_bars = max(1, math.ceil(offset / bar_ticks))
+    return role_notes, tempo_events, total_bars, layout
+
+
+def _tempo_events_from_plan(tempo_plan, fragments, bridge_bars,
+                            bars_per_section):
+    """Genera tempo_events [(tick, bpm)] para el modo recombine (layout propio)."""
+    bar_ticks = TPB * 4
+    events = []
+    offset = 0
+    for i, bpm in enumerate(tempo_plan):
+        events.append((offset, bpm))
+        offset += bars_per_section * bar_ticks
+        if i < len(tempo_plan) - 1 and bridge_bars > 0:
+            # rampa hacia el siguiente tempo durante el puente
+            steps = max(2, bridge_bars * 2)
+            next_bpm = tempo_plan[i + 1]
+            for s in range(steps):
+                tk = offset + int(s * bridge_bars * bar_ticks / steps)
+                events.append((tk, bpm + (next_bpm - bpm) * (s / (steps - 1))))
+            offset += bridge_bars * bar_ticks
+    return events
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  [8] ARCO DINÁMICO GLOBAL   (curvas de climax_engineer, adaptadas)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def build_arc(n_sections: int) -> list:
+    """Arco de tensión tipo 'arch' sobre las secciones (de v1.1)."""
+    if n_sections <= 1:
+        return [0.5, 0.5]
+    arc = []
+    for i in range(n_sections):
+        frac = i / (n_sections - 1)
+        val = 0.2 + 0.7 * (1 - (2 * frac - 0.62) ** 2 / 0.62 ** 2)
+        arc.append(max(0.1, min(1.0, val)))
+    return arc
+
+
+def energy_curve_roles(role_notes, bar_ticks, n_bars) -> np.ndarray:
+    # ── adaptada de climax_engineer.energy_curve a listas de notas ──
+    dens = np.zeros(n_bars)
+    vel = np.zeros(n_bars)
+    reg = np.zeros(n_bars)
+    poly = np.zeros(n_bars)
+    cnt = np.zeros(n_bars)
+    for notes in role_notes.values():
+        for n in notes:
+            b = min(n[0] // bar_ticks, n_bars - 1)
+            dens[b] += 1
+            vel[b] += n[2]
+            reg[b] += n[1]
+            poly[b] += n[3]
+            cnt[b] += 1
+    mask = cnt > 0
+    vel[mask] /= cnt[mask]
+    reg[mask] /= cnt[mask]
+    poly /= bar_ticks
+
+    def norm(x):
+        rng = x.max() - x.min()
+        return (x - x.min()) / rng if rng > 0 else np.zeros_like(x)
+
+    e = 0.4 * norm(dens) + 0.3 * norm(vel) + 0.2 * norm(reg) + 0.1 * norm(poly)
+    if len(e) >= 3:
+        e = np.convolve(e, np.ones(3) / 3, mode="same")
+    return e
+
+
+def target_curve(n_bars: int, position: float, width: int = 4) -> np.ndarray:
+    # ── copiada de climax_engineer.py ──
+    peak = max(1, min(n_bars - 2, int(round(position * (n_bars - 1)))))
+    t = np.zeros(n_bars)
+    for b in range(n_bars):
+        if b <= peak:
+            t[b] = (b / peak) ** 1.6 if peak else 1.0
+        else:
+            t[b] = max(0.0, 1 - ((b - peak) / max(1, (n_bars - 1 - peak))) ** 0.8)
+    lo = 0.18
+    return lo + (1 - lo) * t
+
+
+def reshape_arc(role_notes, bar_ticks, n_bars, position, intensity):
+    """Reescala velocidades compás a compás hacia una curva con clímax único."""
+    before = energy_curve_roles(role_notes, bar_ticks, n_bars)
+    goal = target_curve(n_bars, position)
+    eps = 1e-6
+    ratio = (goal + eps) / (before + eps)
+    ratio = np.clip(ratio ** 0.5, 1 - 0.35 * intensity, 1 + 0.45 * intensity)
+    for role, notes in role_notes.items():
+        for n in notes:
+            b = min(n[0] // bar_ticks, n_bars - 1)
+            n[2] = int(np.clip(n[2] * ratio[b], 12, 124))
+    after = energy_curve_roles(role_notes, bar_ticks, n_bars)
+    return before, after
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  [9] ESCRITURA MIDI
+# ══════════════════════════════════════════════════════════════════════════════
+
+def write_midi(role_notes, tempo_events, palette, out_path):
+    """MIDI tipo 1: pista de tempo + una pista por rol con su instrumento."""
+    mid = MidiFile(ticks_per_beat=TPB, type=1)
+
+    meta = MidiTrack()
+    mid.tracks.append(meta)
+    meta.append(MetaMessage("track_name", name="unifier", time=0))
+    meta.append(MetaMessage("time_signature", numerator=4, denominator=4,
+                            time=0))
+    prev = 0
+    for tick, bpm in sorted(tempo_events):
+        meta.append(MetaMessage("set_tempo", tempo=bpm2tempo(bpm),
+                                time=tick - prev))
+        prev = tick
+    meta.append(MetaMessage("end_of_track", time=0))
+
+    for role, ch in ROLE_CHANNELS.items():
+        notes = role_notes.get(role, [])
+        if not notes:
+            continue
+        trk = MidiTrack()
+        mid.tracks.append(trk)
+        trk.append(MetaMessage("track_name", name=role, time=0))
+        if ch != 9:
+            trk.append(Message("program_change", channel=ch,
+                               program=palette[role], time=0))
+        raw = []
+        for (t_on, note, vel, dur) in notes:
+            raw.append((t_on, 1, "note_on", note, vel))
+            raw.append((t_on + dur, 0, "note_off", note, 0))
+        raw.sort()
+        prev = 0
+        for (t_abs, _, mtype, note, vel) in raw:
+            trk.append(Message(mtype, channel=ch, note=int(note),
+                               velocity=int(vel), time=max(0, t_abs - prev)))
+            prev = t_abs
+        trk.append(MetaMessage("end_of_track", time=0))
+    mid.save(_ensure_parent(out_path))
+    return out_path
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SCORE DE COHERENCIA antes → después   (idea de unifier_external, con las
+#  métricas corregidas: sin puntos regalados por "tener puentes"; se añade
+#  consistencia de tempo y correlación de groove, que eran los ejes ausentes)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def count_motif(notes_lists, intervals):
+    """Apariciones exactas de la secuencia de intervalos en listas de notas."""
+    if not intervals:
         return 0
-    L = len(motif_iv)
-    total = 0
-    # agrupar por canal y extraer secuencia monofónica (una nota por onset)
-    by_ch: Dict[int, List[Note]] = {}
-    for n in notes:
-        by_ch.setdefault(n.channel, []).append(n)
-    for ch, ch_notes in by_ch.items():
-        ch_notes.sort(key=lambda n: (n.start, -n.pitch))
-        # reducir a monofónico
-        reduced: List[Note] = []
-        last = None
-        bucket: List[Note] = []
-        for n in ch_notes:
-            if last is None or abs(n.start - last) < 0.05:
-                bucket.append(n)
-                last = n.start if last is None else last
-            else:
-                if bucket:
-                    reduced.append(max(bucket, key=lambda x: x.pitch))
-                bucket = [n]
-                last = n.start
-        if bucket:
-            reduced.append(max(bucket, key=lambda x: x.pitch))
-        intervals = [reduced[i+1].pitch - reduced[i].pitch for i in range(len(reduced)-1)]
-        for i in range(len(intervals) - L + 1):
-            if intervals[i:i+L] == motif_iv:
-                total += 1
-    return total
+    L, hits = len(intervals), 0
+    for notes in notes_lists:
+        ps = [n[1] for n in sorted(notes)]
+        ivs = [ps[i + 1] - ps[i] for i in range(len(ps) - 1)]
+        for i in range(len(ivs) - L + 1):
+            if ivs[i:i + L] == intervals:
+                hits += 1
+    return hits
 
 
-def naive_concat(sections: List[Section]) -> Tuple[List[Note], List[Tuple[float,float,Tuple[int,int]]], Dict[int,int]]:
-    """Línea base 'antes': secciones originales pegadas tal cual, sin pegamento ni puentes."""
-    notes: List[Note] = []
-    tempo_map: List[Tuple[float, float, Tuple[int, int]]] = []
-    programs: Dict[int, int] = {}
-    cur = 0.0
-    for s in sections:
-        for n in s.notes:
-            notes.append(Note(n.pitch, n.start + cur, n.dur, n.velocity, n.channel, n.track))
-        tempo_map.append((cur, s.tempo, s.time_sig))
-        for ch, p in s.programs.items():
-            programs.setdefault(ch, p)
-        cur += s.n_bars * s.beats_per_bar + s.beats_per_bar  # 1 compás de silencio entre
-    return notes, tempo_map, programs
+def coherence_metrics(fragments, motif, target_key, tempo_plan=None):
+    """Métricas 0-1 sobre el estado ACTUAL de los fragmentos."""
+    key_pc = key_to_midi_root(target_key)
+    # tónica: fracción de fragmentos cuya tonalidad re-detectada cae en la
+    # tónica global o su relativa
+    rel_pc = (key_pc + (3 if "minor" in target_key else 9)) % 12
+    ok = 0
+    for f in fragments:
+        pitches = [n[1] for sid, st in f.streams.items() if sid[1] != 9
+                   for n in st["notes"]]
+        k = detect_key_notes(pitches)
+        if key_to_midi_root(k) in (key_pc, rel_pc):
+            ok += 1
+    tonic = ok / len(fragments)
+    # tempo: 1 − dispersión relativa de los BPM efectivos
+    bpms = tempo_plan if tempo_plan else [f.tempo_bpm for f in fragments]
+    tempo = float(np.clip(1 - np.std(bpms) / max(1e-6, np.mean(bpms)) * 2,
+                          0, 1))
+    # groove: correlación media de cada rejilla con la del ancla (posición 0
+    # de fragments = ancla por convención de llamada)
+    grids = [rhythm_grid(f) for f in fragments]
+    cors = []
+    for g in grids[1:]:
+        if grids[0].std() > 0 and g.std() > 0:
+            cors.append(float(np.corrcoef(grids[0], g)[0, 1]))
+    groove = float(np.clip(np.mean(cors), 0, 1)) if cors else 1.0
+    # niveles: 1 − dispersión relativa de las medias de velocity
+    vms = [float(np.mean([n[2] for st in f.streams.values()
+                          for n in st["notes"]])) for f in fragments]
+    levels = float(np.clip(1 - np.std(vms) / max(1e-6, np.mean(vms)) * 3,
+                           0, 1))
+    # motivo: apariciones del hilo común (streams + siembras)
+    lists = [st["notes"] for f in fragments for st in f.streams.values()]
+    lists += [getattr(f, "motif_notes", []) for f in fragments]
+    m_hits = count_motif(lists, motif["intervals"]) if motif else 0
+    m_score = min(1.0, m_hits / max(1, 2 * len(fragments))) if motif else 0.0
+    glob = 0.25 * tonic + 0.2 * tempo + 0.2 * groove + 0.15 * levels \
+        + 0.2 * m_score
+    return {"tonic_consistency": round(tonic, 2),
+            "tempo_consistency": round(tempo, 2),
+            "groove_correlation": round(groove, 2),
+            "level_balance": round(levels, 2),
+            "motif_recurrences": m_hits,
+            "motif_score": round(m_score, 2),
+            "global_coherence": round(glob, 2)}
 
 
-def coherence_score(notes: List[Note], sections: List[Section], motif_iv: List[int],
-                     use_target_keys: bool = True, has_bridges: bool = False) -> dict:
-    """
-    Métricas de coherencia (mejora v1.1):
-      - motif_recurrences: apariciones del motivo en cualquier canal
-      - bridge_coherence: 1.0 si hay puentes coherentes, 0.0 si no
-      - instr_concentration: fracción de notas en los 5 canales más usados
-      - tonic_consistency: fracción de secciones con tónica común
-      - global_coherence: combinación 0-1
-    """
-    motif_match = count_motif_in_notes(notes, motif_iv)
-    ch_counts = Counter(n.channel for n in notes)
-    total = sum(ch_counts.values()) or 1
-    top_k = sum(c for _, c in ch_counts.most_common(5))
-    instr_concentration = top_k / total
-    tonics = [s.target_key_pc if use_target_keys else s.key_pc for s in sections]
-    tonic_consistency = sum(1 for t in tonics if t == tonics[0]) / len(tonics) if tonics else 0
-    bridge_coherence = 1.0 if has_bridges else 0.0
-    motif_score = min(1.0, motif_match / max(1, len(sections)))
-    score = 0.4 * motif_score + 0.3 * bridge_coherence + 0.3 * tonic_consistency
-    return {
-        "motif_recurrences": motif_match,
-        "motif_score": round(motif_score, 2),
-        "bridge_coherence": bridge_coherence,
-        "instr_concentration": round(instr_concentration, 2),
-        "tonic_consistency": round(tonic_consistency, 2),
-        "n_channels": len(ch_counts),
-        "n_notes": len(notes),
-        "global_coherence": round(score, 2),
-    }
+def print_score(before, after):
+    B, R, G, D = _c("bold"), _c("reset"), _c("green"), _c("dim")
+    print(f"\n{B}[9] COHERENCIA antes → después{R}")
+    for k in before:
+        b, a = before[k], after[k]
+        mark = G if (isinstance(a, (int, float)) and a >= b) else _c("yellow")
+        print(f"    {k:<22} {D}{b!s:>6}{R}  →  {mark}{a!s:>6}{R}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CLI
-# ─────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  PULIDO FINAL   (adaptado de unifier_external: humanize / validate / rit)
+# ══════════════════════════════════════════════════════════════════════════════
 
-GLUE_PRESETS = {
-    "sutil":  {"motif": 0.3, "harmony": 0.3, "rhythm": 0.2, "instrumentation": 0.4},
-    "medio":  {"motif": 0.6, "harmony": 0.6, "rhythm": 0.3, "instrumentation": 0.8},
-    "fuerte": {"motif": 0.9, "harmony": 0.85, "rhythm": 0.6, "instrumentation": 1.0},
-}
+def validate_and_fix(role_notes):
+    """Deduplica (tick,pitch) por rol y acota rangos."""
+    removed = 0
+    for role, notes in role_notes.items():
+        seen, clean = set(), []
+        for n in sorted(notes):
+            key = (n[0], n[1])
+            if key in seen:
+                removed += 1
+                continue
+            seen.add(key)
+            n[1] = int(np.clip(n[1], 0, 127))
+            n[2] = int(np.clip(n[2], 1, 127))
+            n[3] = max(10, n[3])
+            clean.append(n)
+        role_notes[role] = clean
+    return removed
 
 
-def parse_glue(s: str, preset: Optional[str] = None) -> dict:
-    """Parsea 'motif=,harmony=,...' aplicando un preset base si se indica."""
-    if preset and preset in GLUE_PRESETS:
-        glue = dict(GLUE_PRESETS[preset])
-    else:
-        glue = {"motif": 0.6, "harmony": 0.6, "rhythm": 0.3, "instrumentation": 0.8}
-    if not s:
-        return glue
-    for part in s.split(","):
-        part = part.strip()
-        if "=" in part:
-            k, v = part.split("=")
-            k = k.strip().lower()
-            try:
-                glue[k] = max(0.0, min(1.0, float(v.strip())))
-            except ValueError:
-                pass
+def humanize(role_notes, rng):
+    """Micro-timing ±6 ticks y velocity ±5, excepto percusión."""
+    for role, notes in role_notes.items():
+        if role == "percusion":
+            continue
+        for n in notes:
+            n[0] = max(0, n[0] + rng.randint(-6, 6))
+            n[2] = int(np.clip(n[2] + rng.randint(-5, 5), 15, 124))
+        notes.sort()
+
+
+def add_final_rit(tempo_events, total_ticks):
+    """Ritardando final: 85 % → ×0.85, 95 % → ×0.70 del último tempo."""
+    if not tempo_events:
+        return
+    last = sorted(tempo_events)[-1][1]
+    tempo_events.append((int(total_ticks * 0.85), last * 0.85))
+    tempo_events.append((int(total_ticks * 0.95), last * 0.70))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  INFORME
+# ══════════════════════════════════════════════════════════════════════════════
+
+def print_analysis(fragments, anchor_idx, target_key, target_bpm, tempo_plan,
+                   tonal_decisions):
+    B, D, R = _c("bold"), _c("dim"), _c("reset")
+    print(f"\n{B}[1] ANÁLISIS DE FRAGMENTOS{R}")
+    hdr = f"{'#':>2} {'fragmento':<22} {'tonalidad':<11} {'tempo':>6} " \
+          f"{'compases':>8} {'tensión':>8} {'streams':>8}"
+    print(D + hdr + R)
+    for i, f in enumerate(fragments):
+        mark = " ⚓" if i == anchor_idx else "  "
+        print(f"{i:>2} {f.name[:22]:<22} {f.key:<11} {f.tempo_bpm:>6.1f} "
+              f"{f.bars:>8} {f.tension:>8.2f} {len(f.streams):>8}{mark}")
+    print(f"\n{B}[2] PLAN TONAL{R}  →  tonalidad global: "
+          f"{_c('cyan')}{target_key}{R}")
+    for d in tonal_decisions:
+        sign = f"+{d['transpose']}" if d["transpose"] > 0 else str(d["transpose"])
+        tgt = d.get('target_pc') or d.get('target_key', '?')
+        emo = d.get('emotion')
+        emo_txt = f" [{emo}]" if emo else ""
+        print(f"    {d['fragment'][:22]:<22} {d['detected_key']:<11} "
+              f"→ {tgt:<11} ({sign} st){emo_txt}")
+    print(f"\n{B}[3] PLAN DE TEMPO{R}  →  diana global: "
+          f"{_c('cyan')}{target_bpm} BPM{R}")
+    for f, bpm in zip(fragments, tempo_plan):
+        print(f"    {f.name[:22]:<22} {f.tempo_bpm:>6.1f} → {bpm:>6.1f} BPM")
+
+
+def print_layout(layout):
+    R_ = _c("reset")
+    print(f"\n{_c('bold')}[7] MAPA DE LA OBRA{R_}")
+    for name, b0, b1 in layout:
+        tag = _c("magenta") if name.startswith("puente") else _c("cyan")
+        print(f"    {tag}{name[:24]:<24}{R_} compases {b0 + 1:>3}–{b1:>3}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CLI
+# ══════════════════════════════════════════════════════════════════════════════
+
+GLUE_PRESETS = {"sutil": {"motif": 0.35, "harmony": 0.0, "rhythm": 0.25,
+                          "dynamics": 0.4},
+                "medio": {"motif": 0.6, "harmony": 0.6, "rhythm": 0.5,
+                          "dynamics": 0.6},
+                "fuerte": {"motif": 0.9, "harmony": 0.85, "rhythm": 0.7,
+                           "dynamics": 0.8}}
+
+
+def parse_glue(spec, preset):
+    # ── idea de unifier_external.parse_glue, con presets ──
+    glue = dict(GLUE_PRESETS[preset])
+    if spec:
+        for part in spec.split(","):
+            if "=" not in part:
+                continue
+            k, v = part.split("=", 1)
+            k = k.strip()
+            if k in glue:
+                glue[k] = float(np.clip(float(v), 0, 1))
     return glue
 
 
-def parse_section_spec(spec: str) -> Tuple[str, Optional[str], str]:
-    """
-    'label:emotion:path' | 'label:path' | 'emotion:path' | 'path'
-    """
-    parts = spec.split(":")
-    if len(parts) >= 3:
-        return parts[0], parts[1], ":".join(parts[2:])
-    if len(parts) == 2:
-        if parts[0].lower() in EMOTIONS:
-            return parts[0], parts[0], parts[1]
-        return parts[0], None, parts[1]
-    # path solo
-    base = os.path.basename(spec)
-    label = os.path.splitext(base)[0]
-    return label, None, spec
-
-
-def parse_args():
+def build_parser():
     p = argparse.ArgumentParser(
-        description="Unificador de secciones MIDI en una composición coherente.",
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("midis", nargs="*", help="MIDIs de sección (orden fijo)")
-    p.add_argument("--section", action="append", default=[],
-                   help='Sección: "label:emotion:path" (repetible)')
-    p.add_argument("--emotions", help="Emociones separadas por coma (para MIDIs posicionales)")
-    p.add_argument("--mode", choices=["glue","recombine","auto"], default="glue")
-    p.add_argument("--motif-seed", help="MIDI con el motivo semilla")
-    p.add_argument("--key", help="Tonalidad hogar, ej: D, F# minor")
-    p.add_argument("--template", choices=list(TEMPLATES.keys())+["auto"], default="auto")
-    p.add_argument("--glue", default="", help="motif=,harmony=,rhythm=,instrumentation=")
-    p.add_argument("--glue-preset", choices=list(GLUE_PRESETS.keys()), default=None,
-                   help="Preset de pegamento: sutil|medio|fuerte")
-    p.add_argument("--bridge-bars", type=int, default=2)
-    p.add_argument("--bridge", choices=["morph","pivot","auto"], default="auto")
-    p.add_argument("--recombine-bars", type=int, default=8, help="compases por sección en modo recombine")
+        prog="unifier",
+        description="Fusiona secciones-ancla MIDI en una composición unificada "
+                    "(tonalidad, tempo, motivo, ritmo, instrumentación y "
+                    "dinámica comunes).")
+    p.add_argument("midis", nargs="+",
+                   help="Fragmentos MIDI en el orden emocional deseado")
     p.add_argument("--output", default="obra_unificada.mid")
-    p.add_argument("--seed", type=int, default=1)
-    p.add_argument("--report", action="store_true")
-    p.add_argument("--dry-run", action="store_true", help="Mostrar el plan (ADN, tonal, motivo) sin generar MIDI")
-    p.add_argument("--verbose", action="store_true")
-    p.add_argument("--no-color", action="store_true")
-    return p.parse_args()
+    p.add_argument("--anchor", type=int, default=0,
+                   help="Índice del fragmento ancla (default: 0)")
+    p.add_argument("--key", default=None,
+                   help="Tonalidad global, p.ej. C, Am, Eb, F#m")
+    p.add_argument("--tempo", type=float, default=None)
+    p.add_argument("--tempo-blend", type=float, default=0.25)
+    p.add_argument("--bridge-bars", type=int, default=2)
+    p.add_argument("--mode", choices=["glue", "recombine", "auto"], default="glue",
+                   help="glue=conserva MIDIs; recombine=obra nueva desde ADN; auto")
+    p.add_argument("--tonal-plan", choices=["global", "emotion", "auto"],
+                   default="auto",
+                   help="global=una tonalidad; emotion=viaje por emoción; auto")
+    p.add_argument("--emotions", default=None,
+                   help="Emociones por orden, separadas por coma (para MIDIs posicionales)")
+    p.add_argument("--recombine-bars", type=int, default=8,
+                   help="Compases por sección en modo recombine")
+    p.add_argument("--glue", default=None,
+                   help="Dosificación: motif=0.7,harmony=0.6,rhythm=0.4,"
+                        "dynamics=0.6 (ejes omitidos → preset)")
+    p.add_argument("--glue-preset", choices=["sutil", "medio", "fuerte"],
+                   default="medio")
+    p.add_argument("--motif-seed", default=None,
+                   help="MIDI externo con el motivo semilla (anula el ancla)")
+    p.add_argument("--snap-strength", type=float, default=0.0,
+                   help="0=respetar cromatismo, 1=ajustar todo a la escala")
+    p.add_argument("--climax-pos", type=float, default=0.618)
+    p.add_argument("--arc-intensity", type=float, default=0.6)
+    p.add_argument("--no-motif", action="store_true")
+    p.add_argument("--no-rhythm", action="store_true")
+    p.add_argument("--no-harmony", action="store_true")
+    p.add_argument("--no-humanize", action="store_true")
+    p.add_argument("--no-rit", action="store_true")
+    p.add_argument("--score", action="store_true",
+                   help="Imprimir score de coherencia antes→después")
+    p.add_argument("--no-instr", action="store_true",
+                   help="Ignorar instrumentos del ancla (paleta de cuerdas)")
+    p.add_argument("--no-bridges", action="store_true")
+    p.add_argument("--no-arc", action="store_true")
+    p.add_argument("--no-levels", action="store_true")
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--report", action="store_true",
+                   help="Solo análisis y plan, sin transformar ni escribir")
+    p.add_argument("--json", default=None,
+                   help="Exportar decisiones y mapa a JSON")
+    p.add_argument("--dry-run", action="store_true")
+    return p
 
 
 def main():
-    args = parse_args()
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+    args = build_parser().parse_args()
+    rng = random.Random(args.seed)
+    B, R, D = _c("bold"), _c("reset"), _c("dim")
 
-    # construir lista de secciones
-    specs = []
-    for s in args.section:
-        specs.append(parse_section_spec(s))
-    if args.midis:
-        emotions = (args.emotions.split(",") if args.emotions else [])
-        for i, m in enumerate(args.midis):
-            emo = emotions[i].strip() if i < len(emotions) else None
-            if emo and emo.lower() not in EMOTIONS:
-                print(f"[WARN] emoción '{emo}' no reconocida, se deducirá")
-                emo = None
-            label = os.path.splitext(os.path.basename(m))[0]
-            specs.append((label, emo, m))
-    if len(specs) < 2:
-        sys.exit("Se necesitan al menos 2 secciones. Usa --section o MIDIs posicionales.")
-    if len(specs) > 10:
-        print(f"[WARN] {len(specs)} secciones: recortando a 10.")
-        specs = specs[:10]
+    if len(args.midis) < 2:
+        sys.exit("[unifier] Se necesitan al menos 2 fragmentos MIDI.")
+    if not 0 <= args.anchor < len(args.midis):
+        sys.exit(f"[unifier] --anchor fuera de rango (0–{len(args.midis)-1}).")
 
-    sections = []
-    for label, emo, path in specs:
-        if not os.path.exists(path):
-            sys.exit(f"No existe el MIDI: {path}")
-        notes, tpb, tempo, tsig, tmeta, progs = load_midi(path)
-        s = Section(path=path, label=label, emotion=emo, notes=notes, tpb=tpb,
-                    tempo=tempo, time_sig=tsig, tracks_meta=tmeta, programs=progs)
-        build_fingerprint(s)
-        sections.append(s)
-        if args.verbose:
-            print(f"  [{label}] {path}: {s.key_name} {s.tempo:.0f}bpm {s.time_sig[0]}/{s.time_sig[1]} "
-                  f"{s.n_bars}c | emoción={'deducida' if emo is None else emo}: {s.emotion} "
-                  f"| motivo saliencia={s.motif_salience:.1f}")
-
-    # ADN compartido
-    motif_iv, motif_durs, motif_first, motif_src = choose_motif_seed(sections, args.motif_seed)
-    plan = build_tonal_plan(sections, args.key)
-    template = choose_template(sections, "auto" if args.template == "auto" else args.template)
     glue = parse_glue(args.glue, args.glue_preset)
+    if args.no_motif:
+        glue["motif"] = 0.0
+    if args.no_rhythm:
+        glue["rhythm"] = 0.0
+    if args.no_harmony:
+        glue["harmony"] = 0.0
 
-    if args.verbose:
-        print(f"\n  ADN compartido:")
-        print(f"    Motivo semilla: {len(motif_iv)} intervalos (de {os.path.basename(motif_src)})")
-        print(f"    Plantilla: {args.template}")
-        print(f"    Pegamento: {glue}")
-        for i, s in enumerate(sections):
-            print(f"    Sec {i+1} [{s.label}]: {s.key_name} -> {NOTE_NAMES[s.target_key_pc]} {s.target_mode} "
-                  f"(transp {s.transpose_semis:+d}) emoción={s.emotion}")
+    print(f"{B}══ UNIFIER v3.0 ══{R}  {len(args.midis)} fragmentos, "
+          f"ancla = #{args.anchor}, modo = {args.mode}, "
+          f"plan tonal = {args.tonal_plan}, glue = " +
+          ", ".join(f"{k}={v}" for k, v in glue.items()))
 
-    # puentes: auto -> morph por defecto
-    bridge_mode = args.bridge
-    if bridge_mode == "auto":
-        bridge_mode = "morph"
+    # [1] análisis ----------------------------------------------------------
+    # emociones indicadas por orden (posicionales)
+    emo_list = ([e.strip() for e in args.emotions.split(",")]
+                if args.emotions else [])
+    fragments = []
+    for i, p in enumerate(args.midis):
+        f = Fragment(p).load()
+        if i < len(emo_list):
+            e = emo_list[i].lower()
+            f.emotion = e if e in EMOTIONS else None
+            if e not in EMOTIONS:
+                print(f"{D}[WARN] emoción '{e}' no reconocida, se deducirá{R}")
+        fragments.append(f)
+    anchor = fragments[args.anchor]
 
-    # elegir modo
-    mode = args.mode
-    if mode == "auto":
-        diff_keys = len({s.key_pc for s in sections})
-        mode = "recombine" if diff_keys >= len(sections)*0.7 else "glue"
+    # [2] plan tonal ---------------------------------------------------------
+    target_key = parse_key_arg(args.key) if args.key else anchor.key
+    # decidir plan tonal
+    plan_mode = args.tonal_plan
+    if plan_mode == "auto":
+        any_emotion = any(f.emotion for f in fragments)
+        plan_mode = "emotion" if any_emotion else "global"
+    if plan_mode == "emotion":
+        tonal_decisions = plan_tonal_emotion(fragments, anchor,
+                                             args.key if args.key else None)
+        # la tonalidad efectiva para puentes/score es la del ancla
+        bridge_key = fragments[0].target_key or target_key
+    else:
+        tonal_decisions = plan_tonal(fragments, target_key)
+        bridge_key = target_key
+        for f in fragments:
+            f.target_key = target_key
+    scale = _get_scale(bridge_key)
 
-    # ── dry-run: mostrar plan sin generar MIDI ──
-    if args.dry_run:
-        print(f"\n  ── Plan (dry-run, modo {mode}) ──")
-        print(f"    Motivo semilla: {len(motif_iv)} intervalos (de {os.path.basename(motif_src)})")
-        print(f"    Intervalos: {motif_iv}")
-        print(f"    Plantilla: {args.template}  → {template}")
-        print(f"    Pegamento: {glue}" + (f"  [preset {args.glue_preset}]" if args.glue_preset else ""))
-        print(f"    Puente: {bridge_mode}, {args.bridge_bars} compases")
-        print(f"    Plan tonal:")
-        for i, s in enumerate(sections):
-            print(f"      Sec {i+1} [{s.label}]: {s.key_name} → "
-                  f"{NOTE_NAMES[s.target_key_pc]} {s.target_mode} "
-                  f"(transp {s.transpose_semis:+d}) emoción={s.emotion}")
-        # score de la línea base 'antes'
-        before_notes, _, _ = naive_concat(sections)
-        before = coherence_score(before_notes, sections, motif_iv, use_target_keys=False)
-        print(f"    Coherencia 'antes' (sin pegar): {before['global_coherence']}")
-        print("  (dry-run: no se generó MIDI)")
+    # métricas "antes": tras cargar, antes de transformar (orden ancla primero)
+    ordered = [anchor] + [f for i, f in enumerate(fragments)
+                          if i != args.anchor]
+    motif_probe = extract_motif_ngram(anchor, args.motif_seed)
+    before = coherence_metrics(ordered, motif_probe, bridge_key)
+
+    # [3] plan de tempo ----------------------------------------------------------
+    target_bpm, tempo_plan = plan_tempo(fragments, args.tempo,
+                                        float(np.clip(args.tempo_blend, 0, 1)))
+
+    print_analysis(fragments, args.anchor, target_key, target_bpm,
+                   tempo_plan, tonal_decisions)
+    if args.report:
         return
 
-    if mode == "glue":
-        out_notes, tempo_map, progs = run_glue(
-            sections, motif_iv, motif_durs, motif_first, template,
-            glue, args.bridge_bars, bridge_mode, seed=args.seed)
+    # [4] motivo ancla ------------------------------------------------------------
+    motif = None
+    if glue["motif"] > 0.05 or args.mode == "recombine":
+        print(f"\n{B}[4] MOTIVO ANCLA{R}")
+        motif = extract_motif_ngram(anchor, args.motif_seed, verbose=True)
+        if motif is None:
+            print("    (material insuficiente: siembra desactivada)")
+
+    # elegir modo de generación
+    mode = args.mode
+    if mode == "auto":
+        diff_keys = len({key_to_midi_root(f.key) for f in fragments})
+        mode = "recombine" if diff_keys >= len(fragments) * 0.7 else "glue"
+
+    if mode == "recombine":
+        # [6b] MODO RECOMBINE -----------------------------------------------------
+        print(f"\n{B}[5/6] MODO RECOMBINE{R}  (obra nueva desde ADN)")
+        if not args.no_levels and glue["dynamics"] > 0.05:
+            unify_levels(fragments)
+        role_notes, bridges, tempo_plan_r, total_bars, layout, bar_ticks_out = \
+            run_recombine(fragments, anchor, motif, bridge_key, tempo_plan,
+                          glue, 0 if args.no_bridges else args.bridge_bars,
+                          args.recombine_bars, rng, verbose=True)
+        tempo_events = _tempo_events_from_plan(tempo_plan_r, fragments,
+                                               0 if args.no_bridges else args.bridge_bars,
+                                               args.recombine_bars)
+        palette = resolve_palette(anchor, args.no_instr)
+        print_layout(layout)
+        pal_txt = ", ".join(f"{r}={p}" for r, p in palette.items())
+        print(f"    instrumentación única (GM): {pal_txt}")
     else:
-        out_notes, tempo_map, progs = run_recombine(
-            sections, motif_iv, motif_durs, motif_first, template,
-            glue, args.bridge_bars, args.recombine_bars, seed=args.seed)
+        # [5] MODO GLUE: unificación ----------------------------------------------
+        print(f"\n{B}[5] UNIFICACIÓN (glue){R}")
+        if not args.no_levels and glue["dynamics"] > 0.05:
+            gm = unify_levels(fragments)
+            print(f"    niveles dinámicos igualados (media global {gm:.0f})")
+        if glue["harmony"] >= 0.5:
+            total_h = sum(nudge_harmony(f, bridge_key, glue["harmony"],
+                                        verbose=True) for f in fragments)
+            if total_h == 0:
+                print("    armonía: todos los compases ya eran diatónicos")
+        if motif:
+            total_inj = sum(
+                seed_motif(f, motif, scale, glue["motif"], rng, verbose=True)
+                for i, f in enumerate(fragments) if i != args.anchor)
+            print(f"    siembras de motivo: {total_inj}")
+        if glue["rhythm"] > 0.05:
+            agrid = rhythm_grid(anchor)
+            moved = sum(attract_rhythm(f, agrid, glue["rhythm"])
+                        for i, f in enumerate(fragments) if i != args.anchor)
+            print(f"    ataques imantados al groove ancla: {moved}  "
+                  f"{D}{sparkline(agrid)}{R}")
+        if args.snap_strength > 0:
+            snapped = 0
+            for f in fragments:
+                for sid, st in f.streams.items():
+                    if f.roles.get(sid) == "percusion":
+                        continue
+                    for n in st["notes"]:
+                        tgt = _snap_to_scale(n[1], scale)
+                        if tgt != n[1] and rng.random() < args.snap_strength:
+                            n[1] = tgt
+                            snapped += 1
+            print(f"    notas ajustadas a la escala global: {snapped}")
 
-    # asegurar programas al inicio
-    for ch, p in progs.items():
-        if not (0 <= p <= 127):
-            progs[ch] = 0
+        # [6] puentes + crossfades -------------------------------------------------------
+        bridge_bars = 0 if args.no_bridges else max(0, args.bridge_bars)
+        bridges = []
+        if bridge_bars > 0:
+            print(f"\n{B}[6] PUENTES{R}  ({bridge_bars} compases: "
+                  f"fin-de-A → IV → V7 → inicio-de-B en {bridge_key})")
+            vel_ref = float(np.mean([f.vel_mean for f in fragments]))
+            for i in range(len(fragments) - 1):
+                crossfade(fragments[i], fragments[i + 1])
+                # el puente aterriza en la tonalidad destino de B
+                bkey = fragments[i + 1].target_key or bridge_key
+                bscale = _get_scale(bkey)
+                bridges.append(build_bridge(fragments[i], fragments[i + 1],
+                                            bridge_bars, bscale, bkey,
+                                            vel_ref, motif=motif))
+                print(f"    {fragments[i].name} ⇢ {fragments[i+1].name}")
 
-    save_midi(args.output, out_notes, tempo_map, progs)
-    print(f"\n✓ Obra unificada (modo {mode}): {args.output}")
-    print(f"  Notas: {len(out_notes)} | Canales: {sorted(progs.keys())} | Secciones: {len(sections)}")
+        # [7] ensamblaje ------------------------------------------------------------------
+        palette = resolve_palette(anchor, args.no_instr)
+        role_notes, tempo_events, total_bars, layout = assemble(
+            fragments, bridges, tempo_plan, target_bpm, palette, bridge_bars)
+        print_layout(layout)
+        pal_txt = ", ".join(f"{r}={p}" for r, p in palette.items())
+        print(f"    instrumentación única (GM): {pal_txt}")
 
-    if args.report:
-        before_notes, _, _ = naive_concat(sections)
-        before = coherence_score(before_notes, sections, motif_iv, use_target_keys=False, has_bridges=False)
-        after = coherence_score(out_notes, sections, motif_iv, use_target_keys=True, has_bridges=True)
-        print(f"\n  ── Coherencia antes → después ──")
-        for k in ["motif_recurrences","motif_score","bridge_coherence",
-                  "instr_concentration","tonic_consistency","n_channels","global_coherence"]:
-            print(f"    {k:20s} {before[k]:>8}  →  {after[k]:>8}")
-        report = {
-            "mode": mode,
-            "sections": [{"label": s.label, "path": s.path, "key": s.key_name,
-                          "emotion": s.emotion, "target_key": f"{NOTE_NAMES[s.target_key_pc]} {s.target_mode}",
-                          "transpose": s.transpose_semis, "n_bars": s.n_bars}
-                         for s in sections],
-            "motif": {"intervals": motif_iv, "durations": motif_durs,
-                      "source": os.path.basename(motif_src)},
-            "template": template,
-            "glue": glue,
-            "coherence_before": before,
-            "coherence_after": after,
+    # [8] arco global + pulido -------------------------------------------------------
+    if not args.no_arc:
+        before_e, after_e = reshape_arc(role_notes, TPB * 4, total_bars,
+                                        args.climax_pos,
+                                        args.arc_intensity * glue["dynamics"]
+                                        / 0.6)
+        print(f"\n{B}[8] ARCO GLOBAL{R}  clímax en "
+              f"{args.climax_pos:.0%} (compás "
+              f"~{int(args.climax_pos * total_bars)})")
+        print(f"    antes   {D}{sparkline(before_e)}{R}")
+        print(f"    después {_c('green')}{sparkline(after_e)}{R}")
+    removed = validate_and_fix(role_notes)
+    if removed:
+        print(f"    duplicados eliminados: {removed}")
+    if not args.no_humanize:
+        humanize(role_notes, rng)
+    if not args.no_rit:
+        add_final_rit(tempo_events, total_bars * TPB * 4)
+
+    # [9] score + escritura --------------------------------------------------------------
+    after = coherence_metrics(ordered, motif, bridge_key,
+                              tempo_plan=tempo_plan)
+    if args.score:
+        print_score(before, after)
+
+    if args.json:
+        payload = {
+            "target_key": target_key, "target_bpm": target_bpm,
+            "anchor": fragments[args.anchor].name, "glue": glue,
+            "tonal_decisions": tonal_decisions,
+            "tempo_plan": dict(zip([f.name for f in fragments], tempo_plan)),
+            "palette": palette,
+            "motif": ({"intervals": motif["intervals"],
+                       "salience": motif["salience"]} if motif else None),
+            "layout": [{"section": n, "from_bar": b0 + 1, "to_bar": b1}
+                       for n, b0, b1 in layout],
+            "coherence_before": before, "coherence_after": after,
+            "total_bars": total_bars,
         }
-        rep_path = os.path.splitext(args.output)[0] + ".report.json"
-        with open(_ensure_parent(rep_path), "w", encoding="utf-8") as f:
-            json.dump(report, f, ensure_ascii=False, indent=2)
-        print(f"  Reporte JSON: {rep_path}")
+        with open(_ensure_parent(args.json), "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2, ensure_ascii=False)
+        print(f"\n    plan exportado → {args.json}")
+
+    if args.dry_run:
+        print(f"\n{B}[9]{R} --dry-run: no se escribe MIDI.")
+        return
+    out = write_midi(role_notes, tempo_events, palette, args.output)
+    n_notes = sum(len(v) for v in role_notes.values())
+    print(f"\n{B}[9] ESCRITO{R}  {_c('green')}{out}{R}  "
+          f"({total_bars} compases, {n_notes} notas)")
 
 
 if __name__ == "__main__":
