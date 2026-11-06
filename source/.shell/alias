@@ -283,3 +283,13 @@ txt2pdf(){
 pkg install texlive-xetex
 pandoc --from=markdown_strict --pdf-engine=xelatex $1.txt -o $1.pdf
 }
+
+cargo_build_meld () {
+	cargo build --all-targets --all-features
+	cargo build --all-targets --all-features &> /tmp/cargolog
+	cat /tmp/cargolog | grep --color -- ' --> ' | awk '{print $2}' | cut -d: -f1 | sort -u | while read line
+	do
+		meld $line
+	done
+}
+
