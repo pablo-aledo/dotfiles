@@ -296,6 +296,7 @@ cargo_build_meld () {
     else
         if [ $1 = "diff" ]
         then
+            shift
             Git add .
             Git diff_with_lines | mgrep - $* | cut -d: -f1 | sort -u | while read line
             do
