@@ -857,7 +857,16 @@ def detect_grid(
     """
     # Imported here, not at module scope: beat_this pulls in torchaudio and soxr,
     # which would slow every CLI invocation that never transcribes anything.
-    from beat_this.inference import Audio2Beats
+    # A missing or broken optional dependency (e.g. torchaudio failing to load its
+    # native library -> OSError) is reported as BeatDetectionError, so that
+    # "best-effort" can degrade to the placeholder tempo instead of aborting, and
+    # "true" gets the CLI's clean error rather than a raw traceback.
+    try:
+        from beat_this.inference import Audio2Beats
+    except (ImportError, OSError, RuntimeError) as e:
+        raise BeatDetectionError(
+            f"beat_this is not usable ({type(e).__name__}: {e})"
+        ) from e
 
     # This triggers an error in beat_this so report as BeatDetectionError directly
     min_duration_s = 1.0
@@ -869,9 +878,16 @@ def detect_grid(
     signal = wav.mean(dim=0).detach().cpu().numpy()  # beat_this wants mono, 1-D
     # Returns (beats, downbeats) despite beat_this's own File2File unpacking
     # them the other way round.
-    beats, downbeats = Audio2Beats(
-        checkpoint_path=checkpoint, device=device, dbn=False
-    )(signal, sr)
+    try:
+        beats, downbeats = Audio2Beats(
+            checkpoint_path=checkpoint, device=device, dbn=False
+        )(signal, sr)
+    except BeatDetectionError:
+        raise
+    except Exception as e:  # checkpoint download/load or inference failure
+        raise BeatDetectionError(
+            f"beat_this failed ({type(e).__name__}: {e})"
+        ) from e
 
     beats = np.asarray(beats, dtype=float)
     downbeats = np.asarray(downbeats, dtype=float)

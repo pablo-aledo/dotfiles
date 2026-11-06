@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-stem_separator.py — Separación de fuentes de audio (voz, batería, bajo, resto)
-con HTDemucs: reimplementación autocontenida
-(versión 1.0).
+stem_separator.py — Separación de fuentes de audio (voz, batería, bajo, resto,
+y con el modelo de 6 fuentes también guitarra y piano) con HTDemucs:
+reimplementación autocontenida
+(versión 1.1).
 
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
@@ -15,6 +16,16 @@ Fundamento
   checkpoint preentrenado oficial "htdemucs" — sin depender del paquete
   `demucs` ni de su cadena de dependencias (dora, omegaconf, einops...).
 
+  MODELOS (--model):
+    htdemucs      4 stems: drums, bass, other, vocals            (default)
+    htdemucs_6s   6 stems: + guitar, piano. Imprescindible para música de
+                  cámara o piano + cuerdas: con el modelo de 4 stems el
+                  piano cae dentro de «other» y no se puede aislar.
+                  Misma arquitectura; solo cambian nº de fuentes y etiquetas.
+                  Nota: el piano de htdemucs_6s es notablemente menos fiable
+                  que el resto de fuentes (lo advierte el propio Demucs);
+                  comprueba el resultado con audio_midi_fidelity.py.
+
   CÓMO FUNCIONA (resumen):
     mezcla → STFT (representación complex-as-channels) + forma de onda
     cruda → dos ramas U-Net paralelas (frecuencia / tiempo) → Transformer
@@ -24,7 +35,7 @@ Fundamento
 
   COMANDOS:
     install     — descarga el checkpoint preentrenado oficial (~80 MB)
-    separate    — WAV → hasta 4 stems (drums, bass, other, vocals)
+    separate    — WAV → hasta 4 stems (6 con --model htdemucs_6s)
     info        — inspecciona un checkpoint o la arquitectura por defecto
 
   USO:
@@ -80,19 +91,25 @@ Modos de uso
 Opciones
 ────────────────────────────────────────────────────────────────────────────
   install
-    --output OUTPUT             ruta de destino del .th
+    --model MODEL               modelo a descargar (defecto htdemucs;
+                                valores: htdemucs|htdemucs_6s)
+    --output OUTPUT             ruta de destino del checkpoint
+    --url URL                   URL alternativa (por si la oficial cambia)
     --force                     volver a descargar aunque ya exista
 
   separate
     input INPUT                 fichero WAV de entrada
+    --model MODEL               modelo (defecto htdemucs; valores:
+                                htdemucs|htdemucs_6s)
     --stems STEMS […]           subconjunto de fuentes a exportar (default:
-                                las 4)
+                                todas las del modelo)
     --two-stems TWO_STEMS       modo karaoke: exporta esta fuente y
                                 'no_<fuente>' (suma del resto)
     --shifts SHIFTS             nº de desplazamientos promediados (default: 1)
     --overlap OVERLAP           solape entre segmentos, 0-1 (default: 0.25)
     --segment SEGMENT           duración de segmento en segundos
-    --model-path MODEL_PATH     ruta al checkpoint .th
+    --model-path MODEL_PATH     ruta al checkpoint (.th oficial, o
+                                .safetensors con los pesos de Demucs ≥4.1)
     --device DEVICE             (defecto cpu; valores: cpu|cuda)
     --output-dir OUTPUT_DIR
     --random-weights            no cargar checkpoint; pesos aleatorios (solo
@@ -100,6 +117,7 @@ Opciones
     --quiet                     no mostrar barra de progreso
 
   info
+    --model MODEL               (defecto htdemucs; valores: htdemucs|htdemucs_6s)
     --model-path MODEL_PATH
     --random-weights
 
@@ -114,21 +132,25 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 
 @params v1
 [install]
---output file  io=out  # ruta de destino del .th
+--model  enum  default=htdemucs values=htdemucs|htdemucs_6s  # modelo a descargar
+--output file  io=out  # ruta de destino del checkpoint
+--url    str   # URL alternativa del checkpoint
 --force  bool  default=false  # volver a descargar aunque ya exista
 [separate]
 input            file  io=in ext=wav required  # fichero WAV de entrada
---stems          list  of=enum values=drums|bass|other|vocals  # subconjunto de fuentes a exportar
---two-stems      enum  values=drums|bass|other|vocals  # modo karaoke: exporta esta fuente y…
+--model          enum  default=htdemucs values=htdemucs|htdemucs_6s  # modelo (4 o 6 fuentes)
+--stems          list  of=enum values=drums|bass|other|vocals|guitar|piano  # subconjunto de fuentes a exportar
+--two-stems      enum  values=drums|bass|other|vocals|guitar|piano  # modo karaoke: exporta esta fuente y…
 --shifts         int   default=1  # nº de desplazamientos promediados
 --overlap        float default=0.25 min=0 max=1  # solape entre segmentos, 0-1
 --segment        float unit=s  # duración de segmento en segundos
---model-path     file  io=in ext=pt,pth  # ruta al checkpoint .th
+--model-path     file  io=in ext=th,pt,pth,safetensors  # ruta al checkpoint
 --device         enum  default=cpu values=cpu|cuda
 --output-dir     dir   io=out
 --random-weights bool  default=false  # no cargar checkpoint; pesos aleatorios (solo para pruebas…
 --quiet          bool  default=false  # no mostrar barra de progreso
 [info]
+--model          enum  default=htdemucs values=htdemucs|htdemucs_6s
 --model-path     file  io=in
 --random-weights bool  default=false
 @end
@@ -154,6 +176,8 @@ import torch.nn.functional as F
 # ============================================================================
 
 SOURCES = ["drums", "bass", "other", "vocals"]
+SOURCES_6S = ["drums", "bass", "other", "vocals", "guitar", "piano"]
+ALL_SOURCES = SOURCES_6S  # unión, para `choices` del CLI
 SAMPLERATE = 44100
 AUDIO_CHANNELS = 2
 
@@ -161,6 +185,35 @@ AUDIO_CHANNELS = 2
 OFFICIAL_MODEL_URL = "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th"
 DEFAULT_CACHE_DIR = Path(os.environ.get("STEM_SEPARATOR_HOME", Path.home() / ".stem_separator"))
 DEFAULT_MODEL_PATH = DEFAULT_CACHE_DIR / "htdemucs.th"
+
+# Catálogo de modelos. `urls` se prueban en orden. Para htdemucs_6s: el .th
+# sigue el esquema de hosting oficial de Demucs (misma carpeta que htdemucs;
+# firma 5c90dfd2) y la segunda es el espejo de pesos safetensors de Demucs ≥4.1
+# en Hugging Face. Ninguna se ha podido verificar en el entorno de desarrollo
+# (sin red a esos hosts): si una falla, `install --url` admite otra.
+MODELS = {
+    "htdemucs": {
+        "sources": SOURCES,
+        "urls": [OFFICIAL_MODEL_URL],
+        "path": DEFAULT_CACHE_DIR / "htdemucs.th",
+    },
+    "htdemucs_6s": {
+        "sources": SOURCES_6S,
+        "urls": [
+            "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/5c90dfd2-34c22ccb.th",
+            "https://huggingface.co/adefossez/HTDemucs-6s/resolve/main/5c90dfd2.safetensors",
+        ],
+        "path": DEFAULT_CACHE_DIR / "htdemucs_6s.th",
+    },
+}
+
+
+def model_sources(name):
+    return list(MODELS[name]["sources"])
+
+
+def model_default_path(name):
+    return Path(MODELS[name]["path"])
 
 
 def _ensure_parent(path):
@@ -1069,10 +1122,22 @@ def _install_compat_shim():
     sys.modules["demucs.htdemucs"] = htdemucs_mod
 
 
-def load_checkpoint(path, device="cpu"):
-    """Carga un checkpoint .th (formato oficial demucs: dict con klass/args/
-    kwargs/state) y devuelve un HTDemucs listo para inferencia."""
+def load_checkpoint(path, device="cpu", sources=None):
+    """Carga un checkpoint y devuelve un HTDemucs listo para inferencia.
+    Formatos: .th oficial (dict con klass/args/kwargs/state; las fuentes van
+    dentro) o .safetensors (solo pesos: las fuentes se deducen de la forma de
+    `sources`, y si no se indican, del tamaño de la capa final del decoder)."""
     _install_compat_shim()
+    if str(path).endswith(".safetensors"):
+        from safetensors.torch import load_file
+        state = load_file(str(path))
+        state = {k: (v.float() if v.dtype == torch.float16 else v) for k, v in state.items()}
+        srcs = list(sources) if sources else _infer_sources_from_state(state)
+        model = HTDemucs(sources=srcs)
+        model.load_state_dict(state, strict=True)
+        model.to(device)
+        model.eval()
+        return model
     package = torch.load(path, map_location=device, weights_only=False)
     if isinstance(package, dict) and "state" in package and "kwargs" in package:
         kwargs = dict(package["kwargs"])
@@ -1085,7 +1150,7 @@ def load_checkpoint(path, device="cpu"):
         model.load_state_dict(state, strict=True)
     elif isinstance(package, dict):
         # Un state_dict plano guardado por nosotros mismos (--random-weights de prueba).
-        model = HTDemucs(sources=SOURCES)
+        model = HTDemucs(sources=list(sources) if sources else _infer_sources_from_state(package))
         model.load_state_dict(package, strict=True)
     else:
         raise ValueError(f"Formato de checkpoint no reconocido en {path}")
@@ -1094,11 +1159,28 @@ def load_checkpoint(path, device="cpu"):
     return model
 
 
-def build_random_model(device="cpu"):
+def _infer_sources_from_state(state):
+    """Deduce las fuentes del checkpoint: la capa de salida del decoder
+    temporal (la de mayor índice en `tdecoder.N`, ConvTranspose1d con pesos
+    (in, out, k)) saca audio_channels × nº_fuentes canales."""
+    import re
+    idx = [int(m.group(1)) for k in state
+           for m in [re.match(r"tdecoder\.(\d+)\.conv_tr\.weight$", k)] if m]
+    if not idx:
+        raise ValueError("Checkpoint sin capas 'tdecoder.N.conv_tr.weight': no se pueden deducir "
+                         "las fuentes; usa --model para indicarlas")
+    n_src = state[f"tdecoder.{max(idx)}.conv_tr.weight"].shape[1] // AUDIO_CHANNELS
+    for srcs in (SOURCES_6S, SOURCES):
+        if n_src == len(srcs):
+            return list(srcs)
+    raise ValueError(f"Checkpoint con {n_src} fuentes: solo se soportan 4 o 6")
+
+
+def build_random_model(device="cpu", sources=None):
     """Construye un HTDemucs con pesos aleatorios (misma arquitectura e
     hiperparámetros que el checkpoint oficial). Solo para pruebas: la
     separación resultante no tiene ningún significado musical."""
-    model = HTDemucs(sources=SOURCES)
+    model = HTDemucs(sources=list(sources) if sources else SOURCES)
     model.to(device)
     model.eval()
     return model
@@ -1109,6 +1191,16 @@ def build_random_model(device="cpu"):
 # ============================================================================
 
 def download_checkpoint(url=OFFICIAL_MODEL_URL, dest=DEFAULT_MODEL_PATH):
+    """Descarga `url` (o la primera que funcione si es una lista)."""
+    if isinstance(url, (list, tuple)):
+        last = None
+        for u in url:
+            try:
+                return download_checkpoint(u, dest)
+            except Exception as e:  # prueba la siguiente URL
+                print(f"  [!] {u} falló: {e}", file=sys.stderr)
+                last = e
+        raise last
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     print(f"Descargando {url}")
@@ -1177,25 +1269,44 @@ def save_wav(path, wav, sr=SAMPLERATE):
 # ============================================================================
 
 def cmd_install(args):
-    dest = Path(args.output) if args.output else DEFAULT_MODEL_PATH
+    dest = Path(args.output) if args.output else model_default_path(args.model)
+    if args.url and args.url.endswith(".safetensors") and dest.suffix != ".safetensors":
+        dest = dest.with_suffix(".safetensors")  # que load_checkpoint reconozca el formato
     if dest.exists() and not args.force:
         print(f"Ya existe {dest} (usa --force para volver a descargar).")
         return 0
-    download_checkpoint(dest=dest)
-    print("Listo.")
+    urls = [args.url] if args.url else MODELS[args.model]["urls"]
+    try:
+        got = download_checkpoint(urls, dest)
+    except Exception as e:
+        print(f"No se pudo descargar {args.model}: {e}", file=sys.stderr)
+        print("Prueba con --url <URL del checkpoint> o descárgalo a mano y usa --model-path.",
+              file=sys.stderr)
+        return 1
+    print(f"Listo: {got}")
     return 0
 
 
+def _resolve_model_file(name):
+    """Ruta del checkpoint instalado de `name` (acepta .th o .safetensors)."""
+    p = model_default_path(name)
+    alt = p.with_suffix(".safetensors")
+    if not p.exists() and alt.exists():
+        return alt
+    return p
+
+
 def cmd_info(args):
+    default_path = _resolve_model_file(args.model)
     if args.model_path:
-        model = load_checkpoint(args.model_path, device="cpu")
+        model = load_checkpoint(args.model_path, device="cpu", sources=model_sources(args.model))
         source = str(args.model_path)
-    elif args.random_weights or not Path(DEFAULT_MODEL_PATH).exists():
-        model = build_random_model(device="cpu")
+    elif args.random_weights or not default_path.exists():
+        model = build_random_model(device="cpu", sources=model_sources(args.model))
         source = "(arquitectura por defecto, sin checkpoint cargado)"
     else:
-        model = load_checkpoint(DEFAULT_MODEL_PATH, device="cpu")
-        source = str(DEFAULT_MODEL_PATH)
+        model = load_checkpoint(default_path, device="cpu", sources=model_sources(args.model))
+        source = str(default_path)
 
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Checkpoint:        {source}")
@@ -1217,14 +1328,15 @@ def cmd_separate(args):
     if args.random_weights:
         print("[!] --random-weights: usando pesos aleatorios, la separación NO será musicalmente válida "
               "(solo sirve para probar que el motor funciona).", file=sys.stderr)
-        model = build_random_model(device=device)
+        model = build_random_model(device=device, sources=model_sources(args.model))
     else:
-        model_path = args.model_path or DEFAULT_MODEL_PATH
+        model_path = args.model_path or _resolve_model_file(args.model)
         if not Path(model_path).exists():
             print(f"No se encuentra el checkpoint en {model_path}.", file=sys.stderr)
-            print("Ejecuta antes: python stem_separator.py install", file=sys.stderr)
+            extra = "" if args.model == "htdemucs" else f" --model {args.model}"
+            print(f"Ejecuta antes: python stem_separator.py install{extra}", file=sys.stderr)
             return 1
-        model = load_checkpoint(model_path, device=device)
+        model = load_checkpoint(model_path, device=device, sources=model_sources(args.model))
 
     if args.segment:
         model.segment = args.segment
@@ -1283,20 +1395,26 @@ def build_parser():
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_install = sub.add_parser("install", help="descarga el checkpoint preentrenado oficial")
-    p_install.add_argument("--output", type=str, default=None, help="ruta de destino del .th")
+    p_install.add_argument("--model", type=str, default="htdemucs", choices=list(MODELS),
+                           help="modelo a descargar (defecto htdemucs)")
+    p_install.add_argument("--output", type=str, default=None, help="ruta de destino del checkpoint")
+    p_install.add_argument("--url", type=str, default=None, help="URL alternativa del checkpoint")
     p_install.add_argument("--force", action="store_true", help="volver a descargar aunque ya exista")
     p_install.set_defaults(func=cmd_install)
 
     p_sep = sub.add_parser("separate", help="separa un WAV en stems")
     p_sep.add_argument("input", type=str, help="fichero WAV de entrada")
-    p_sep.add_argument("--stems", nargs="+", default=None, choices=SOURCES,
-                        help="subconjunto de fuentes a exportar (default: las 4)")
-    p_sep.add_argument("--two-stems", type=str, default=None, choices=SOURCES,
+    p_sep.add_argument("--model", type=str, default="htdemucs", choices=list(MODELS),
+                        help="modelo (defecto htdemucs; htdemucs_6s añade guitar y piano)")
+    p_sep.add_argument("--stems", nargs="+", default=None, choices=ALL_SOURCES,
+                        help="subconjunto de fuentes a exportar (default: todas las del modelo)")
+    p_sep.add_argument("--two-stems", type=str, default=None, choices=ALL_SOURCES,
                         help="modo karaoke: exporta esta fuente y 'no_<fuente>' (suma del resto)")
     p_sep.add_argument("--shifts", type=int, default=1, help="nº de desplazamientos promediados (default: 1)")
     p_sep.add_argument("--overlap", type=float, default=0.25, help="solape entre segmentos, 0-1 (default: 0.25)")
     p_sep.add_argument("--segment", type=float, default=None, help="duración de segmento en segundos")
-    p_sep.add_argument("--model-path", type=str, default=None, help="ruta al checkpoint .th")
+    p_sep.add_argument("--model-path", type=str, default=None,
+                        help="ruta al checkpoint (.th oficial, o .safetensors con los pesos de Demucs ≥4.1)")
     p_sep.add_argument("--device", type=str, default="cpu", choices=["cpu", "cuda"])
     p_sep.add_argument("--output-dir", type=str, default=None)
     p_sep.add_argument("--random-weights", action="store_true",
@@ -1305,6 +1423,7 @@ def build_parser():
     p_sep.set_defaults(func=cmd_separate)
 
     p_info = sub.add_parser("info", help="inspecciona un checkpoint o la arquitectura por defecto")
+    p_info.add_argument("--model", type=str, default="htdemucs", choices=list(MODELS))
     p_info.add_argument("--model-path", type=str, default=None)
     p_info.add_argument("--random-weights", action="store_true")
     p_info.set_defaults(func=cmd_info)
