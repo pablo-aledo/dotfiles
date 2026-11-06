@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 r"""
-combined_simplifier_hybrid_v2.py — Simplificador de piano por grados: sustitución
+piano_simplifier.py — Simplificador de piano por grados: sustitución
 armónica/melódica + optimizador adaptativo + rejilla + preparación automática
 (MIDI → MIDI, autocontenido)
-(versión 4.0 «arreglo»: sucesor de combined_simplifier_hybrid.py v3.0).
+(versión 4.0 «arreglo»: sucesor de old/combined_simplifier_hybrid.py v3.0).
 
 NOVEDADES v5 (niveles): --level beginner|intermediate|advanced deriva versiones con un perfil
 aprendido de 553 MIDIs graduados (ver bloque [NIVEL]); --target-grade 1..5 usa ese perfil (--legacy
@@ -13,7 +13,7 @@ transposicion automatica coincidia con la real menos que no transponer).
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
 ────────────────────────────────────────────────────────────────────────────
-Mismo núcleo que combined_simplifier_hybrid.py (sustitución armónica/melódica
+Mismo núcleo que old/combined_simplifier_hybrid.py (sustitución armónica/melódica
 que nunca reduce el nº de notas, optimizador de aceptación adaptativa por
 pasadas y rejilla de respaldo desde el snapshot estructural; fichero único que
 no importa otros módulos del proyecto), más una capa de preparación y de
@@ -109,40 +109,40 @@ Opciones
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Cuatro grados con todo activado:
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 1 3 5 7
+  python piano_simplifier.py obra.mid --target-grade 1 3 5 7
 
   # Carpeta de salida, más pasadas y corte de manos explícito:
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 2 \
+  python piano_simplifier.py obra.mid --target-grade 2 \
       --outdir out/ --max-transform-passes 12 --split 60
 
   # Acordes en bloque densos: limitar a 3 voces por mano y acordes:
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 4 --max-voices-per-chord 3
+  python piano_simplifier.py obra.mid --target-grade 4 --max-voices-per-chord 3
 
   # Grado muy bajo permitiendo tocar la melodía, sin notas añadidas:
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 1 \
+  python piano_simplifier.py obra.mid --target-grade 1 \
       --no-protect-melody --no-additive
 
   # Conservar tonalidad y compás originales:
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 --no-transpose --no-meter-detect
+  python piano_simplifier.py obra.mid --target-grade 3 --no-transpose --no-meter-detect
 
   # Respetar la textura original (sin retexturizar) o retexturizar hasta el grado 4:
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 --no-retexture
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 --retexture-max-grade 4
+  python piano_simplifier.py obra.mid --target-grade 3 --no-retexture
+  python piano_simplifier.py obra.mid --target-grade 3 --retexture-max-grade 4
 
   # Solo motor estructural + rejilla:
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 6 --no-transforms
+  python piano_simplifier.py obra.mid --target-grade 6 --no-transforms
 
   # Localizar pasajes densos (grado por compás) y luego tratarlos:
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 --report-bars
-  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 \
+  python piano_simplifier.py obra.mid --target-grade 3 --report-bars
+  python piano_simplifier.py obra.mid --target-grade 3 \
       --protect-bars 45 46 47 48 --soften-bars 60 61 62 63 64 \
       --soften-span 9 --soften-leap 5 --soften-stretch 1.4
 
 ────────────────────────────────────────────────────────────────────────────
 Dependencias y relación con otras versiones
 ────────────────────────────────────────────────────────────────────────────
-Solo numpy; fichero único y autocontenido. Predecesor: combined_simplifier_hybrid.py
-(v3.0). Motor base y escalera schenkeriana: combined_simplifier.py.
+Solo numpy; fichero único y autocontenido. Predecesor: old/combined_simplifier_hybrid.py
+(v3.0). Motor base y escalera schenkeriana: combined_simplifier_schenker.py.
 """
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2302,9 +2302,9 @@ def apply_grid_fallback_until_target(records: List["NoteRec"], tc: "TimeContext"
 # ══════════════════════════════════════════════════════════════════════════════
 #  [HIBRIDO] CAPA DE TRANSFORMACIONES QUE NO SE LIMITAN A ELIMINAR NOTAS
 #
-#  Fusion de combined_simplifier.py v2.0 (sustitucion armonica genuina,
+#  Fusion de combined_simplifier_schenker.py v2.0 (sustitucion armonica genuina,
 #  hallazgo empirico sobre el punto de arranque de la rejilla) y
-#  combined_simplifier_transformed.py v1.2 (bucle de aceptacion adaptativa,
+#  old/combined_simplifier_transformed.py v1.2 (bucle de aceptacion adaptativa,
 #  align_hands, merge_repeated_notes, trim_overlaps). Ver cabecera del
 #  fichero para el detalle de que se tomo de cada uno y por que.
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3578,7 +3578,7 @@ def grade_main(args, grades):
 
 def main():
     ap = argparse.ArgumentParser(
-        prog="combined_simplifier_hybrid.py",
+        prog="piano_simplifier.py",
         description="Simplifica un MIDI de piano a un nivel de dificultad pedagogica pedido: "
                      "sustitucion armonica/melodica + optimizador adaptativo de transformaciones "
                      "(registro/textura/ritmica/aditivas) + rejilla garantizada como ultimo recurso, "

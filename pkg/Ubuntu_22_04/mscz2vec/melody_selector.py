@@ -7,7 +7,7 @@ elegir para melodías
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
 ────────────────────────────────────────────────────────────────────────────
-Los generadores (melody_conditioned_v5 --candidates, bass_line_composer,
+Los generadores (melody_conditioned --candidates, bass_line_composer,
 melody_generator…) eligen "el mejor" con su PROPIO score interno. Esta
 herramienta puntúa los candidatos con el crítico oficial del ecosistema
 (melody_critic.py) y se queda con el mejor; con `loop` automatiza todo el
@@ -93,7 +93,7 @@ Ejemplos de uso
   python melody_selector.py pick mel.mid mel_v2.mid mel_v3.mid \
       --output mejor.mid
   python melody_selector.py loop --n 12 --stop-at 0.55 --output mejor.mid \
-      --cmd "python melody_conditioned_v5.py --engine motif --key C \
+      --cmd "python melody_conditioned.py --engine motif --key C \
              --bars 16 --seed {seed} --candidates 3 --output {out}"
 
 ────────────────────────────────────────────────────────────────────────────

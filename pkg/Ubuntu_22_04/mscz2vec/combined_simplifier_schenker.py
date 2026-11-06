@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 r"""
-combined_simplifier.py — Simplificador de partituras de piano por grados de
+combined_simplifier_schenker.py — Simplificador de partituras de piano por grados de
 dificultad pedagógica (MIDI → MIDI)
 (versión 1.2: motor estructural + rejilla de respaldo + escalera schenkeriana).
 
@@ -103,38 +103,38 @@ Opciones
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Cuatro versiones del mismo MIDI, de grado 1 a grado 7:
-  python combined_simplifier.py obra.mid --target-grade 1 3 5 7
+  python combined_simplifier_schenker.py obra.mid --target-grade 1 3 5 7
 
   # Un solo grado, con carpeta de salida:
-  python combined_simplifier.py obra.mid --target-grade 2 --outdir out/
+  python combined_simplifier_schenker.py obra.mid --target-grade 2 --outdir out/
 
   # Cambiar el punto de corte entre manos (aquí 60 = C4, el defecto):
-  python combined_simplifier.py obra.mid --target-grade 4 --split 60
+  python combined_simplifier_schenker.py obra.mid --target-grade 4 --split 60
 
   # Fijar el suelo estructural en un nivel intermedio en vez del Ursatz:
-  python combined_simplifier.py obra.mid --target-grade 3 --floor-level 1
+  python combined_simplifier_schenker.py obra.mid --target-grade 3 --floor-level 1
 
   # Escalera schenkeriana rápida (3 peldaños: ursatz / umbral / superficie):
-  python combined_simplifier.py obra.mid --schenker-sequence
+  python combined_simplifier_schenker.py obra.mid --schenker-sequence
 
   # Escalera gradual, un peldaño por umbral:
-  python combined_simplifier.py obra.mid --schenker-sequence --schenker-mode threshold_sweep
+  python combined_simplifier_schenker.py obra.mid --schenker-sequence --schenker-mode threshold_sweep
 
   # Escalera gradual con umbrales propios, carpeta y salto mínimo entre peldaños:
-  python combined_simplifier.py obra.mid --schenker-sequence \
+  python combined_simplifier_schenker.py obra.mid --schenker-sequence \
       --schenker-mode threshold_sweep --outdir out/ \
       --schenker-thresholds 0.15 0.3 0.45 0.6 0.75 --schenker-min-diff 0.05
 
   # Primer recorte más agresivo y menos niveles:
-  python combined_simplifier.py obra.mid --schenker-sequence \
+  python combined_simplifier_schenker.py obra.mid --schenker-sequence \
       --schenker-threshold 0.5 --schenker-max-levels 5
 
 ────────────────────────────────────────────────────────────────────────────
 Dependencias y relación con otras versiones
 ────────────────────────────────────────────────────────────────────────────
 Solo numpy (el resto es biblioteca estándar); fichero único y autocontenido.
-Véase también: combined_simplifier_transformed.py (añade transformaciones
-musicales sobre este motor), combined_simplifier_transformed_2.py y
+Véase también: old/combined_simplifier_transformed.py (añade transformaciones
+musicales sobre este motor), old/combined_simplifier_transformed_2.py y
 combined_simplifier_hybrid*.py (versiones autocontenidas que lo fusionan con el
 optimizador adaptativo).
 """
@@ -2614,7 +2614,7 @@ def grade_main(args, grades):
 
 def main():
     ap = argparse.ArgumentParser(
-        prog="combined_simplifier.py",
+        prog="combined_simplifier_schenker.py",
         description="Simplifica un MIDI de piano a un nivel de dificultad pedagogica pedido: "
                      "fidelidad estructural donde alcanza, rejilla garantizada donde el suelo "
                      "estructural bloquea el target.")

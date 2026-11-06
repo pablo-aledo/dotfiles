@@ -680,7 +680,7 @@ def print_brief(b):
     r = b["recommend"]
     print(f"\n  {_c('B')}Parámetros recomendados{_c('R')}")
     print(f"    chord_progression_generator --style {r['generator_style']}")
-    print(f"    melody_conditioned_v5 --engine {r['melody_engine']}   bass_line_composer --style {r['bass_style']}")
+    print(f"    melody_conditioned --engine {r['melody_engine']}   bass_line_composer --style {r['bass_style']}")
     print(f"    drummer --style {r['drum_style']}" + (f"   ({r['drum_note']})" if r["drum_note"] else ""))
     print(f"    leadsheet_realizer --pattern {r['leadsheet_pattern']}   performer --style {r['performer_style']}"
           f"   song_architect --style {r['song_architect_style']}")
@@ -801,7 +801,7 @@ def make_steps(brief, a, chord_string, bars, variant, seed):
          _cmd("python", "leadsheet_realizer.py", "--chords", chord_string, "--pattern", r["leadsheet_pattern"],
               "--tempo", tempo, "--output", "armonia.mid"))
     step("melody", f"Melodía condicionada (motor {r['melody_engine']})",
-         _cmd("python", "melody_conditioned_v5.py", "--engine", r["melody_engine"], "--key", root, "--mode", mode,
+         _cmd("python", "melody_conditioned.py", "--engine", r["melody_engine"], "--key", root, "--mode", mode,
               "--bars", bars, "--tempo", tempo, "--chords", chord_string, "--include-chords",
               "--output", "melodia.mid", "--seed", seed + 100))
     step("bass", f"Línea de bajo ({r['bass_style']})",

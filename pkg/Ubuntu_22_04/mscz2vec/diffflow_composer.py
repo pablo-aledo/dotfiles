@@ -14,7 +14,7 @@ Fundamento
     Se entrena minimizando KL(p_forward‖p_backward) sobre la trayectoria
     completa (Zhang & Chen, "Diffusion Normalizing Flow", NeurIPS 2021).
     A medio camino entre flow_composer.py (biyección determinista, sin
-    ruido) y diffusion_composer_v4.py (drift fijo, solo el backward aprende):
+    ruido) y diffusion_composer.py (drift fijo, solo el backward aprende):
     aquí AMBAS direcciones son redes entrenables, lo que permite menos pasos
     de discretización que una difusión estándar manteniendo capacidad de
     modelar distribuciones multimodales que un flow puro no puede.
@@ -252,7 +252,7 @@ from pathlib import Path
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONSTANTES GLOBALES  (idénticas a diffusion_composer_v4.py / latent_composer.py)
+#  CONSTANTES GLOBALES  (idénticas a diffusion_composer.py / latent_composer.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
 ROLES = ['melody', 'counterpoint', 'accompaniment', 'bass', 'percussion']
@@ -316,7 +316,7 @@ def _pad_pitch(roll, pitch_lo, n_full=128):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  UTILIDADES MIDI COMUNES  (idénticas a diffusion_composer_v4.py)
+#  UTILIDADES MIDI COMUNES  (idénticas a diffusion_composer.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _load_midi(path: str):
@@ -361,7 +361,7 @@ def _std(values: list) -> float:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  ASIGNACIÓN DE ROLES  (RoleAssigner) — idéntico a diffusion_composer_v4.py
+#  ASIGNACIÓN DE ROLES  (RoleAssigner) — idéntico a diffusion_composer.py
 # ══════════════════════════════════════════════════════════════════════════════
 
 class RoleAssigner:
@@ -477,7 +477,7 @@ class RoleAssigner:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PIANO ROLL CONVERTER  — idéntico a diffusion_composer_v4.py
+#  PIANO ROLL CONVERTER  — idéntico a diffusion_composer.py
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PianoRollConverter:
@@ -521,7 +521,7 @@ class PianoRollConverter:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  EXTRACTOR DE TENSIÓN  — idéntico a diffusion_composer_v4.py (sin enriquecimiento
+#  EXTRACTOR DE TENSIÓN  — idéntico a diffusion_composer.py (sin enriquecimiento
 #  mscz2vec opcional, omitido aquí para mantener el archivo autocontenido)
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -890,7 +890,7 @@ def _collate_fn(batch):
 #
 #  COSTE: cada paso de entrenamiento evalúa drift_net ~2×n_sde_steps veces y
 #  score_net ~1×n_sde_steps veces (vs. 1 sola evaluación por paso en
-#  diffusion_composer_v4.py). Si el entrenamiento va lento, baja --sde-steps,
+#  diffusion_composer.py). Si el entrenamiento va lento, baja --sde-steps,
 #  --hidden-channels o --batch-size antes que nada.
 # ══════════════════════════════════════════════════════════════════════════════
 

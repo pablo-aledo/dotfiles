@@ -1222,13 +1222,13 @@ def recompose_steps(i: Dict, O: Dict) -> List[Dict]:
                   "--chords-midi-channel", f"@chan0:{chords}", "--chords-midi-window", max(1, bpb)]
     tail = ["--candidates", 3, "--seed", seed, "--output", mel]
     gens = {
-        "motif": ("r11_melodia", "melody_conditioned_v5.py",
+        "motif": ("r11_melodia", "melody_conditioned.py",
                   ["--engine", "motif", "--motif", i["motif"] or ""] + base + chordsargs + tail,
                   "Melodía sembrada con el motivo real", [f"exists:{chords}"], bool(i["motif"])),
-        "guided": ("r11b_melodia_guiada", "melody_conditioned_v5.py",
+        "guided": ("r11b_melodia_guiada", "melody_conditioned.py",
                    ["--engine", "chord_guided"] + base + chordsargs + tail,
                    "Melodía guiada por acordes", [f"exists:{chords}"], True),
-        "free": ("r11c_melodia_libre", "melody_conditioned_v5.py",
+        "free": ("r11c_melodia_libre", "melody_conditioned.py",
                  ["--engine", "chord_guided"] + base + tail, "Melodía sin acordes", [], True),
         "captured": ("r11d_melodia_capturada", SELF, ["_first", "--files", f"{W}/orig_melody.mid", "-o", mel],
                      "Melodía capturada por el HMM (puede venir invertida)",

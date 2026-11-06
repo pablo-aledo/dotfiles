@@ -1,65 +1,88 @@
 #!/usr/bin/env python3
 r"""
-diffusion_composer.py — Composición end-to-end mediante difusión LATENTE
-multi-rol (MIDI → MIDI, requiere PyTorch)
-(versión 0.1: encoder/decoder CNN + DDPM condicionado en tensión y estilo).
+diffusion_composer.py — Composición end-to-end mediante difusión DIRECTA
+multi-rol sobre el piano roll (MIDI → MIDI, requiere PyTorch)
+(versión 4: la v3 con roles y rango de pitch reducibles; U-Net 2D sin VAE,
+DDPM con parametrización x0; el banner aún imprime «v3»).
 
 ────────────────────────────────────────────────────────────────────────────
 Fundamento
 ────────────────────────────────────────────────────────────────────────────
-Arquitectura: un encoder CNN lleva cada ventana de piano roll multi-rol
-(melody, counterpoint, accompaniment, bass, percussion) a un espacio latente
-continuo; sobre ese espacio se entrena un DDPM (Denoising Diffusion
-Probabilistic Model) condicionado en la tensión armónica por compás y en un
-vector de estilo; un decoder CNN devuelve el latente a piano roll. La generación
-es compás a compás, con un contexto de los compases anteriores, muestreo DDIM y
-binarización por umbral (percentil adaptativo o fijo) antes de escribir el MIDI.
+Arquitectura: una U-Net 2D difunde directamente sobre el piano roll multi-rol
+(melody, counterpoint, accompaniment, bass, percussion), sin encoder/decoder
+latente. DDPM con parametrización x0, condicionado en la tensión armónica por
+compás y en un vector de estilo que se extrae del contexto. La generación es
+compás a compás con muestreo DDIM; el contexto son los compases ya generados
+(o los del MIDI original con --fixed-context) y el roll se binariza por umbral
+antes de escribir el MIDI. El inpainting usa RePaint: en cada paso los compases
+conocidos se sustituyen por su versión ruidificada al nivel correspondiente y
+los vacíos se generan condicionados en ese contexto.
 
-Familia: es la línea LATENTE (con --latent-dim, --pos-weight y
---decoder-dropout activos). Las versiones diffusion_composer_v3.py y _v4.py
-difunden directamente sobre el piano roll con una U-Net, sin VAE.
+Respecto a old/diffusion_composer_v3.py: nuevos --disable-roles y --pitch-range en
+prepare, train y round-trip, para reducir la carga computacional (menos roles
+activos y piano roll de N notas centrado en Do central, MIDI 60); el modelo
+guarda el rango en model_config.json y los demás subcomandos lo leen de ahí.
+
+Respecto a latent_diffusion_composer.py (v0.1, latente): --latent-dim, --pos-weight y
+--decoder-dropout siguen aceptándose por compatibilidad pero se ignoran (el
+primero solo se guarda como informativo en model_config.json); el umbral
+adaptativo por defecto pasa de percentil 85 a 99 (distribuciones bimodales);
+nuevos --threshold, --adaptive-per-bar y --fixed-context; subcomando inpaint;
+enriquecimiento opcional del condicionamiento con mscz2vec en prepare.
 
 ────────────────────────────────────────────────────────────────────────────
 Modos de uso (subcomandos)
 ────────────────────────────────────────────────────────────────────────────
-  prepare       MIDI corpus → piano rolls segmentados por rol (.npz).
-  train         Entrena el modelo de difusión latente.
-  encode        MIDI de referencia → vector de estilo z_style (.json).
+  prepare       MIDI corpus → piano rolls segmentados por rol (.npz). Con
+                --enrich el vector de condicionamiento crece de 8D (tensión
+                básica) a 23D (8D + 15D de tensión armónica, estabilidad tonal
+                y tonalidad según mscz2vec); con --enrich-external lee un
+                vector .vec junto a cada MIDI (mismo nombre, extensión .vec) y
+                lo replica en todos los compases.
+  train         Entrena el modelo de difusión.
+  encode        MIDI de referencia → z_style (.json).
   compose       Genera una obra nueva. Modos (--mode):
-                  sample    parte de ruido, condicionada en el estilo de --input.
-                  denoise   parte del propio MIDI --input con ruido de fuerza
+                  sample    condicionada en el estilo de --input.
+                  denoise   parte del propio --input con ruido de fuerza
                             --strength (0 = copia, 1 = libre).
                   blend     mezcla el estilo de varios --inputs según --weights.
                   sweep     interpola el estilo de 2 o más --inputs a lo largo de
                             los compases (morphing gradual).
-                Todos los modos exigen --input o --inputs (sweep, al menos dos).
-  style-corpus  Centroide de estilo de una carpeta de MIDIs (.json compatible con
-                encode).
-  transfer      Traslada el estilo de un corpus A a un corpus B sobre una canción:
+                sample, denoise y blend exigen --input o --inputs; sweep, al
+                menos dos --inputs.
+  transfer      Transfiere el estilo de un corpus A → B a una canción:
                 z_nuevo = z_canción + strength · (z_B − z_A); con --progressive
                 la fuerza crece de 0 a --strength a lo largo de la obra.
-  round-trip    Diagnóstico: MIDI → piano roll → MIDI sin modelo (aísla fallos
-                del parser).
-  reconstruct   Diagnóstico: encode → decode sin difusión (comprueba el codec).
+  style-corpus  Centroide de estilo de una carpeta de MIDIs (.json).
+  inpaint       Rellena los compases vacíos de un MIDI conservando los que
+                tienen notas (RePaint). Sin compases vacíos no hace nada (sale
+                con 0); si todos están vacíos, usa compose (sale con 1).
+  reconstruct   Diagnóstico: denoising muy leve (fuerza 0.05, 20 pasos DDIM)
+                sobre el input. p90 > 0.3 → U-Net correcta; p90 < 0.05 → aún no
+                ha convergido, esperar más épocas.
+  round-trip    Diagnóstico: MIDI → piano roll → MIDI sin modelo.
   inspect       Diagnóstico del modelo (curvas de pérdida) y de los datos (.npz).
-  Orden de diagnóstico: si round-trip suena mal, falla el parseo MIDI; si
-  reconstruct suena mal, el codec; si solo compose suena mal, el denoiser.
+  Orden de diagnóstico: si round-trip suena mal, falla el parseo; si round-trip
+  suena bien pero reconstruct mal, el modelo; si reconstruct bien y compose mal,
+  los parámetros de muestreo.
 
 ────────────────────────────────────────────────────────────────────────────
 Entradas y salidas
 ────────────────────────────────────────────────────────────────────────────
-  prepare       Salida: un .npz por MIDI en --output-dir (y prepare_report.json
-                con --report).
-  train         Salida en --model-dir: model_config.json, checkpoints e historial
-                de pérdidas.
-  encode        Salida: --output (defecto <entrada>.style.json) con z_style,
-                z_context y la tensión media.
-  style-corpus  Salida: --output (defecto z_corpus_<carpeta>.json) con el
-                centroide, nº de ficheros y cohesión del corpus.
-  compose       Salida: --output (defecto output.mid). Necesita una paleta JSON
-                (--palette) con programa, canal y velocidad por rol.
-  transfer      Salida: --output (defecto transfer_output.mid).
-  round-trip / reconstruct   Salida: output_roundtrip.mid / output_recon.mid.
+  prepare       Un .npz por MIDI en --output-dir (y prepare_report.json con
+                --report).
+  train         En --model-dir: model_config.json (con model_version
+                "v3_direct"), checkpoints e historial de pérdidas.
+  encode        --output (defecto <entrada>.style.json): z_style, z_context y
+                tensión media.
+  style-corpus  --output (defecto z_corpus_<carpeta>.json): centroide, nº de
+                ficheros y cohesión.
+  compose       --output (defecto output.mid); requiere --palette (JSON con
+                programa, canal y velocidad por rol).
+  transfer      --output (defecto transfer_output.mid).
+  inpaint       --output (defecto output_inpaint.mid), con un mapa de compases
+                (█ con notas, ░ vacíos) por consola.
+  reconstruct / round-trip   output_recon.mid / output_roundtrip.mid.
 
 ────────────────────────────────────────────────────────────────────────────
 Opciones
@@ -69,66 +92,74 @@ Opciones
     --resolution N     Ticks por compás (defecto 48).
     --window-bars N    Compases por ventana (defecto 4).
     --report           Estadísticas de la preparación.
+    --disable-roles ROL…  Roles a excluir del preprocesado (melody, counterpoint,
+                       accompaniment, bass, percussion).
+    --pitch-range N    Limita el piano roll a N valores MIDI centrados en Do
+                       central (reduce tamaño del modelo y memoria).
+    --enrich           Condicionamiento enriquecido con mscz2vec (23D).
+    --mscz2vec-path F  Ruta a mscz2vec.py (si no está en el PATH ni junto a este
+                       fichero).
+    --enrich-external  Carga un .vec por MIDI (mismo nombre).
   train
     --data-dir DIR  --model-dir DIR     (obligatorios)
     --epochs N (300)   --batch-size N (16)   --lr F (1e-4)   --patience N (50)
-    --latent-dim N     Dimensión del espacio latente (defecto 128).
     --style-dim N      Dimensión del vector de estilo (defecto 16).
-    --diffusion-steps N  Pasos T del proceso de difusión (defecto 1000).
-    --pos-weight F     Peso de las notas activas en la BCE (defecto 5.0).
-    --decoder-dropout F  Dropout entre bloques del decoder (defecto 0.1; subir a
-                       0.2-0.3 si val_recon sube mientras train baja).
+    --diffusion-steps N  Pasos T de difusión (defecto 1000).
+    --latent-dim N  --pos-weight F  --decoder-dropout F
+                       Heredados de v0.1: aceptados e ignorados.
+    --disable-roles ROL…  Roles a excluir; debe coincidir con el usado en prepare.
     --resume           Reanuda desde el último checkpoint.
   encode
     --input FILE  --model-dir DIR (obligatorios)   --output FILE
   compose
     --model-dir DIR  --palette FILE     (obligatorios)
     --mode M           sample (defecto) | denoise | blend | sweep.
-    --input FILE       MIDI de referencia (sample, denoise, blend).
-    --inputs FILE…     Varios MIDIs (blend, sweep).
-    --weights W…       Pesos de la mezcla en blend (se normalizan; defecto
-                       iguales).
+    --input FILE       MIDI de referencia.      --inputs FILE…   Varios MIDIs.
+    --weights W…       Pesos de la mezcla en blend (se normalizan).
     --strength F       [denoise] 0 = copia … 1 = libre (defecto 0.7).
     --bars N           Compases a generar (defecto 32).
-    --tension T        Perfil de tensión: flat | arch (defecto) | rise | fall, o
-                       un .json con una curva (se interpola a --bars).
-    --output FILE      MIDI de salida (defecto output.mid).
-    --bpm F            Tempo (defecto 120).
-    --temperature F    Temperatura del muestreo (defecto 1.0).
-    --ddim-steps N     Pasos DDIM (defecto 50; más = mejor calidad).
-    --eta F            Estocasticidad DDIM: 0 determinista … 1 DDPM (defecto 0.0).
-    --threshold-pct F  Percentil del umbral adaptativo de binarización (defecto
-                       85; bajarlo si el MIDI sale vacío, subirlo si sale denso).
+    --tension T        flat | arch (defecto) | rise | fall, o un .json con una
+                       curva (se interpola a --bars).
+    --output FILE (output.mid)   --bpm F (120)   --temperature F (1.0)
+    --ddim-steps N    Pasos DDIM (defecto 50; más = mejor calidad).
+    --eta F           0 = determinista … 1 = DDPM completo (defecto 0.0).
+    --threshold-pct F  Percentil del umbral adaptativo (defecto 99.0; si sale
+                       vacío, bajarlo; si sale denso, subirlo).
+    --threshold F     Umbral fijo 0.0-1.0; tiene prioridad sobre --threshold-pct.
+    --adaptive-per-bar  Umbral adaptativo por compás: los compases cuyo máximo
+                       no alcanza el global usan max × 0.5 como umbral local.
+    --fixed-context   Usa como contexto el MIDI original y no lo generado, lo
+                       que evita la degradación progresiva en piezas largas.
   style-corpus
     --input-dir DIR  --model-dir DIR    (obligatorios)   --output FILE
   transfer
     --input FILE  --model-dir DIR  --palette FILE  --style-from FILE
-    --style-to FILE                     (obligatorios; los .json vienen de
-                                        style-corpus o encode)
-    --strength F       Desplazamiento de estilo 0 … 1 (defecto 0.8).
-    --progressive      Interpola A → B a lo largo de los compases.
-    --denoise-strength F  Lejanía respecto al MIDI de referencia (defecto 0.6).
+    --style-to FILE                     (obligatorios)
+    --strength F (0.8)   --progressive   --denoise-strength F (0.6)
     --ddim-steps N (50)   --eta F (0.0)   --bpm F (120)
-    --threshold-pct F  Umbral adaptativo (defecto 85).
-    --output FILE      MIDI de salida (defecto transfer_output.mid).
-  round-trip
-    --input FILE       (obligatorio)
-    --model-dir DIR    Lee resolución y roles de model_config.json.
-    --resolution N     Ticks por compás si no se da --model-dir (defecto 48).
-    --palette FILE  --output FILE  --bpm F
+    --threshold-pct F (85.0)   --output FILE
+  inpaint
+    --model-dir DIR  --input FILE       (obligatorios; el MIDI con huecos)
+    --palette FILE  --output FILE (output_inpaint.mid)  --bpm F (120)
+    --ddim-steps N (50)
+    --resample N      Re-muestreos RePaint por paso (defecto 1; 3-5 mejoran la
+                       coherencia a costa de velocidad).
+    --threshold F     Umbral de binarización (defecto 0.5).
   reconstruct
     --model-dir DIR  --input FILE       (obligatorios)
-    --palette FILE  --output FILE  --bpm F  --threshold F
+    --palette FILE  --output FILE  --bpm F
+    --threshold F     Umbral fijo (sin valor: automático p99 × 0.5).
+  round-trip
+    --input FILE (obligatorio)   --model-dir DIR (lee resolución y roles)
+    --resolution N (48)   --palette FILE   --output FILE   --bpm F
+    --disable-roles ROL…  --pitch-range N   (solo si no se usa --model-dir)
   inspect
-    --what W [W…]      npz (defecto) | loss_curve.
-    --data-dir DIR     Carpeta de .npz (para npz).
-    --model-dir DIR    Directorio del modelo (para loss_curve).
-    --file STEM        Solo el .npz con ese nombre (sin extensión).
-    --window N         Ventana a mostrar (defecto 0; negativo = desde el final).
-    --bars-show N      Compases a dibujar por rol (defecto 4).
-    --roles ROL…       Roles a dibujar (defecto: todos).
-    --no-roll          Lista todos los .npz solo con metadatos y densidad
-                       (marca ⚠ DENSO si > 15 %).
+    --what W [W…]     npz (defecto) | loss_curve.
+    --data-dir DIR  --model-dir DIR  --file STEM
+    --window N (0; negativo = desde el final)   --bars-show N (4)
+    --roles ROL…      Roles a dibujar.
+    --no-roll         Lista todos los .npz con metadatos y densidad (⚠ DENSO si
+                      > 15 %).
 
 ────────────────────────────────────────────────────────────────────────────
 Parámetros (spec)
@@ -141,11 +172,16 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 
 @params v1
 [prepare]
---input-dir   dir   io=in required
---output-dir  dir   io=out required
---resolution  int   default=48 min=0
---window-bars int   default=4 min=0 unit=compases
---report      bool  default=false
+--input-dir       dir   io=in required
+--output-dir      dir   io=out required
+--resolution      int   default=48 min=0
+--window-bars     int   default=4 min=0 unit=compases
+--report          bool  default=false
+--enrich          bool  default=false  # Enriquecer el vector de condicionamiento con mscz2vec…
+--mscz2vec-path   file  io=in  # Ruta al script mscz2vec.py (opcional si está en el PATH o en el…
+--enrich-external bool  default=false  # Cargar vector externo .vec junto a cada MIDI (mismo nombre…
+--disable-roles   list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--pitch-range     int   typical=36..83  # Limitar el piano roll a N valores MIDI centrados en Do…
 [train]
 --data-dir        dir   io=in required
 --model-dir       dir   io=in required
@@ -159,26 +195,30 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 --decoder-dropout float default=0.1 typical=0.2..0.3  # Dropout entre bloques del decoder. Aumenta…
 --patience        int   default=50
 --resume          bool  default=false  # Reanudar entrenamiento desde el último checkpoint
+--disable-roles   list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
 [encode]
 --input     file  io=in required
 --model-dir dir   io=in required
 --output    file  io=out
 [compose]
---model-dir     dir   io=in required
---palette       file  io=in required
---mode          enum  default=sample values=sample|denoise|blend|sweep
---bars          int   default=32 min=0 unit=compases
---tension       str   default=arch
---output        file  default=output.mid io=out ext=mid
---bpm           float default=120.0 unit=BPM
---temperature   float default=1.0 typical=0..1
---ddim-steps    int   default=50 min=0  # Pasos de inferencia DDIM
---eta           float default=0.0  # Estocasticidad DDIM: 0=determinista, 1=DDPM completo
---strength      float default=0.7 typical=0..1  # [denoise] Fuerza de variación respecto a ref…
---input         file  io=in
---inputs        list  of=file io=in
---weights       list  of=float
---threshold-pct float default=85.0 unit=%  # Percentil para umbral adaptativo de binarización.…
+--model-dir        dir   io=in required
+--palette          file  io=in required
+--mode             enum  default=sample values=sample|denoise|blend|sweep
+--bars             int   default=32 min=0 unit=compases
+--tension          str   default=arch
+--output           file  default=output.mid io=out ext=mid
+--bpm              float default=120.0 unit=BPM
+--temperature      float default=1.0 typical=0..1
+--ddim-steps       int   default=50 min=0  # Pasos de inferencia DDIM
+--eta              float default=0.0  # Estocasticidad DDIM: 0=determinista, 1=DDPM completo
+--strength         float default=0.7 typical=0..1  # [denoise] Fuerza de variación respecto a ref…
+--input            file  io=in
+--inputs           list  of=file io=in
+--weights          list  of=float
+--threshold-pct    float default=99.0 unit=%  # Percentil para umbral adaptativo. Bájalo (ej.…
+--adaptive-per-bar bool  default=false  # Umbral adaptativo por compás: los compases cuyo máximo no…
+--fixed-context    bool  default=false  # Usar el contexto del MIDI original en lugar del output…
+--threshold        float typical=0.0..1.0  # Umbral fijo de binarización (0.0–1.0). Tiene prioridad…
 [style-corpus]
 --input-dir dir   io=in required  # Carpeta con los MIDIs del corpus
 --model-dir dir   io=in required
@@ -198,11 +238,22 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 --threshold-pct    float default=85.0 unit=%
 --output           file  default=transfer_output.mid io=out ext=mid
 [round-trip]
---input      file  io=in required
---model-dir  dir   io=in  # Si se indica, lee resolución y roles desde model_config.json
---resolution int   default=48 min=0
---palette    file  io=in  # Paleta de instrumentos (opcional)
---output     file  default=output_roundtrip.mid io=out ext=mid
+--input         file  io=in required
+--model-dir     dir   io=in  # Si se indica, lee resolución, roles y rango de pitch desde…
+--resolution    int   default=48 min=0
+--disable-roles list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--pitch-range   int    # Limitar a N valores MIDI centrados en Do central (solo si no se usa…
+--palette       file  io=in  # Paleta de instrumentos (opcional)
+--output        file  default=output_roundtrip.mid io=out ext=mid
+--bpm           float default=120.0 unit=BPM
+[inpaint]
+--model-dir  dir   io=in required
+--input      file  io=in ext=mid required  # MIDI con compases vacíos a rellenar
+--palette    file  io=in
+--output     file  default=output_inpaint.mid io=out ext=mid
+--ddim-steps int   default=50 min=0  # Pasos DDIM
+--resample   int   default=1 typical=3..5  # Número de re-muestreos RePaint por paso
+--threshold  float  # Umbral de binarización
 --bpm        float default=120.0 unit=BPM
 [reconstruct]
 --model-dir dir   io=in required
@@ -225,49 +276,72 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 ────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
-  # Preparar y entrenar:
+  # Preparar con roles reducidos y rango de pitch limitado (menos carga):
+  python diffusion_composer.py prepare --input-dir midis/ --output-dir data_small/ \
+      --disable-roles percussion counterpoint --pitch-range 48
+
+  # Preparar los datos (con la tensión enriquecida opcional):
   python diffusion_composer.py prepare --input-dir midis/ --output-dir data/ --report
-  python diffusion_composer.py train --data-dir data/ --model-dir model_diff/ \
-      --epochs 300 --batch-size 16 --lr 1e-4 --latent-dim 128 --style-dim 16 \
-      --diffusion-steps 1000 --pos-weight 5.0 --decoder-dropout 0.2 --patience 50
-  python diffusion_composer.py train --data-dir data/ --model-dir model_diff/ --resume
+  python diffusion_composer.py prepare --input-dir midis/ --output-dir data_enr/ \
+      --enrich --mscz2vec-path ./mscz2vec.py
+  python diffusion_composer.py prepare --input-dir midis/ --output-dir data_ext/ --enrich-external
+
+  # Entrenar con los mismos roles que en prepare:
+  python diffusion_composer.py train --data-dir data_small/ --model-dir model_small/ \
+      --disable-roles percussion counterpoint --epochs 300 --batch-size 16
+
+  # Entrenar, y reanudar:
+  python diffusion_composer.py train --data-dir data/ --model-dir model_diff_v4/ \
+      --epochs 300 --batch-size 8 --lr 1e-4 --style-dim 16 --diffusion-steps 1000 --patience 50
+  python diffusion_composer.py train --data-dir data/ --model-dir model_diff_v4/ --resume
 
   # Estilo de una referencia:
-  python diffusion_composer.py encode --input ref.mid --model-dir model_diff/ --output ref.style.json
+  python diffusion_composer.py encode --input ref.mid --model-dir model_diff_v4/
 
-  # Componer: desde ruido condicionado en una referencia, o variando una obra:
+  # Variar una obra (denoising desde una referencia):
+  python diffusion_composer.py compose --model-dir model_diff_v4/ --palette palette.json \
+      --mode denoise --input ref.mid --strength 0.1 --ddim-steps 50 --eta 0.0 \
+      --temperature 1.0 --bars 16 --threshold 0.3
+  python diffusion_composer.py compose --model-dir model_diff_v4/ --palette palette.json \
+      --mode denoise --input ref.mid --strength 0.3 --ddim-steps 50 --eta 0.0 \
+      --temperature 1.0 --bars 16 --threshold-pct 99.0 --adaptive-per-bar --fixed-context
+
+  # Obra nueva condicionada en el estilo de una referencia:
   python diffusion_composer.py compose --mode sample --input ref.mid \
-      --model-dir model_diff/ --palette palette.json --bars 32 --tension arch
-  python diffusion_composer.py compose --model-dir model_diff/ --palette palette.json \
-      --mode denoise --input ref.mid --strength 0.2 --ddim-steps 200 --eta 0.0 \
-      --temperature 0.5 --bars 16 --threshold-pct 99
+      --model-dir model_diff_v4/ --palette palette.json --bars 32 --tension arch
 
-  # Mezclar dos estilos, o hacer un morphing gradual entre tres obras:
-  python diffusion_composer.py compose --mode blend --inputs a.mid b.mid \
-      --weights 0.7 0.3 --model-dir model_diff/ --palette palette.json
-  python diffusion_composer.py compose --mode sweep --inputs a.mid b.mid c.mid \
-      --bars 48 --tension rise --model-dir model_diff/ --palette palette.json
+  # Morphing gradual entre dos canciones (sweep) y mezcla estática (blend):
+  python diffusion_composer.py compose --model-dir model_diff_v4/ --palette palette.json \
+      --mode sweep --inputs a.mid b.mid --bars 32 --ddim-steps 50 --eta 0.0 \
+      --temperature 1.0 --threshold-pct 99.0
+  python diffusion_composer.py compose --model-dir model_diff_v4/ --palette palette.json \
+      --mode blend --inputs a.mid b.mid --weights 0.7 0.3 --bars 32
 
-  # Transferencia de estilo de un corpus A a uno B sobre una canción:
-  python diffusion_composer.py style-corpus --input-dir midis_A/ --model-dir model_diff/ --output z_A.json
-  python diffusion_composer.py style-corpus --input-dir midis_B/ --model-dir model_diff/ --output z_B.json
-  python diffusion_composer.py transfer --input cancion.mid --model-dir model_diff/ \
-      --palette palette.json --style-from z_A.json --style-to z_B.json \
-      --strength 0.8 --output resultado.mid
-  python diffusion_composer.py transfer --input cancion.mid --model-dir model_diff/ \
+  # Transferencia de estilo de un corpus A a un corpus B:
+  python diffusion_composer.py style-corpus --input-dir midis_A/ --model-dir model_diff_v4/ --output z_A.json
+  python diffusion_composer.py style-corpus --input-dir midis_B/ --model-dir model_diff_v4/ --output z_B.json
+  python diffusion_composer.py transfer --input cancion.mid --model-dir model_diff_v4/ \
+      --palette palette.json --style-from z_A.json --style-to z_B.json --strength 0.8 \
+      --output resultado.mid
+  python diffusion_composer.py transfer --input cancion.mid --model-dir model_diff_v4/ \
       --palette palette.json --style-from z_A.json --style-to z_B.json --progressive
 
-  # Diagnóstico (en este orden):
-  python diffusion_composer.py round-trip --input ref.mid --model-dir model_diff/
-  python diffusion_composer.py reconstruct --model-dir model_diff/ --input ref.mid --palette palette.json
-  python diffusion_composer.py inspect --what loss_curve --model-dir model_diff/
+  # Rellenar compases vacíos:
+  python diffusion_composer.py inpaint --model-dir model_diff_v4/ --input con_huecos.mid \
+      --palette palette.json --ddim-steps 50 --resample 3 --output relleno.mid
+
+  # Diagnóstico:
+  python diffusion_composer.py round-trip --input ref.mid --model-dir model_diff_v4/
+  python diffusion_composer.py round-trip --input ref.mid --disable-roles percussion --pitch-range 48
+  python diffusion_composer.py reconstruct --model-dir model_diff_v4/ --input ref.mid
+  python diffusion_composer.py inspect --what loss_curve --model-dir model_diff_v4/
   python diffusion_composer.py inspect --what npz --data-dir data/ --no-roll
 
 ────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
-mido, numpy, torch.
-Versiones posteriores: diffusion_composer_v3.py (U-Net directa) y _v4.py.
+mido, numpy, torch. mscz2vec.py solo para prepare --enrich. Anteriores:
+latent_diffusion_composer.py (latente) y old/diffusion_composer_v3.py.
 """
 
 import argparse
@@ -304,6 +378,7 @@ GM_ROLE_HINTS = {
 TICKS_PER_BAR_DEFAULT = 48
 WINDOW_BARS_DEFAULT   = 4
 PITCH_CLASSES         = 128
+MIDI_CENTER           = 60   # Do central
 
 
 def _ensure_parent(path):
@@ -315,6 +390,48 @@ def _ensure_parent(path):
         if d:
             _os.makedirs(d, exist_ok=True)
     return path
+
+
+def _pitch_range(n: int | None) -> tuple[int, int] | None:
+    """
+    Devuelve (pitch_lo, pitch_hi) — rango MIDI inclusivo de n notas centrado
+    en Do central (MIDI 60).  n debe ser par o impar; si es None devuelve None
+    (= sin recorte, usa los 128 valores completos).
+
+    Ejemplos:
+        n=48  → (36, 83)   — 24 notas por debajo y 24 por encima de C4
+        n=24  → (48, 71)
+    """
+    if n is None:
+        return None
+    half = n // 2
+    lo   = max(0,   MIDI_CENTER - half)
+    hi   = min(127, lo + n - 1)
+    # Ajustar lo si hi tocó el límite superior
+    lo   = hi - n + 1
+    lo   = max(0, lo)
+    return (lo, hi)
+
+
+def _crop_pitch(roll: 'np.ndarray', pitch_lo: int, pitch_hi: int) -> 'np.ndarray':
+    """
+    Recorta el eje de pitch de un piano roll.
+    roll shape: (..., 128)  →  (..., pitch_hi - pitch_lo + 1)
+    """
+    return roll[..., pitch_lo: pitch_hi + 1]
+
+
+def _pad_pitch(roll: 'np.ndarray', pitch_lo: int, n_full: int = 128) -> 'np.ndarray':
+    """
+    Devuelve el piano roll a sus 128 dimensiones de pitch insertando ceros
+    fuera del rango activo.  roll shape: (..., n_crop) → (..., 128)
+    """
+    import numpy as np
+    n_crop = roll.shape[-1]
+    prefix = pitch_lo
+    suffix = n_full - pitch_lo - n_crop
+    pad_widths = [(0, 0)] * (roll.ndim - 1) + [(prefix, suffix)]
+    return np.pad(roll, pad_widths, mode='constant')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -511,9 +628,10 @@ class PianoRollConverter:
 
     def roll_to_windows(self, roll) -> 'np.ndarray':
         import numpy as np
-        n_bars = roll.shape[0]
+        n_bars  = roll.shape[0]
+        n_pitch = roll.shape[2]   # puede ser < 128 si se recortó
         if n_bars < self.window_bars:
-            return np.zeros((0, self.window_bars, self.resolution, PITCH_CLASSES),
+            return np.zeros((0, self.window_bars, self.resolution, n_pitch),
                             dtype=np.float32)
         n_windows = n_bars - self.window_bars + 1
         windows   = np.stack([roll[i:i + self.window_bars]
@@ -530,9 +648,11 @@ class TensionExtractor:
 
     def extract_bar_vectors(self, role_rolls: dict, bars: int) -> 'np.ndarray':
         import numpy as np
+        # Inferir n_pitch desde los rolls (puede ser < 128 si se usó --pitch-range)
+        n_pitch = next(iter(role_rolls.values())).shape[-1] if role_rolls else PITCH_CLASSES
         vectors = np.zeros((bars, self.TENSION_DIM), dtype=np.float32)
         for bar in range(bars):
-            combined    = np.zeros((PITCH_CLASSES,), dtype=np.float32)
+            combined    = np.zeros((n_pitch,), dtype=np.float32)
             total_events = 0
             resolution   = None
             for role, roll in role_rolls.items():
@@ -547,12 +667,12 @@ class TensionExtractor:
                 continue
             pitches_active = np.where(combined > 0)[0]
             n_active       = len(pitches_active)
-            capacity       = resolution * PITCH_CLASSES
+            capacity       = resolution * n_pitch
             tension        = self._lerdahl_proxy(pitches_active)
             density        = min(float(total_events) / max(capacity * len(role_rolls), 1) * 20, 1.0)
             poly           = min(n_active / 12.0, 1.0)
-            reg_mean       = float(np.mean(pitches_active)) / 127 if n_active > 0 else 0.5
-            reg_spread     = float(np.ptp(pitches_active)) / 127 if n_active > 1 else 0.0
+            reg_mean       = float(np.mean(pitches_active)) / max(n_pitch - 1, 1) if n_active > 0 else 0.5
+            reg_spread     = float(np.ptp(pitches_active)) / max(n_pitch - 1, 1) if n_active > 1 else 0.0
             vel_mean       = 0.5
             rhythm_density = 0.0
             if 'melody' in role_rolls and bar < role_rolls['melody'].shape[0]:
@@ -585,11 +705,140 @@ class TensionExtractor:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  COMANDO: prepare  (idéntico a latent_composer.py)
+#  ENRIQUECIMIENTO CON MSCZ2VEC (opcional, requiere music21)
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Dimensión del vector de tensión enriquecido:
+#   8  (TensionExtractor básico)
+# + 1  (tensión armónica por compás, de harmonic_tension_profile)
+# + 1  (estabilidad tonal por compás, de tonal_stability_profile)
+# + 12 (tonalidad: one-hot de las 12 clases de pitch)
+# + 1  (modo: 1.0=mayor, 0.0=menor)
+# = 23 dimensiones
+ENRICHED_TENSION_DIM = 23
+
+
+def _enrich_with_mscz2vec(midi_path: str, total_bars: int,
+                           mscz2vec_path: str = None) -> 'np.ndarray | None':
+    """
+    Extrae vectores de condicionamiento enriquecidos usando mscz2vec.
+
+    Devuelve array (total_bars, 15) con:
+        [0]    tensión armónica por compás (harmonic_tension_profile)
+        [1]    estabilidad tonal por compás (tonal_stability_profile)
+        [2:14] tonalidad: one-hot 12 clases de pitch (Do=0 ... Si=11)
+        [14]   modo: 1.0=mayor, 0.0=menor
+
+    Si music21 o mscz2vec no están disponibles, devuelve None silenciosamente.
+    """
+    import numpy as np
+
+    ENRICH_DIM = 15  # solo la parte añadida (sin los 8 básicos)
+
+    try:
+        # Intentar importar music21
+        import music21
+        from music21 import converter as m21_converter
+    except ImportError:
+        return None
+
+    # Importar mscz2vec
+    try:
+        if mscz2vec_path:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location('mscz2vec', mscz2vec_path)
+            mod  = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        else:
+            import mscz2vec as mod
+    except (ImportError, Exception):
+        return None
+
+    try:
+        # Suprimir prints de debug de mscz2vec
+        import io, contextlib
+        with contextlib.redirect_stdout(io.StringIO()):
+            score = m21_converter.parse(midi_path)
+
+            # 1. Tensión armónica por compás
+            tension_data = mod.harmonic_tension_profile(score)
+            harm_tension = tension_data.get('tension_values', []) if tension_data else []
+
+            # 2. Estabilidad tonal por compás
+            stability_data = mod.tonal_stability_profile(score)
+            tonal_stab = (stability_data.get('stability_smoothed', [])
+                         if stability_data else [])
+
+            # 3. Tonalidad global → one-hot + modo
+            try:
+                key = score.analyze('key')
+                tonic_pc  = key.tonic.pitchClass        # 0–11
+                is_major  = 1.0 if key.mode == 'major' else 0.0
+            except Exception:
+                tonic_pc  = 0
+                is_major  = 0.5
+
+        # Construir array (total_bars, ENRICH_DIM)
+        result = np.zeros((total_bars, ENRICH_DIM), dtype=np.float32)
+
+        for bar in range(total_bars):
+            # Tensión armónica (interpolar si hay menos compases que total_bars)
+            if harm_tension:
+                idx = min(bar, len(harm_tension) - 1)
+                result[bar, 0] = float(harm_tension[idx])
+
+            # Estabilidad tonal
+            if tonal_stab:
+                idx = min(bar, len(tonal_stab) - 1)
+                result[bar, 1] = float(tonal_stab[idx])
+
+            # Tonalidad: one-hot
+            result[bar, 2 + tonic_pc] = 1.0
+
+            # Modo
+            result[bar, 14] = is_major
+
+        return result
+
+    except Exception:
+        return None
+
+
+
+
+def _load_external_vec(midi_path: 'Path') -> 'np.ndarray | None':
+    """
+    Busca un archivo .vec junto al MIDI (mismo nombre, extensión .vec)
+    y lo carga como array numpy 1D.
+
+    El vector se replica para todos los compases durante el preprocesado,
+    añadiéndose al vector de condicionamiento como embedding global del MIDI.
+
+    Formato esperado: array numpy guardado con np.save() → archivo .npy,
+    o bien archivo de texto con valores separados por espacios/líneas.
+    """
+    import numpy as np
+
+    vec_path = midi_path.with_suffix('.vec')
+    if not vec_path.exists():
+        return None
+    try:
+        # Intentar cargar como numpy binario primero
+        try:
+            vec = np.load(str(vec_path))
+        except Exception:
+            # Fallback: texto plano (valores separados por espacios o líneas)
+            vec = np.loadtxt(str(vec_path), dtype=np.float32)
+        vec = np.array(vec, dtype=np.float32).flatten()
+        return vec
+    except Exception:
+        return None
+
+
 def _prepare_one_midi(args_tuple):
-    midi_path, output_dir, resolution, window_bars = args_tuple
+    (midi_path, output_dir, resolution, window_bars,
+     enrich, mscz2vec_path, enrich_external,
+     active_roles, pitch_lo, pitch_hi) = args_tuple
     import numpy as np
 
     stem = midi_path.stem
@@ -597,6 +846,9 @@ def _prepare_one_midi(args_tuple):
     stats_partial['files_ok']      = 0
     stats_partial['files_skipped'] = 0
     stats_partial['total_windows'] = 0
+
+    # Número de clases de pitch efectivo tras el recorte
+    n_pitch = (pitch_hi - pitch_lo + 1) if pitch_lo is not None else PITCH_CLASSES
 
     try:
         mid = _load_midi(str(midi_path))
@@ -624,10 +876,16 @@ def _prepare_one_midi(args_tuple):
     role_rolls  = {}
     roles_found = []
     for role, key in role_assignment.items():
+        # Saltar roles deshabilitados
+        if role not in active_roles:
+            continue
         notes = note_lists.get(key, [])
         if not notes:
             continue
         roll = converter.notes_to_roll(notes, tpb_raw, total_bars)
+        # Recortar eje de pitch si se especificó --pitch-range
+        if pitch_lo is not None:
+            roll = _crop_pitch(roll, pitch_lo, pitch_hi)
         role_rolls[role] = roll
         roles_found.append(role)
         stats_partial[role] = 1
@@ -662,6 +920,21 @@ def _prepare_one_midi(args_tuple):
         tension_windows = np.concatenate([tension_windows, pad], axis=0)
 
     save_dict = {'tension': tension_windows}
+
+    # Enriquecimiento opcional con mscz2vec
+    enrich_ok = False
+    if enrich:
+        enrich_bars = _enrich_with_mscz2vec(str(midi_path), total_bars, mscz2vec_path)
+        if enrich_bars is not None:
+            # Combinar: [tensión básica (8D) | enriquecida (15D)] = 23D por compás
+            tension_full = np.concatenate([tension_bars, enrich_bars], axis=1)
+            tension_full_windows = tension_full[mid_offset: mid_offset + min_windows]
+            if len(tension_full_windows) < min_windows:
+                pad = np.zeros((min_windows - len(tension_full_windows),
+                                ENRICHED_TENSION_DIM), dtype=np.float32)
+                tension_full_windows = np.concatenate([tension_full_windows, pad], axis=0)
+            save_dict['tension_enriched'] = tension_full_windows
+            enrich_ok = True
     for role, windows in role_windows.items():
         save_dict[f'roll_{role}'] = windows
 
@@ -669,6 +942,9 @@ def _prepare_one_midi(args_tuple):
         'source': stem, 'resolution': resolution, 'window_bars': window_bars,
         'total_bars': total_bars, 'n_windows': min_windows,
         'roles': roles_found, 'tpb_raw': tpb_raw,
+        'pitch_lo': pitch_lo if pitch_lo is not None else 0,
+        'pitch_hi': pitch_hi if pitch_hi is not None else 127,
+        'n_pitch':  n_pitch,
     }
     save_dict['meta_json'] = np.array([json.dumps(meta)])
     out_path = Path(output_dir) / f"{stem}.npz"
@@ -676,8 +952,35 @@ def _prepare_one_midi(args_tuple):
 
     stats_partial['files_ok']      = 1
     stats_partial['total_windows'] = min_windows
+    enrich_str = ' +enrich' if enrich_ok else (' enrich:FAIL' if enrich else '')
+
+    # Enriquecimiento externo: cargar .vec junto al MIDI
+    ext_vec_ok = False
+    if enrich_external:
+        ext_vec = _load_external_vec(midi_path)
+        if ext_vec is not None:
+            ext_dim = len(ext_vec)
+            # Replicar el vector para todos los compases: (total_bars, ext_dim)
+            ext_bars = np.tile(ext_vec, (total_bars, 1))
+            # Ventanas del vector externo (mismo offset que la tensión)
+            ext_windows = ext_bars[mid_offset: mid_offset + min_windows]
+            if len(ext_windows) < min_windows:
+                pad = np.zeros((min_windows - len(ext_windows), ext_dim), dtype=np.float32)
+                ext_windows = np.concatenate([ext_windows, pad], axis=0)
+
+            # Concatenar al vector de tensión ya disponible
+            base_key = 'tension_enriched' if 'tension_enriched' in save_dict else 'tension'
+            save_dict['tension_enriched'] = np.concatenate(
+                [save_dict[base_key], ext_windows], axis=1)
+            # Guardar dimensión del vec externo en meta para poder reconstruirla
+            save_dict['ext_vec_dim'] = np.array([ext_dim], dtype=np.int32)
+            ext_vec_ok = True
+            enrich_str += f' +vec({ext_dim}D)'
+        else:
+            if enrich_external:
+                enrich_str += ' vec:MISSING'
     return (stem,
-            f"OK  ({total_bars} compases, {min_windows} ventanas, roles: {', '.join(roles_found)})",
+            f"OK  ({total_bars} compases, {min_windows} ventanas, roles: {', '.join(roles_found)}){enrich_str}",
             True, stats_partial)
 
 
@@ -691,13 +994,63 @@ def cmd_prepare(args):
 
     resolution  = args.resolution
     window_bars = args.window_bars
+    enrich      = getattr(args, 'enrich', False)
+    mscz2vec_path = getattr(args, 'mscz2vec_path', None)
+    enrich_external = getattr(args, 'enrich_external', False)
+
+    # Roles activos (filtrar los deshabilitados)
+    disabled    = set(getattr(args, 'disable_roles', None) or [])
+    active_roles = [r for r in ROLES if r not in disabled]
+    if disabled:
+        print(f"[prepare] Roles deshabilitados : {', '.join(sorted(disabled))}")
+        print(f"[prepare] Roles activos        : {', '.join(active_roles)}")
+
+    # Rango de pitch
+    pitch_n  = getattr(args, 'pitch_range', None)
+    pr       = _pitch_range(pitch_n)
+    pitch_lo = pr[0] if pr else None
+    pitch_hi = pr[1] if pr else None
+    if pr:
+        n_pitch = pitch_hi - pitch_lo + 1
+        print(f"[prepare] Rango de pitch       : {pitch_n} notas  "
+              f"(MIDI {pitch_lo}–{pitch_hi}, n_pitch={n_pitch})")
 
     midi_files = sorted(list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi')))
     if not midi_files:
         print(f"[prepare] No se encontraron archivos MIDI en {input_dir}")
         sys.exit(1)
 
+    if enrich:
+        # Verificar disponibilidad de music21 y mscz2vec antes de empezar
+        try:
+            import music21
+            enrich_available = True
+        except ImportError:
+            print("[prepare] ⚠  --enrich ignorado: music21 no está instalado.")
+            print("           Instala con: pip install music21")
+            enrich_available = False
+            enrich = False
+
+        if enrich_available and mscz2vec_path:
+            if not Path(mscz2vec_path).exists():
+                print(f"[prepare] ⚠  --mscz2vec-path '{mscz2vec_path}' no encontrado. "
+                      f"Enriquecimiento desactivado.")
+                enrich = False
+
+        if enrich:
+            print(f"[prepare] ✓  Enriquecimiento mscz2vec ACTIVO "
+                  f"(tensión armónica + estabilidad tonal + tonalidad → {ENRICHED_TENSION_DIM}D)")
+            print(f"[prepare]    Nota: el preprocesado será más lento (~5-30s por archivo)")
+
+    if enrich_external:
+        print(f"[prepare] ✓  Enriquecimiento externo ACTIVO "
+              f"(buscando .vec junto a cada MIDI)")
+
     n_workers = min(multiprocessing.cpu_count(), len(midi_files))
+    # Con enriquecimiento, limitar workers para no saturar music21
+    if enrich:
+        n_workers = min(n_workers, 4)
+
     print(f"[prepare] {len(midi_files)} archivos MIDI encontrados")
     print(f"[prepare] Resolución: {resolution} ticks/compás  |  Ventana: {window_bars} compases")
     print(f"[prepare] Paralelizando con {n_workers} procesos\n")
@@ -705,7 +1058,12 @@ def cmd_prepare(args):
     stats = {r: 0 for r in ROLES}
     stats['files_ok'] = stats['files_skipped'] = stats['total_windows'] = 0
 
-    task_args = [(midi_path, str(output_dir), resolution, window_bars) for midi_path in midi_files]
+    task_args = [
+        (midi_path, str(output_dir), resolution, window_bars,
+         enrich, mscz2vec_path, enrich_external,
+         active_roles, pitch_lo, pitch_hi)
+        for midi_path in midi_files
+    ]
 
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         futures = {executor.submit(_prepare_one_midi, a): a[0] for a in task_args}
@@ -744,8 +1102,8 @@ def cmd_prepare(args):
 class MidiRollDataset:
     """
     Cada muestra:
-        'x'        : Tensor (N_ROLES, resolution, 128)  — compás a difundir (target)
-        'context'  : Tensor (N_ROLES, ctx_bars, resolution, 128)  — contexto previo
+        'x'        : Tensor (N_ROLES, resolution, n_pitch)  — compás a difundir (target)
+        'context'  : Tensor (N_ROLES, ctx_bars, resolution, n_pitch)  — contexto previo
         'tension'  : Tensor (TENSION_DIM,)
         'role_mask': Tensor (N_ROLES,) bool
     """
@@ -756,6 +1114,7 @@ class MidiRollDataset:
         self.n_roles  = len(self.roles)
         self.augment  = augment
         self._cache   = {}
+        self.n_pitch  = None   # se fija con el primer archivo válido
 
         npz_files = sorted(Path(data_dir).glob('*.npz'))
         if not npz_files:
@@ -765,11 +1124,16 @@ class MidiRollDataset:
             try:
                 data = dict(np.load(str(path), allow_pickle=True))
                 meta = json.loads(str(data['meta_json'][0]))
+                if self.n_pitch is None:
+                    self.n_pitch = meta.get('n_pitch', PITCH_CLASSES)
                 for i in range(meta['n_windows']):
                     self.samples.append((str(path), i, meta))
                 self._cache[str(path)] = data
             except Exception:
                 continue
+
+        if self.n_pitch is None:
+            self.n_pitch = PITCH_CLASSES
 
     def __len__(self):
         return len(self.samples)
@@ -785,8 +1149,6 @@ class MidiRollDataset:
         window_bars = meta['window_bars']
         ctx_bars    = window_bars - 1
 
-        # x = último compás de la ventana (el "target" de difusión)
-        # context = compases anteriores (condicionamiento temporal)
         x_parts   = []
         ctx_parts = []
         mask      = []
@@ -794,18 +1156,21 @@ class MidiRollDataset:
         for role in self.roles:
             key = f'roll_{role}'
             if key in data:
-                window = data[key][widx]                  # (window_bars, resolution, 128)
+                window = data[key][widx]                  # (window_bars, resolution, n_pitch)
                 x_parts.append(window[-1])                # último compás
                 ctx_parts.append(window[:ctx_bars])       # compases de contexto
                 mask.append(True)
             else:
-                x_parts.append(np.zeros((resolution, 128), dtype=np.float32))
-                ctx_parts.append(np.zeros((ctx_bars, resolution, 128), dtype=np.float32))
+                x_parts.append(np.zeros((resolution, self.n_pitch), dtype=np.float32))
+                ctx_parts.append(np.zeros((ctx_bars, resolution, self.n_pitch), dtype=np.float32))
                 mask.append(False)
 
-        x       = torch.tensor(np.stack(x_parts,   axis=0))   # (N_ROLES, res, 128)
-        context = torch.tensor(np.stack(ctx_parts,  axis=0))   # (N_ROLES, ctx_bars, res, 128)
-        tension = torch.tensor(data['tension'][widx])           # (TENSION_DIM,)
+        x       = torch.tensor(np.stack(x_parts,   axis=0))   # (N_ROLES, res, n_pitch)
+        context = torch.tensor(np.stack(ctx_parts,  axis=0))   # (N_ROLES, ctx_bars, res, n_pitch)
+        if 'tension_enriched' in data:
+            tension = torch.tensor(data['tension_enriched'][widx])
+        else:
+            tension = torch.tensor(data['tension'][widx])
         role_mask = torch.tensor(mask, dtype=torch.bool)
 
         return {'x': x, 'context': context, 'tension': tension, 'role_mask': role_mask}
@@ -822,252 +1187,191 @@ def _collate_fn(batch):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  ARQUITECTURA: ENCODER / DECODER CNN (espacio latente comprimido)
+#  ARQUITECTURA v3: DIFUSIÓN DIRECTA EN EL PIANO ROLL (sin VAE)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#  Cambio respecto a v1/v2:
+#    v1/v2: piano_roll → Encoder → z (128d) → DDPM en z → Decoder → piano_roll
+#    v3:    piano_roll (N_ROLES, res, 128) → U-Net DDPM → piano_roll
+#
+#  El denoiser es una U-Net 2D que opera sobre el piano roll completo.
+#  El proceso inverso converge directamente a notas sin espacio latente.
+#
+#  Condicionamiento: context (compases anteriores) + tensión + estilo
+#  inyectados via AdaGN (Adaptive Group Normalization) en cada bloque.
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _build_codec(latent_dim: int, n_roles: int, resolution: int,
-                 decoder_dropout: float = 0.1):
+
+def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
+                          tension_dim: int, n_steps: int = 1000,
+                          base_ch: int = 64, n_pitch: int = 128):
     """
-    Construye el par Encoder / Decoder CNN que mapea:
-        piano_roll (N_ROLES, resolution, 128) ↔ z (latent_dim,)
+    Construye la U-Net 2D para difusión directa en el piano roll.
 
-    v2 — cambios respecto a v1:
-      · Encoder más profundo: 3 bloques Conv con BatchNorm en lugar de 2
-      · H_FEAT aumentado a 256 para mayor capacidad de representación
-      · Decoder con Dropout entre bloques para regularización
-        (frena el sobreajuste que aparece ~época 85 en v1)
-      · Skip connections en el decoder: concatena features del encoder
-        para recuperar detalles finos perdidos en la compresión
-      · latent_dim default 128 (era 64) para mayor capacidad del espacio latente
-    """
-    import torch
-    import torch.nn as nn
+    Entrada : x_t  (B, N_ROLES, resolution, n_pitch)  — piano roll ruidoso
+    Salida  : x0   (B, N_ROLES, resolution, n_pitch)  — x0 predicho
 
-    PITCH   = 128
-    H_FEAT  = 128   # igual que v1 — con resolution=48 subir esto dispara el modelo a >1GB
-                    # La mejora real viene de BatchNorm + Dropout, no de más canales
-    res4    = resolution // 4
-    p4      = PITCH // 4
-    flat    = n_roles * H_FEAT * res4 * p4
-
-    class _Encoder(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.per_role = nn.ModuleList([
-                nn.Sequential(
-                    # Bloque 1: stride 1, mantiene resolución
-                    nn.Conv2d(1, 64, kernel_size=3, padding=1),
-                    nn.BatchNorm2d(64),
-                    nn.ReLU(),
-                    # Bloque 2: stride 2 → /2
-                    nn.Conv2d(64, H_FEAT, kernel_size=3, stride=2, padding=1),
-                    nn.BatchNorm2d(H_FEAT),
-                    nn.ReLU(),
-                    # Bloque 3: stride 2 → /4
-                    nn.Conv2d(H_FEAT, H_FEAT, kernel_size=3, stride=2, padding=1),
-                    nn.BatchNorm2d(H_FEAT),
-                    nn.ReLU(),
-                )
-                for _ in range(n_roles)
-            ])
-            self.fc_mu     = nn.Linear(flat, latent_dim)
-            self.fc_logvar = nn.Linear(flat, latent_dim)
-
-        def forward(self, x):
-            # x: (B, N_ROLES, resolution, 128)
-            B = x.size(0)
-            feats = []
-            for r, conv in enumerate(self.per_role):
-                xr = x[:, r, :, :].unsqueeze(1)   # (B, 1, res, 128)
-                feats.append(conv(xr))             # (B, H_FEAT, res/4, 128/4)
-            h = torch.cat(feats, dim=1).reshape(B, -1)  # (B, flat)
-            return self.fc_mu(h), self.fc_logvar(h)
-
-    class _Decoder(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.fc = nn.Linear(latent_dim, flat)
-            self.per_role = nn.ModuleList([
-                nn.Sequential(
-                    # Bloque 1: upsample ×2
-                    nn.ConvTranspose2d(H_FEAT, H_FEAT, kernel_size=4, stride=2, padding=1),
-                    nn.BatchNorm2d(H_FEAT),
-                    nn.ReLU(),
-                    nn.Dropout2d(decoder_dropout),
-                    # Bloque 2: upsample ×2 → resolución original
-                    nn.ConvTranspose2d(H_FEAT, 64, kernel_size=4, stride=2, padding=1),
-                    nn.BatchNorm2d(64),
-                    nn.ReLU(),
-                    nn.Dropout2d(decoder_dropout),
-                    # Bloque 3: refinamiento sin cambio de escala
-                    nn.Conv2d(64, 32, kernel_size=3, padding=1),
-                    nn.ReLU(),
-                    # Salida: sin Sigmoid — usamos BCEWithLogits en el loss
-                    nn.Conv2d(32, 1, kernel_size=3, padding=1),
-                )
-                for _ in range(n_roles)
-            ])
-
-        def forward(self, z):
-            B = z.size(0)
-            h = self.fc(z).reshape(B, n_roles, H_FEAT, res4, p4)
-            rolls = []
-            for r, deconv in enumerate(self.per_role):
-                xr = deconv(h[:, r])          # (B, 1, resolution, 128) — logits
-                rolls.append(xr.squeeze(1))   # (B, res, 128)
-            return torch.stack(rolls, dim=1)  # (B, N_ROLES, res, 128) — logits
-
-        def decode_probs(self, z):
-            """Versión con Sigmoid para inferencia (produce probabilidades [0,1])."""
-            import torch
-            return torch.sigmoid(self.forward(z))
-
-    return _Encoder(), _Decoder()
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  ARQUITECTURA: DDPM  (Denoising Diffusion Probabilistic Model)
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _build_diffusion_model(latent_dim: int, style_dim: int, tension_dim: int,
-                           n_roles: int, resolution: int,
-                           n_steps: int = 1000):
-    """
-    Construye:
-      1. CosineSchedule  — schedule de ruido β(t)
-      2. DenoisingNet    — red U-Net-like 1D que predice ε(z_t, t, cond)
-      3. DiffusionModel  — wrapper con forward / sample / ddim_sample
+    n_pitch = 128 (completo) o cualquier valor recortado con --pitch-range.
 
     Condicionamiento:
-        cond = Linear(context_feat + tension + style) → cond_dim
-        Inyectado en cada bloque temporal vía cross-attention o concat.
-
-    Arquitectura del DenoisingNet (simple pero efectivo):
-        z_t ∈ R^{latent_dim}  +  t_emb ∈ R^{128}  +  cond ∈ R^{cond_dim}
-        → MLP ResNet de 4 capas → ε̂ ∈ R^{latent_dim}
+        cond = f(context_avg, tension, style) -> vector (COND_DIM,)
+        Inyectado en cada bloque via AdaGN: scale/shift aprendidos.
     """
     import torch
     import torch.nn as nn
     import math
 
-    COND_DIM   = 256
-    H_DIM      = 512
-    T_EMB_DIM  = 128
+    PITCH    = n_pitch   # configurable: 128 completo o recortado
+    COND_DIM = 256
+    T_DIM    = 128
 
-    # ── Context encoder (para condicionamiento) ────────────────────────────
-    # Toma el contexto (N_ROLES, ctx_bars, res, 128) y lo comprime a cond_dim
-    ctx_flat = n_roles * resolution * 128   # puede ser enorme; usamos avg pool
+    # Canales en cada nivel de la U-Net
+    ch = [base_ch, base_ch * 2, base_ch * 4]   # [64, 128, 256]
 
-    class _ContextEncoder(nn.Module):
+    # ── Time embedding sinusoidal ──────────────────────────────────────────
+    class _TimeEmb(nn.Module):
         def __init__(self):
             super().__init__()
-            # Compresión espacial: avgpool sobre (res, 128) → escalar por rol y bar
-            # Luego MLP ligero
-            self.pool = nn.AdaptiveAvgPool2d((4, 8))   # → n_roles * ctx_bars * 4 * 8
-            # Dimensión dinámica: se calcula en forward
-            self.fc = nn.LazyLinear(COND_DIM)
-
-        def forward(self, ctx, tension, z_style):
-            # ctx: (B, N_ROLES, ctx_bars, res, 128)
-            B, R, C, Res, P = ctx.shape
-            flat_ctx = ctx.reshape(B * R * C, 1, Res, P)
-            pooled   = self.pool(flat_ctx).reshape(B, -1)   # (B, R*C*4*8)
-            cond_raw = torch.cat([pooled, tension, z_style], dim=-1)
-            return self.fc(cond_raw)   # (B, COND_DIM)
-
-    # ── Sinusoidal time embedding ──────────────────────────────────────────
-    class _TimeEmbedding(nn.Module):
-        def __init__(self, dim: int):
-            super().__init__()
-            self.dim = dim
             self.proj = nn.Sequential(
-                nn.Linear(dim, dim * 2),
-                nn.SiLU(),
-                nn.Linear(dim * 2, dim),
+                nn.Linear(T_DIM, T_DIM * 2), nn.SiLU(),
+                nn.Linear(T_DIM * 2, T_DIM),
             )
 
         def forward(self, t):
-            # t: (B,) enteros [0, n_steps-1]
-            half  = self.dim // 2
+            half  = T_DIM // 2
             freqs = torch.exp(
-                -math.log(10000) * torch.arange(half, device=t.device) / half
-            )
+                -math.log(10000) * torch.arange(half, device=t.device) / half)
             args  = t[:, None].float() * freqs[None]
             emb   = torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
-            return self.proj(emb)   # (B, T_EMB_DIM)
+            return self.proj(emb)   # (B, T_DIM)
 
-    # ── ResBlock para el DenoisingNet ──────────────────────────────────────
-    class _ResBlock(nn.Module):
-        def __init__(self, dim: int, cond_dim: int, t_dim: int):
-            super().__init__()
-            self.norm1 = nn.LayerNorm(dim)
-            self.fc1   = nn.Linear(dim, dim)
-            self.norm2 = nn.LayerNorm(dim)
-            self.fc2   = nn.Linear(dim, dim)
-            self.act   = nn.SiLU()
-            # Proyecciones de condicionamiento (tiempo + contexto)
-            self.t_proj    = nn.Linear(t_dim, dim)
-            self.cond_proj = nn.Linear(cond_dim, dim)
-
-        def forward(self, x, t_emb, cond):
-            h = self.norm1(x)
-            h = self.fc1(h) + self.t_proj(t_emb) + self.cond_proj(cond)
-            h = self.act(h)
-            h = self.norm2(h)
-            h = self.fc2(h)
-            return x + h   # skip connection
-
-    # ── Red de denoising ───────────────────────────────────────────────────
-    class _DenoisingNet(nn.Module):
+    # ── Context encoder ────────────────────────────────────────────────────
+    class _ContextEnc(nn.Module):
         def __init__(self):
             super().__init__()
-            self.input_proj = nn.Linear(latent_dim, H_DIM)
-            self.t_emb      = _TimeEmbedding(T_EMB_DIM)
-            self.ctx_enc    = _ContextEncoder()
-            self.blocks     = nn.ModuleList([
-                _ResBlock(H_DIM, COND_DIM, T_EMB_DIM) for _ in range(6)
-            ])
-            self.out_norm   = nn.LayerNorm(H_DIM)
-            self.out_proj   = nn.Linear(H_DIM, latent_dim)
+            self.pool = nn.AdaptiveAvgPool2d((4, 8))
+            self.fc   = nn.LazyLinear(COND_DIM)
 
-        def forward(self, z_t, t, context, tension, z_style):
+        def forward(self, ctx, tension, style):
+            # ctx: (B, N_ROLES, ctx_bars, res, 128)
+            B, R, C, H, W = ctx.shape
+            pooled = self.pool(ctx.reshape(B * R * C, 1, H, W)).reshape(B, -1)
+            return self.fc(torch.cat([pooled, tension, style], dim=-1))
+
+    # ── AdaGN block: Conv2D + Adaptive Group Norm condicionado ────────────
+    class _AdaGNBlock(nn.Module):
+        """ResBlock con AdaGN: el condicionamiento escala y desplaza la norma."""
+        def __init__(self, in_ch, out_ch, cond_dim, t_dim, dropout=0.1):
+            super().__init__()
+            self.norm1  = nn.GroupNorm(min(8, in_ch), in_ch)
+            self.conv1  = nn.Conv2d(in_ch, out_ch, 3, padding=1)
+            self.norm2  = nn.GroupNorm(min(8, out_ch), out_ch)
+            self.conv2  = nn.Conv2d(out_ch, out_ch, 3, padding=1)
+            self.drop   = nn.Dropout2d(dropout)
+            self.act    = nn.SiLU()
+            # Proyecciones AdaGN: scale + shift desde cond y t
+            self.cond_proj = nn.Linear(cond_dim, out_ch * 2)
+            self.t_proj    = nn.Linear(t_dim,    out_ch * 2)
+            # Skip connection si in_ch != out_ch
+            self.skip = nn.Conv2d(in_ch, out_ch, 1) if in_ch != out_ch else nn.Identity()
+
+        def forward(self, x, t_emb, cond):
+            h = self.act(self.norm1(x))
+            h = self.conv1(h)
+            # AdaGN: escala y desplazamiento aprendidos desde cond y t
+            st_c = self.cond_proj(cond)[:, :, None, None]   # (B, out*2, 1, 1)
+            st_t = self.t_proj(t_emb)[:, :, None, None]
+            st   = st_c + st_t
+            scale, shift = st.chunk(2, dim=1)
+            h = self.norm2(h) * (1 + scale) + shift
+            h = self.act(h)
+            h = self.drop(self.conv2(h))
+            return h + self.skip(x)
+
+    # ── U-Net completa ─────────────────────────────────────────────────────
+    class _UNet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.t_emb   = _TimeEmb()
+            self.ctx_enc = _ContextEnc()
+
+            # Stem: proyecta N_ROLES canales a ch[0]
+            self.stem = nn.Conv2d(n_roles, ch[0], 3, padding=1)
+
+            # Encoder
+            self.enc0 = _AdaGNBlock(ch[0], ch[0], COND_DIM, T_DIM)
+            self.down0 = nn.Conv2d(ch[0], ch[0], 3, stride=2, padding=1)  # /2
+
+            self.enc1 = _AdaGNBlock(ch[0], ch[1], COND_DIM, T_DIM)
+            self.down1 = nn.Conv2d(ch[1], ch[1], 3, stride=2, padding=1)  # /4
+
+            # Bottleneck
+            self.mid0 = _AdaGNBlock(ch[1], ch[2], COND_DIM, T_DIM)
+            self.mid1 = _AdaGNBlock(ch[2], ch[2], COND_DIM, T_DIM)
+
+            # Decoder (con skip connections del encoder)
+            self.up1   = nn.ConvTranspose2d(ch[2], ch[1], 4, stride=2, padding=1)
+            self.dec1  = _AdaGNBlock(ch[1] * 2, ch[1], COND_DIM, T_DIM)  # *2 por skip
+
+            self.up0   = nn.ConvTranspose2d(ch[1], ch[0], 4, stride=2, padding=1)
+            self.dec0  = _AdaGNBlock(ch[0] * 2, ch[0], COND_DIM, T_DIM)  # *2 por skip
+
+            # Head: proyecta ch[0] → N_ROLES (predicción de ruido)
+            self.head = nn.Sequential(
+                nn.GroupNorm(min(8, ch[0]), ch[0]),
+                nn.SiLU(),
+                nn.Conv2d(ch[0], n_roles, 3, padding=1),
+            )
+
+        def forward(self, x_t, t, context, tension, z_style):
             """
-            z_t     : (B, latent_dim)   — latente ruidoso
-            t       : (B,)              — paso de difusión
+            x_t     : (B, N_ROLES, res, 128)
+            t       : (B,) enteros
             context : (B, N_ROLES, ctx_bars, res, 128)
             tension : (B, tension_dim)
             z_style : (B, style_dim)
-            → ε̂    : (B, latent_dim)
+            → ε̂    : (B, N_ROLES, res, 128)
             """
             cond  = self.ctx_enc(context, tension, z_style)  # (B, COND_DIM)
-            t_emb = self.t_emb(t)                             # (B, T_EMB_DIM)
-            h     = self.input_proj(z_t)                      # (B, H_DIM)
-            for block in self.blocks:
-                h = block(h, t_emb, cond)
-            h = self.out_norm(h)
-            return self.out_proj(h)   # (B, latent_dim)
+            t_emb = self.t_emb(t)                             # (B, T_DIM)
 
-    # ── Schedule coseno (mejor que lineal) ────────────────────────────────
+            # Stem
+            h = self.stem(x_t)                    # (B, ch0, res, 128)
+
+            # Encoder
+            h0 = self.enc0(h,  t_emb, cond)       # (B, ch0, res, 128)
+            h  = self.down0(h0)                    # (B, ch0, res/2, 64)
+            h1 = self.enc1(h,  t_emb, cond)       # (B, ch1, res/2, 64)
+            h  = self.down1(h1)                    # (B, ch1, res/4, 32)
+
+            # Bottleneck
+            h  = self.mid0(h,  t_emb, cond)
+            h  = self.mid1(h,  t_emb, cond)       # (B, ch2, res/4, 32)
+
+            # Decoder con skips
+            h  = self.up1(h)                       # (B, ch1, res/2, 64)
+            h  = self.dec1(torch.cat([h, h1], 1), t_emb, cond)
+
+            h  = self.up0(h)                       # (B, ch0, res, 128)
+            h  = self.dec0(torch.cat([h, h0], 1), t_emb, cond)
+
+            return self.head(h)                    # (B, N_ROLES, res, 128)
+
+    # ── Schedule coseno ────────────────────────────────────────────────────
     class _CosineSchedule:
-        """
-        Schedule coseno de Nichol & Dhariwal 2021.
-        α_t = cos((t/T + s)/(1 + s) · π/2)²  con s = 0.008
-        """
-        def __init__(self, n_steps: int = 1000, s: float = 0.008):
+        def __init__(self, n_steps=1000, s=0.008):
             import torch, math
             self.n_steps = n_steps
             steps  = torch.arange(n_steps + 1, dtype=torch.float64)
             alphas = torch.cos((steps / n_steps + s) / (1 + s) * math.pi / 2) ** 2
             alphas = alphas / alphas[0]
-            betas  = 1.0 - alphas[1:] / alphas[:-1]
-            betas  = betas.clamp(0.0, 0.999).float()
-
-            alphas_cumprod = torch.cumprod(1.0 - betas, dim=0)
+            betas  = (1.0 - alphas[1:] / alphas[:-1]).clamp(0, 0.999).float()
+            acp    = torch.cumprod(1.0 - betas, dim=0)
             self.register = {
                 'betas':               betas,
-                'alphas_cumprod':      alphas_cumprod,
-                'sqrt_alphas_cumprod': alphas_cumprod.sqrt(),
-                'sqrt_one_minus_alphas_cumprod': (1.0 - alphas_cumprod).sqrt(),
+                'alphas_cumprod':      acp,
+                'sqrt_alphas_cumprod': acp.sqrt(),
+                'sqrt_one_minus_acp':  (1.0 - acp).sqrt(),
             }
 
         def to(self, device):
@@ -1075,249 +1379,331 @@ def _build_diffusion_model(latent_dim: int, style_dim: int, tension_dim: int,
             return self
 
         def q_sample(self, x0, t, noise=None):
-            """Añade ruido a x0 en el paso t."""
-            import torch
             if noise is None:
                 noise = torch.randn_like(x0)
-            sqrt_a = self.register['sqrt_alphas_cumprod'][t][:, None]
-            sqrt_b = self.register['sqrt_one_minus_alphas_cumprod'][t][:, None]
-            return sqrt_a * x0 + sqrt_b * noise, noise
+            sa = self.register['sqrt_alphas_cumprod'][t]
+            sb = self.register['sqrt_one_minus_acp'][t]
+            # Broadcast para tensores 4D (B, N_ROLES, res, 128)
+            while sa.dim() < x0.dim():
+                sa = sa.unsqueeze(-1)
+                sb = sb.unsqueeze(-1)
+            return sa * x0 + sb * noise, noise
 
-        def p_sample(self, net, z_t, t_scalar, context, tension, z_style):
-            """Un paso de denoising DDPM (inverso)."""
+        def ddim_sample(self, net, x_t, t_scalar, t_prev,
+                        context, tension, z_style, eta=0.0):
             import torch
-            B     = z_t.size(0)
-            t_ten = torch.full((B,), t_scalar, device=z_t.device, dtype=torch.long)
+            B     = x_t.size(0)
+            t_ten = torch.full((B,), t_scalar, device=x_t.device, dtype=torch.long)
             with torch.no_grad():
-                eps_pred = net(z_t, t_ten, context, tension, z_style)
+                # La U-Net predice x_0 directamente
+                x0_logits = net(x_t, t_ten, context, tension, z_style)
+                x0_pred   = torch.sigmoid(x0_logits)   # → [0,1]
 
-            alpha_t    = self.register['alphas_cumprod'][t_scalar]
-            alpha_tm1  = self.register['alphas_cumprod'][t_scalar - 1] if t_scalar > 0 else torch.tensor(1.0)
-            beta_t     = 1 - alpha_t / alpha_tm1
+            at  = self.register['alphas_cumprod'][t_scalar]
+            atp = self.register['alphas_cumprod'][t_prev] if t_prev >= 0 else torch.tensor(1.0)
 
-            coef1 = (1.0 / (1 - alpha_t).sqrt())
-            coef2 = beta_t / (1 - alpha_t).sqrt()
-            mean  = coef1 * (z_t - coef2 * eps_pred)
+            while at.dim() < x_t.dim():
+                at  = at.unsqueeze(-1)
+                atp = atp.unsqueeze(-1)
 
-            if t_scalar > 0:
-                noise = torch.randn_like(z_t)
-                var   = beta_t.sqrt().to(z_t.device) * noise
-            else:
-                var = 0.0
-            return mean + var
+            # Reconstruir eps desde x0_pred
+            eps = (x_t - at.sqrt() * x0_pred) / (1 - at).sqrt().clamp(min=1e-6)
 
-        def ddim_sample(self, net, z_t, t_scalar, t_prev,
-                        context, tension, z_style, eta: float = 0.0):
-            """Un paso DDIM (más rápido, menos pasos en inference)."""
-            import torch
-            B     = z_t.size(0)
-            t_ten = torch.full((B,), t_scalar, device=z_t.device, dtype=torch.long)
-            with torch.no_grad():
-                eps_pred = net(z_t, t_ten, context, tension, z_style)
+            sigma   = eta * ((1 - atp) / (1 - at) * (1 - at / atp)).clamp(min=0).sqrt()
+            dir_xt  = (1 - atp - sigma ** 2).clamp(min=0).sqrt() * eps
+            noise   = sigma * torch.randn_like(x_t) if eta > 0 else 0.0
+            return atp.sqrt() * x0_pred + dir_xt + noise
 
-            alpha_t  = self.register['alphas_cumprod'][t_scalar]
-            alpha_tp = self.register['alphas_cumprod'][t_prev] if t_prev >= 0 else torch.tensor(1.0)
+    # ── Modelo completo ────────────────────────────────────────────────────
+    class _DirectDiffusionComposer(nn.Module):
+        """
+        v3: difusión directa en el piano roll — sin encoder/decoder VAE.
 
-            x0_pred  = (z_t - (1 - alpha_t).sqrt() * eps_pred) / alpha_t.sqrt()
-            x0_pred  = x0_pred.clamp(-5, 5)
-
-            sigma    = eta * ((1 - alpha_tp) / (1 - alpha_t) * (1 - alpha_t / alpha_tp)).sqrt()
-            dir_xt   = (1 - alpha_tp - sigma ** 2).clamp(min=0).sqrt() * eps_pred
-            noise    = sigma * torch.randn_like(z_t) if eta > 0 else 0.0
-            return alpha_tp.sqrt() * x0_pred + dir_xt + noise
-
-    schedule = _CosineSchedule(n_steps=n_steps)
-    net      = _DenoisingNet()
-    return net, schedule
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  MODELO COMPLETO: DiffusionComposer
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
-                      n_roles: int, window_bars: int, resolution: int,
-                      n_diffusion_steps: int = 1000,
-                      pos_weight: float = 5.0,
-                      decoder_dropout: float = 0.1):
-    """
-    Integra Encoder + DenoisingNet + Schedule + Decoder en un módulo único.
-    """
-    import torch
-    import torch.nn as nn
-
-    encoder, decoder = _build_codec(latent_dim, n_roles, resolution,
-                                    decoder_dropout=decoder_dropout)
-    denoiser, schedule = _build_diffusion_model(
-        latent_dim, style_dim, tension_dim, n_roles, resolution, n_diffusion_steps)
-
-    class _StyleProjector(nn.Module):
-        """Mapea z latente → z_style condicionante."""
+        forward(x, context, tension) → loss, metrics
+        sample(context, tension, z_style) → piano_roll [0,1]
+        denoise_from_ref(x_ref, context, tension, z_style, strength) → piano_roll [0,1]
+        """
         def __init__(self):
             super().__init__()
-            self.proj = nn.Sequential(
-                nn.Linear(latent_dim, style_dim),
+            self.unet        = _UNet()
+            self.schedule    = _CosineSchedule(n_steps=n_steps)
+            self.n_steps     = n_steps
+            self.n_roles     = n_roles
+            self.resolution  = resolution
+            self.n_pitch     = PITCH        # 128 completo o recortado
+            self.style_dim   = style_dim
+            self.tension_dim = tension_dim
+            # Proyector de estilo: promedia z del contexto → style vector
+            self.style_proj = nn.Sequential(
+                nn.Linear(n_roles * 4 * 8, style_dim),
                 nn.Tanh(),
             )
-        def forward(self, z):
-            return self.proj(z)
 
-    class _DiffusionComposer(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.encoder      = encoder
-            self.decoder      = decoder
-            self.denoiser     = denoiser
-            self.schedule     = schedule
-            self.style_proj   = _StyleProjector()
-            self.n_steps      = n_diffusion_steps
-            self.latent_dim   = latent_dim
-            self.style_dim    = style_dim
-            self.tension_dim  = tension_dim
-            self.n_roles      = n_roles
-            self.window_bars  = window_bars
-            self.resolution   = resolution
-            self.pos_weight      = pos_weight
-            self.decoder_dropout = decoder_dropout
-
-        def reparametrize(self, mu, logvar):
-            if self.training:
-                std = (0.5 * logvar).exp()
-                return mu + std * torch.randn_like(std)
-            return mu
+        def _get_style(self, context):
+            """Extrae z_style desde el contexto (promedio espacial)."""
+            import torch
+            B, R, C, H, W = context.shape
+            pool = torch.nn.functional.adaptive_avg_pool2d(
+                context.reshape(B * R * C, 1, H, W), (4, 8)
+            ).reshape(B, -1)[:, :self.n_roles * 4 * 8]
+            return self.style_proj(pool.reshape(B, self.n_roles * 4 * 8))
 
         def forward(self, x, context, tension, t=None):
             """
-            x        : (B, N_ROLES, res, 128)  — compás target
-            context  : (B, N_ROLES, ctx_bars, res, 128)
-            tension  : (B, tension_dim)
-            t        : (B,) opcional; si None se muestrea aleatoriamente
-
-            Devuelve : loss (escalar), dict de métricas
+            x0-parametrization: la U-Net predice x_0 directamente en lugar
+            del ruido ε. Esto funciona mejor con datos binarios (piano rolls)
+            porque el modelo aprende directamente la distribución objetivo.
             """
             import torch
             B      = x.size(0)
             device = x.device
+            self.schedule.to(device)
 
-            # 1. Codificar → z₀
-            mu, logvar = self.encoder(x)
-            z0 = self.reparametrize(mu, logvar)
+            z_style = self._get_style(context)
 
-            # 2. Calcular z_style desde z₀
-            z_style = self.style_proj(mu.detach())
-
-            # 3. Muestrear t aleatorio y añadir ruido
             if t is None:
                 t = torch.randint(0, self.n_steps, (B,), device=device)
-            self.schedule.to(device)
-            z_t, eps_real = self.schedule.q_sample(z0, t)
 
-            # 4. Red de denoising predice el ruido
-            eps_pred = self.denoiser(z_t, t, context, tension, z_style)
+            x_t, eps_real = self.schedule.q_sample(x, t)
 
-            # 5. Loss de difusión y KL
-            diff_loss = torch.nn.functional.mse_loss(eps_pred, eps_real)
-            # KL clampado: evita explosiones en las primeras épocas cuando el
-            # encoder aún no ha aprendido a producir varianzas estables.
-            kl_loss   = -0.5 * (1 + logvar - mu ** 2 - logvar.exp()).sum(dim=-1).mean()
-            kl_loss   = kl_loss.clamp(max=100.0)   # nunca más de 100 por batch
+            # La U-Net predice x_0 directamente (no el ruido)
+            x0_pred = self.unet(x_t, t, context, tension, z_style)
+            x0_pred_prob = torch.sigmoid(x0_pred)   # → [0,1]
 
-            # 6. Loss de reconstrucción con pos_weight moderado.
-            # El decoder ahora produce logits directamente (sin Sigmoid final),
-            # por lo que usamos BCEWithLogits sin necesidad de invertir sigmoid.
-            recon_logits = self.decoder(z0)   # logits (B, N_ROLES, res, 128)
-            pw           = torch.tensor(self.pos_weight, device=device)
-            recon_loss   = torch.nn.functional.binary_cross_entropy_with_logits(
-                recon_logits, x, pos_weight=pw, reduction='mean')
+            # Loss principal: BCE entre x0 predicho y x0 real
+            recon_loss = torch.nn.functional.binary_cross_entropy(
+                x0_pred_prob.clamp(1e-6, 1 - 1e-6), x, reduction='mean')
 
-            # 7. Sparsity loss sobre probabilidades (sigmoid de logits)
-            recon_probs    = torch.sigmoid(recon_logits)
-            density_target = x.mean()
-            density_pred   = recon_probs.mean()
-            sparsity_loss  = torch.relu(density_pred - density_target * 2.0).mean()
+            # Loss auxiliar: reconstruir el ruido desde x0_pred para
+            # mantener coherencia con el schedule
+            at = self.schedule.register['alphas_cumprod'][t]
+            while at.dim() < x.dim():
+                at = at.unsqueeze(-1)
+            eps_from_x0 = (x_t - at.sqrt() * x0_pred_prob) / (1 - at).sqrt().clamp(min=1e-6)
+            diff_loss = torch.nn.functional.mse_loss(eps_from_x0, eps_real)
 
-            loss = diff_loss + 0.0001 * kl_loss + 2.0 * recon_loss + 5.0 * sparsity_loss
+            loss = recon_loss + 0.5 * diff_loss
 
-            return loss, {'diff': diff_loss.item(),
-                          'kl':   kl_loss.item(),
-                          'recon': recon_loss.item(),
-                          'sparse': sparsity_loss.item()}
+            return loss, {'diff': diff_loss.item(), 'recon': recon_loss.item(),
+                          'kl': 0.0, 'sparse': 0.0}
 
         @torch.no_grad()
         def sample(self, context, tension, z_style,
-                   temperature: float = 1.0,
-                   n_ddim_steps: int  = 50,
-                   eta: float         = 0.0):
-            """
-            Genera un compás nuevo via DDIM (rápido) o DDPM completo.
-
-            context  : (B, N_ROLES, ctx_bars, res, 128)
-            tension  : (B, tension_dim)
-            z_style  : (B, style_dim)
-            → roll   : (B, N_ROLES, res, 128)
-            """
+                   temperature=1.0, n_ddim_steps=50, eta=0.0):
             import torch
             B      = context.size(0)
             device = context.device
             self.schedule.to(device)
 
-            # Ruido inicial escalado por temperatura
-            z = torch.randn(B, self.latent_dim, device=device) * temperature
+            x = torch.randn(B, self.n_roles, self.resolution, self.n_pitch,
+                            device=device) * temperature
 
-            # DDIM steps: subsecuencia de pasos
             total   = self.n_steps
             step_sz = max(total // n_ddim_steps, 1)
             ts      = list(range(total - 1, -1, -step_sz))
 
             for i, t_cur in enumerate(ts):
                 t_prev = ts[i + 1] if i + 1 < len(ts) else -1
-                z = self.schedule.ddim_sample(
-                    self.denoiser, z, t_cur, t_prev,
+                x = self.schedule.ddim_sample(
+                    self.unet, x, t_cur, t_prev,
                     context, tension, z_style, eta=eta)
 
-            return self.decoder.decode_probs(z)
+            return x.clamp(0, 1)   # DDIM converge directamente al piano roll
 
         @torch.no_grad()
         def denoise_from_ref(self, x_ref, context, tension, z_style,
-                             strength: float = 0.7, n_ddim_steps: int = 50, eta: float = 0.0):
-            """
-            Inicia el denoising a partir de x_ref parcialmente ruidificado.
-            strength = 0 → reconstrucción exacta; 1 → generación libre.
-            """
+                             strength=0.7, n_ddim_steps=50, eta=0.0):
             import torch
             B      = x_ref.size(0)
             device = x_ref.device
             self.schedule.to(device)
 
-            # Codificar ref → z₀
-            mu, logvar = self.encoder(x_ref)
-            z0 = self.reparametrize(mu, logvar)
-
-            # Añadir ruido hasta t = int(strength * n_steps)
             t_start = int(strength * self.n_steps)
             t_ten   = torch.full((B,), t_start, device=device, dtype=torch.long)
-            z_t, _  = self.schedule.q_sample(z0, t_ten)
+            x_t, _  = self.schedule.q_sample(x_ref, t_ten)
 
-            # DDIM desde t_start → 0
             total   = t_start
             step_sz = max(total // n_ddim_steps, 1)
             ts      = list(range(t_start - 1, -1, -step_sz))
 
-            z = z_t
+            x = x_t
             for i, t_cur in enumerate(ts):
                 t_prev = ts[i + 1] if i + 1 < len(ts) else -1
-                z = self.schedule.ddim_sample(
-                    self.denoiser, z, t_cur, t_prev,
+                x = self.schedule.ddim_sample(
+                    self.unet, x, t_cur, t_prev,
                     context, tension, z_style, eta=eta)
 
-            return self.decoder.decode_probs(z)
+            return x.clamp(0, 1)
 
-    return _DiffusionComposer()
+        @torch.no_grad()
+        def repaint(self, x_known, mask_bars, context, tension, z_style,
+                    n_ddim_steps=50, n_resample=1):
+            """
+            Algoritmo RePaint con inicialización interpolada para transiciones suaves.
+
+            x_known   : (B, N_ROLES, n_bars, res, 128)
+            mask_bars : (n_bars,) bool — True=conocido, False=vacío
+
+            Mejora respecto al RePaint estándar: en lugar de inicializar los
+            compases vacíos con ruido puro, se inicializan como interpolación
+            lineal entre el último compás conocido anterior y el primero posterior,
+            ruidificados al nivel t=n_steps. Esto da al denoiser una "pista" sobre
+            la dirección de la transición desde el primer paso.
+            """
+            import torch
+            B      = x_known.size(0)
+            n_bars = x_known.size(2)
+            device = x_known.device
+            self.schedule.to(device)
+
+            # ── Inicialización interpolada ────────────────────────────────
+            # Para cada compás vacío, encontrar el compás conocido anterior
+            # y posterior más cercanos e interpolar entre ellos.
+            x_init = x_known.clone()
+
+            for bar_idx in range(n_bars):
+                if mask_bars[bar_idx]:
+                    continue   # compás conocido, no tocar
+
+                # Buscar vecino anterior conocido
+                prev_idx = None
+                for k in range(bar_idx - 1, -1, -1):
+                    if mask_bars[k]:
+                        prev_idx = k
+                        break
+
+                # Buscar vecino posterior conocido
+                next_idx = None
+                for k in range(bar_idx + 1, n_bars):
+                    if mask_bars[k]:
+                        next_idx = k
+                        break
+
+                if prev_idx is not None and next_idx is not None:
+                    # Interpolación lineal entre anterior y posterior
+                    span  = next_idx - prev_idx
+                    alpha = (bar_idx - prev_idx) / span   # 0→1
+                    x_init[:, :, bar_idx] = (
+                        (1 - alpha) * x_known[:, :, prev_idx] +
+                        alpha       * x_known[:, :, next_idx]
+                    )
+                elif prev_idx is not None:
+                    x_init[:, :, bar_idx] = x_known[:, :, prev_idx]
+                elif next_idx is not None:
+                    x_init[:, :, bar_idx] = x_known[:, :, next_idx]
+                else:
+                    x_init[:, :, bar_idx] = torch.zeros_like(x_known[:, :, bar_idx])
+
+            # Ruidificar toda la secuencia al nivel t_max para empezar el denoising
+            t_max     = self.n_steps - 1
+            t_max_ten = torch.full((B,), t_max, device=device, dtype=torch.long)
+            x = torch.zeros_like(x_init)
+            for bar_idx in range(n_bars):
+                x_noisy, _noise = self.schedule.q_sample(x_init[:, :, bar_idx],
+                                                          t_max_ten)
+                x[:, :, bar_idx] = x_noisy
+
+            # ── RePaint ────────────────────────────────────────────────────
+            total   = self.n_steps
+            step_sz = max(total // n_ddim_steps, 1)
+            ts      = list(range(total - 1, -1, -step_sz))
+
+            for i, t_cur in enumerate(ts):
+                t_prev = ts[i + 1] if i + 1 < len(ts) else -1
+
+                for resample_idx in range(n_resample):
+                    # 1. Denoising normal compás a compás
+                    x_new = torch.zeros_like(x)
+                    for bar_idx in range(n_bars):
+                        bar_t   = x[:, :, bar_idx]
+                        ctx_bar = self._build_inpaint_context(
+                            x, x_known, mask_bars, bar_idx, context)
+                        bar_out = self.schedule.ddim_sample(
+                            self.unet, bar_t, t_cur, t_prev,
+                            ctx_bar, tension, z_style, eta=0.0)
+                        x_new[:, :, bar_idx] = bar_out
+
+                    # 2. Para compases conocidos: reemplazar con versión ruidificada
+                    if t_prev >= 0:
+                        t_prev_ten = torch.full((B,), t_prev, device=device,
+                                                dtype=torch.long)
+                        for bar_idx in range(n_bars):
+                            if mask_bars[bar_idx]:
+                                x0_bar = x_known[:, :, bar_idx]
+                                x_noisy, _noise = self.schedule.q_sample(
+                                    x0_bar, t_prev_ten)
+                                x_new[:, :, bar_idx] = x_noisy
+
+                    x = x_new
+
+                    # Re-ruidificar para el siguiente resample (si n_resample > 1)
+                    if resample_idx < n_resample - 1 and t_cur > 0:
+                        t_cur_ten = torch.full((B,), t_cur, device=device,
+                                               dtype=torch.long)
+                        for bar_idx in range(n_bars):
+                            if not mask_bars[bar_idx]:
+                                x[:, :, bar_idx], _noise = self.schedule.q_sample(
+                                    x[:, :, bar_idx], t_cur_ten)
+
+            # Compases conocidos: devolver el original exacto
+            for bar_idx in range(n_bars):
+                if mask_bars[bar_idx]:
+                    x[:, :, bar_idx] = x_known[:, :, bar_idx]
+
+            return x.clamp(0, 1)
+
+        def _build_inpaint_context(self, x_current, x_known, mask_bars,
+                                   bar_idx, ctx_initial):
+            """
+            Construye el tensor de contexto para un compás durante inpainting.
+            Usa los compases anteriores del resultado actual si están disponibles,
+            o el contexto inicial si no hay suficientes compases previos.
+            """
+            import torch
+            ctx_bars = ctx_initial.size(2)
+            device   = x_current.device
+
+            if bar_idx == 0:
+                return ctx_initial
+
+            # Tomar los ctx_bars compases anteriores
+            start = max(0, bar_idx - ctx_bars)
+            avail = x_current[:, :, start:bar_idx]   # (B, N_ROLES, avail, res, 128)
+
+            if avail.size(2) < ctx_bars:
+                # Rellenar con ceros al principio
+                pad = torch.zeros(
+                    avail.size(0), avail.size(1),
+                    ctx_bars - avail.size(2),
+                    avail.size(3), avail.size(4),
+                    device=device)
+                avail = torch.cat([pad, avail], dim=2)
+
+            return avail
+
+    return _DirectDiffusionComposer()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  UTILIDADES DE TIEMPO
-# ══════════════════════════════════════════════════════════════════════════════
+def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
+                      n_roles: int, window_bars: int, resolution: int,
+                      n_diffusion_steps: int = 1000,
+                      pos_weight: float = 5.0,
+                      decoder_dropout: float = 0.1,
+                      n_pitch: int = 128):
+    """
+    v3: wrapper que construye el modelo de difusión directa.
+    Los parámetros latent_dim, pos_weight y decoder_dropout se ignoran
+    (mantenidos por compatibilidad con el CLI).
+    n_pitch: dimensión del eje de pitch (128 completo, o recortado con --pitch-range).
+    """
+    return _build_unet_diffusion(
+        n_roles     = n_roles,
+        resolution  = resolution,
+        style_dim   = style_dim,
+        tension_dim = tension_dim,
+        n_steps     = n_diffusion_steps,
+        n_pitch     = n_pitch,
+    )
 
 def _fmt_time(seconds: float) -> str:
     """Formatea segundos como string legible: 1h 23m 45s / 4m 12s / 38s."""
@@ -1552,7 +1938,7 @@ class Trainer:
                   f"  │{bar}│  {_fmt_time(epoch_elapsed)}/época"
                   f"{best_marker}{stop_str}")
 
-            if self.no_improve >= self.patience:
+            if self.patience > 0 and self.no_improve >= self.patience:  # patience=0: sin early stopping
                 print(f"\n  Early stopping tras {epoch+1} épocas.")
                 break
 
@@ -1576,8 +1962,15 @@ def cmd_train(args):
     model_dir = Path(args.model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
 
+    # Roles activos
+    disabled     = set(getattr(args, 'disable_roles', None) or [])
+    active_roles = [r for r in ROLES if r not in disabled]
+    if disabled:
+        print(f"[train] Roles deshabilitados : {', '.join(sorted(disabled))}")
+        print(f"[train] Roles activos        : {', '.join(active_roles)}")
+
     print("[train] Cargando dataset ...")
-    dataset    = MidiRollDataset(str(data_dir))
+    dataset    = MidiRollDataset(str(data_dir), roles=active_roles)
     n_val      = max(1, int(len(dataset) * 0.1))
     n_train    = len(dataset) - n_val
     train_ds, val_ds = random_split(dataset, [n_train, n_val])
@@ -1588,15 +1981,25 @@ def cmd_train(args):
                               collate_fn=_collate_fn, num_workers=0, pin_memory=False)
 
     # Inferir hiperparámetros del corpus
-    sample     = dataset[0]
-    n_roles    = sample['x'].shape[0]
-    resolution = sample['x'].shape[1]
-    ctx_bars   = sample['context'].shape[1]
+    sample      = dataset[0]
+    n_roles     = sample['x'].shape[0]
+    resolution  = sample['x'].shape[1]
+    n_pitch     = dataset.n_pitch                  # canónico, ya normalizado
+    ctx_bars    = sample['context'].shape[1]
     window_bars = ctx_bars + 1
     tension_dim = sample['tension'].shape[0]
 
-    print(f"[train] n_roles={n_roles}  resolution={resolution}  "
+    # Leer pitch_lo/hi desde los metadatos del primer .npz
+    import numpy as _np
+    _first_npz = sorted(Path(data_dir).glob('*.npz'))[0]
+    _meta      = json.loads(str(_np.load(str(_first_npz), allow_pickle=True)['meta_json'][0]))
+    pitch_lo   = _meta.get('pitch_lo', 0)
+    pitch_hi   = _meta.get('pitch_hi', 127)
+
+    print(f"[train] n_roles={n_roles}  resolution={resolution}  n_pitch={n_pitch}  "
           f"window_bars={window_bars}  tension_dim={tension_dim}")
+    if n_pitch < 128:
+        print(f"[train] Rango de pitch       : MIDI {pitch_lo}–{pitch_hi}  ({n_pitch} notas)")
     print(f"[train] latent_dim={args.latent_dim}  style_dim={args.style_dim}  "
           f"diffusion_steps={args.diffusion_steps}")
 
@@ -1610,6 +2013,7 @@ def cmd_train(args):
         n_diffusion_steps = args.diffusion_steps,
         pos_weight        = args.pos_weight,
         decoder_dropout   = args.decoder_dropout,
+        n_pitch           = n_pitch,
     )
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -1618,16 +2022,18 @@ def cmd_train(args):
 
     # Guardar configuración
     cfg = {
-        'latent_dim':       args.latent_dim,
+        'latent_dim':       args.latent_dim,   # informativo, no usado en v3
         'style_dim':        args.style_dim,
         'tension_dim':      tension_dim,
         'n_roles':          n_roles,
         'roles':            dataset.roles,
         'window_bars':      window_bars,
         'resolution':       resolution,
+        'n_pitch':          n_pitch,
+        'pitch_lo':         pitch_lo,
+        'pitch_hi':         pitch_hi,
         'diffusion_steps':  args.diffusion_steps,
-        'pos_weight':       args.pos_weight,
-        'decoder_dropout':  args.decoder_dropout,
+        'model_version':    'v3_direct',
     }
     with open(model_dir / Trainer.CONFIG_NAME, 'w') as f:
         json.dump(cfg, f, indent=2)
@@ -1653,15 +2059,14 @@ def _load_model_and_config(model_dir: Path):
         cfg = json.load(f)
 
     model = _build_full_model(
-        latent_dim        = cfg['latent_dim'],
+        latent_dim        = cfg.get('latent_dim', 128),
         style_dim         = cfg['style_dim'],
         tension_dim       = cfg['tension_dim'],
         n_roles           = cfg['n_roles'],
         window_bars       = cfg['window_bars'],
         resolution        = cfg['resolution'],
         n_diffusion_steps = cfg.get('diffusion_steps', 1000),
-        pos_weight        = cfg.get('pos_weight', 5.0),
-        decoder_dropout   = cfg.get('decoder_dropout', 0.1),
+        n_pitch           = cfg.get('n_pitch', 128),
     )
     state = torch.load(str(model_path), map_location='cpu')
     model.load_state_dict(state['model_state'])
@@ -1685,19 +2090,29 @@ def _midi_to_rolls(midi_path: str, cfg: dict) -> dict:
     max_tick  = max((e for nl in note_lists.values() for e in [n[1] for n in nl]), default=0)
     total_bars = max(1, int(max_tick / tpbar) + 1)
 
+    # Roles activos y rango de pitch según la config del modelo entrenado
+    active_roles = cfg.get('roles', ROLES)
+    pitch_lo     = cfg.get('pitch_lo', 0)
+    pitch_hi     = cfg.get('pitch_hi', 127)
+    do_crop      = (pitch_lo, pitch_hi) != (0, 127)
+
     role_map = RoleAssigner().assign(mid)
     conv     = PianoRollConverter(resolution=resolution, window_bars=window_bars)
     rolls    = {}
     for role, stream_key in role_map.items():
+        if role not in active_roles:
+            continue
         notes = note_lists[stream_key]
         roll  = conv.notes_to_roll(notes, tpb * 4, total_bars)
+        if do_crop:
+            roll = _crop_pitch(roll, pitch_lo, pitch_hi)
         rolls[role] = roll
 
     return rolls
 
 
 def _rolls_to_context_tensor(rolls: dict, cfg: dict) -> 'np.ndarray':
-    """Convierte rolls → tensor de contexto (N_ROLES, ctx_bars, res, 128)."""
+    """Convierte rolls → tensor de contexto (N_ROLES, ctx_bars, res, n_pitch)."""
     import numpy as np
 
     window_bars = cfg['window_bars']
@@ -1705,42 +2120,50 @@ def _rolls_to_context_tensor(rolls: dict, cfg: dict) -> 'np.ndarray':
     n_roles     = cfg['n_roles']
     role_list   = cfg['roles']
     ctx_bars    = window_bars - 1
+    n_pitch     = cfg.get('n_pitch', 128)
 
     n_bars = min(r.shape[0] for r in rolls.values()) if rolls else 0
     if n_bars < ctx_bars:
         raise ValueError(f"MIDI demasiado corto: {n_bars} compases, se necesitan ≥ {ctx_bars}")
 
-    ctx = np.zeros((n_roles, ctx_bars, resolution, 128), dtype=np.float32)
+    ctx = np.zeros((n_roles, ctx_bars, resolution, n_pitch), dtype=np.float32)
     for ridx, role in enumerate(role_list):
         if role in rolls:
             ctx[ridx] = rolls[role][:ctx_bars]
 
-    return ctx   # (N_ROLES, ctx_bars, res, 128)
+    return ctx   # (N_ROLES, ctx_bars, res, n_pitch)
 
 
 def _encode_ref(midi_path: str, model, cfg: dict) -> tuple:
-    """Devuelve (z_mean, z_style) para un MIDI de referencia."""
+    """
+    v3: extrae z_style desde el contexto del MIDI (sin encoder VAE).
+    Devuelve (z_context, z_style) para compatibilidad con el CLI.
+    """
     import torch, numpy as np
 
-    rolls = _midi_to_rolls(midi_path, cfg)
-    # Usar el último segmento disponible para construir x y ctx
-    window_bars = cfg['window_bars']
-    resolution  = cfg['resolution']
-    n_roles     = cfg['n_roles']
-    role_list   = cfg['roles']
-    ctx_bars    = window_bars - 1
+    rolls       = _midi_to_rolls(midi_path, cfg)
+    ctx_np      = _rolls_to_context_tensor(rolls, cfg)
+    ctx_t       = torch.tensor(ctx_np).unsqueeze(0)   # (1, N_ROLES, ctx_bars, res, 128)
 
+    # tension dummy (cero) solo para extraer estilo
+    tension_dim = cfg['tension_dim']
+    tension     = torch.zeros(1, tension_dim)
+
+    with torch.no_grad():
+        z_style = model._get_style(ctx_t)
+
+    # z_context = promedio de todos los compases del piano roll
+    n_roles   = cfg['n_roles']
+    role_list = cfg['roles']
+    resolution = cfg['resolution']
+    n_pitch   = cfg.get('n_pitch', 128)
     n_bars = min(r.shape[0] for r in rolls.values()) if rolls else 0
-    x_np   = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+    x_np   = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
     for ridx, role in enumerate(role_list):
         if role in rolls and n_bars > 0:
-            x_np[ridx] = rolls[role][min(n_bars - 1, ctx_bars)]
+            x_np[ridx] = rolls[role].mean(axis=0)
 
-    x = torch.tensor(x_np).unsqueeze(0)   # (1, N_ROLES, res, 128)
-    with torch.no_grad():
-        mu, logvar = model.encoder(x)
-        z_style    = model.style_proj(mu)
-    return mu[0].numpy(), z_style[0].numpy()
+    return x_np.flatten()[:cfg.get('latent_dim', 128)], z_style[0].numpy()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1784,28 +2207,46 @@ def _adaptive_threshold(roll: 'np.ndarray', percentile: float = 85.0) -> float:
     """
     Calcula un umbral adaptativo para binarizar el piano roll del decoder.
 
-    Toma el percentil 'percentile' de todos los valores > 0.001.
-    Un percentil alto (95–99) = umbral alto = pocas notas (menos ruido).
-    Un percentil bajo (70–80) = umbral bajo = más notas (más densidad).
+    Para distribuciones bimodales (v3: casi todo cero, picos en 1.0):
+        Usa el percentil sobre TODOS los valores, no solo los >0.001.
+        Con percentile=99 y distribución 99% ceros → umbral ~0.0, deja pasar las notas.
+        Con percentile=99.9 → umbral más alto → menos notas.
 
-    El rango útil típico es 75–97 dependiendo del estado del entrenamiento.
+    Para distribuciones continuas (v1/v2: valores dispersos entre 0 y 1):
+        Usa el percentil sobre valores >0.001 como antes.
+
+    El rango útil:
+        Distribución bimodal (v3): percentile=99.0–99.9
+        Distribución continua (v1/v2): percentile=85–97
     """
     import numpy as np
-    flat    = roll.flatten()
-    nonzero = flat[flat > 0.001]
-    if len(nonzero) == 0:
-        return 0.5   # señal nula: umbral alto → MIDI vacío con aviso
-    return float(np.percentile(nonzero, percentile))
+    flat = roll.flatten()
+
+    # Detectar si la distribución es bimodal:
+    # si más del 90% de valores son < 0.01, es bimodal
+    frac_near_zero = float((flat < 0.01).mean())
+    if frac_near_zero > 0.90:
+        # Bimodal: usar percentil sobre todos los valores
+        thr = float(np.percentile(flat, percentile))
+        return max(thr, 1e-4)   # nunca cero
+    else:
+        # Continua: usar percentil sobre valores activos
+        nonzero = flat[flat > 0.001]
+        if len(nonzero) == 0:
+            return 0.5
+        return float(np.percentile(nonzero, percentile))
 
 
 def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
                    output_path: str, bpm: float = 120.0,
-                   threshold: float = None):
+                   threshold: float = None,
+                   adaptive_per_bar: bool = False):
     """
     Convierte rolls continuos [0,1] → MIDI.
 
-    threshold: umbral de binarización. Si None, se calcula de forma adaptativa
-               por rol usando el percentil 85 de las activaciones.
+    threshold: umbral de binarización global. Si None, se calcula adaptativamente.
+    adaptive_per_bar: si True, los compases cuyo máximo sea menor que el umbral
+                      global usan un umbral local (max * 0.5) para no quedar vacíos.
     """
     import mido, numpy as np
 
@@ -1822,10 +2263,20 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
 
     n_notes_total = 0
 
+    # Rango de pitch del modelo entrenado (puede ser un subconjunto de 0–127)
+    pitch_lo = cfg.get('pitch_lo', 0)
+    pitch_hi = cfg.get('pitch_hi', 127)
+    do_expand = (pitch_lo, pitch_hi) != (0, 127)
+
     for role in cfg['roles']:
         if role not in bars_per_role:
             continue
-        roll = bars_per_role[role]   # (n_bars, res, 128)
+        roll = bars_per_role[role]   # (n_bars, res, n_pitch)
+
+        # Reexpandir al espacio MIDI completo si el roll fue recortado
+        if do_expand:
+            roll = _pad_pitch(roll, pitch_lo, n_full=128)
+        # A partir de aquí roll tiene siempre shape (n_bars, res, 128)
 
         # Umbral adaptativo por rol
         thr = threshold if threshold is not None else _adaptive_threshold(roll)
@@ -1839,17 +2290,31 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
         mid.tracks.append(track)
         track.append(mido.Message('program_change', program=prog, channel=ch, time=0))
 
-        # Binarizar con umbral adaptativo
-        binary = (roll > thr).astype(np.float32)
+        # Binarizar con umbral — por compás si adaptive_per_bar está activo
+        if adaptive_per_bar:
+            binary = np.zeros_like(roll)
+            for b in range(roll.shape[0]):
+                bar_max = roll[b].max()
+                if bar_max >= thr:
+                    # Compás normal: usar umbral global
+                    bar_thr = thr
+                elif bar_max >= 0.1:
+                    # Compás débil pero con señal real: umbral local
+                    bar_thr = bar_max * 0.5
+                else:
+                    # Compás sin señal real (solo ruido): dejar vacío
+                    bar_thr = 1.1   # umbral imposible → compás vacío
+                binary[b] = (roll[b] > bar_thr).astype(np.float32)
+        else:
+            binary = (roll > thr).astype(np.float32)
 
         # Suavizado temporal mínimo: eliminar notas aisladas de 1 tick
-        # (artefacto común del decoder: activa/desactiva en ticks alternos)
         for b in range(binary.shape[0]):
             for p in range(128):
                 col = binary[b, :, p]
                 for t in range(1, len(col) - 1):
                     if col[t] == 1 and col[t-1] == 0 and col[t+1] == 0:
-                        binary[b, t, p] = 0   # nota de 1 tick → silencio
+                        binary[b, t, p] = 0
 
         events = []
         n_bars_r, res_r, _ = binary.shape
@@ -1882,6 +2347,11 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
                 track.append(mido.Message('note_off', channel=ch, note=pitch, velocity=0,   time=delta))
             prev_tick = abs_tick
 
+        # Garantizar duración completa aunque los últimos compases estén vacíos
+        remaining = last_tick - prev_tick
+        if remaining > 0:
+            track.append(mido.MetaMessage('end_of_track', time=remaining))
+
     mid.save(_ensure_parent(output_path))
     return n_notes_total
 
@@ -1897,6 +2367,14 @@ def _load_palette(palette_path: str, cfg: dict) -> dict:
     with open(palette_path) as f:
         user = json.load(f)
     palette = {**DEFAULT_PALETTE}
+    bad = [k for k, v in user.items() if not isinstance(v, dict)]
+    if bad:
+        sys.exit(
+            f"ERROR: '{palette_path}' no es una paleta de roles "
+            f"({{rol: {{program, channel, velocity}}}}); la clave '{bad[0]}' "
+            f"no es un objeto. Si es la salida de 'style-corpus' o 'encode' "
+            f"(centroide de estilo), úsala con 'transfer --style-from/--style-to', "
+            f"no con --palette.")
     for role, params in user.items():
         palette[role] = {**DEFAULT_PALETTE.get(role, {}), **params}
     return palette
@@ -1923,7 +2401,6 @@ def cmd_encode(args):
     payload  = {
         'source':       args.input,
         'model_dir':    str(model_dir),
-        'latent_dim':   cfg['latent_dim'],
         'style_dim':    cfg['style_dim'],
         'z_context':    z_mean.tolist(),
         'z_style':      z_style.tolist(),
@@ -1945,7 +2422,7 @@ def cmd_style_corpus(args):
     El resultado es un .json compatible con el formato de `encode`.
 
     Uso:
-        python diffusion_composer.py style-corpus \\
+        python latent_diffusion_composer.py style-corpus \\
             --input-dir midis_A/ \\
             --model-dir model/ \\
             --output z_corpus_A.json
@@ -2044,7 +2521,7 @@ def cmd_transfer(args):
         5. Denoising compás a compás usando z_style_nuevo como condicionamiento
 
     Uso:
-        python diffusion_composer.py transfer \\
+        python latent_diffusion_composer.py transfer \\
             --input cancion.mid \\
             --model-dir model/ \\
             --style-from z_corpus_A.json \\
@@ -2053,7 +2530,7 @@ def cmd_transfer(args):
             --output resultado.mid
 
         # Interpolación progresiva A→B a lo largo de la canción:
-        python diffusion_composer.py transfer ... --progressive
+        python latent_diffusion_composer.py transfer ... --progressive
     """
     import torch, numpy as np
 
@@ -2094,6 +2571,7 @@ def cmd_transfer(args):
     resolution  = cfg['resolution']
     window_bars = cfg['window_bars']
     ctx_bars    = window_bars - 1
+    n_pitch     = cfg.get('n_pitch', 128)
 
     # Tensión: extraída del propio input (preserva la dinámica original)
     tension_matrix = TensionExtractor().extract_bar_vectors(rolls_ref, n_bars)
@@ -2130,7 +2608,7 @@ def cmd_transfer(args):
         # Usamos el compás correspondiente del input como punto de partida,
         # igual que el modo `denoise` de compose, pero con z_style sustituido.
         ref_bar_idx = min(bar_idx, min(r.shape[0] for r in rolls_ref.values()) - 1)
-        xr_np = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+        xr_np = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
         for ridx, role in enumerate(role_list):
             if role in rolls_ref:
                 xr_np[ridx] = rolls_ref[role][ref_bar_idx]
@@ -2265,18 +2743,18 @@ def cmd_compose(args):
     resolution  = cfg['resolution']
     window_bars = cfg['window_bars']
     ctx_bars    = window_bars - 1
+    n_pitch     = cfg.get('n_pitch', 128)
 
     bars_per_role = {role: [] for role in role_list}
     device        = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
 
     # Buffer de contexto: se actualiza progresivamente con las barras generadas
-    # Inicializado con el contexto del MIDI de referencia
+    # Inicializado con el contexto del MIDI de referencia (sweep lo inicializa en bar_idx==0)
     if mode != 'sweep':
-        ctx_buffer = torch.tensor(ctx_np).unsqueeze(0).to(device)   # (1, N_ROLES, ctx_bars, res, 128)
+        ctx_buffer = torch.tensor(ctx_np).unsqueeze(0).to(device)   # (1, N_ROLES, ctx_bars, res, n_pitch)
     else:
-        # sweep: iniciar con contexto del primer MIDI
-        ctx_buffer = torch.tensor(all_ctx[0]).unsqueeze(0).to(device)
+        ctx_buffer = None   # se inicializa en la primera iteración del bucle
 
     # ── Pre-cargar rolls de referencia para modo denoise ─────────────────
     rolls_ref = None
@@ -2300,10 +2778,13 @@ def cmd_compose(args):
             seg   = alpha * (n_src - 1)
             i0    = min(int(seg), n_src - 2)
             lam   = seg - i0
-            zs_np    = (1 - lam) * sweep_styles[i0] + lam * sweep_styles[i0 + 1]
-            v_sty    = torch.tensor(zs_np).unsqueeze(0).to(device)
-            ctx_np_i = (1 - lam) * all_ctx[i0] + lam * all_ctx[i0 + 1]
-            ctx_buffer = torch.tensor(ctx_np_i).unsqueeze(0).to(device)
+            zs_np = (1 - lam) * sweep_styles[i0] + lam * sweep_styles[i0 + 1]
+            v_sty = torch.tensor(zs_np).unsqueeze(0).to(device)
+            # ctx_buffer se actualiza con las barras generadas (igual que sample/denoise)
+            # Solo en el primer compás usamos el contexto del MIDI de origen
+            if bar_idx == 0:
+                ctx_np_i = all_ctx[i0]
+                ctx_buffer = torch.tensor(ctx_np_i).unsqueeze(0).to(device)
         else:
             v_sty = torch.tensor(z_style_np).unsqueeze(0).to(device)
 
@@ -2314,7 +2795,7 @@ def cmd_compose(args):
                 # de referencia (o el último si la ref es más corta) como
                 # punto de partida del denoising, para TODOS los compases.
                 ref_bar_idx = min(bar_idx, min(r.shape[0] for r in rolls_ref.values()) - 1)
-                xr_np = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+                xr_np = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
                 for ridx, role in enumerate(role_list):
                     if role in rolls_ref:
                         xr_np[ridx] = rolls_ref[role][ref_bar_idx]
@@ -2334,7 +2815,7 @@ def cmd_compose(args):
                 )
 
         # roll_bar: (1, N_ROLES, res, 128) — valores continuos [0,1]
-        bar_np = roll_bar[0].cpu().numpy()   # (N_ROLES, res, 128)
+        bar_np = roll_bar[0].cpu().numpy()   # (N_ROLES, res, n_pitch)
 
         # Diagnóstico en el primer compás
         if bar_idx == 0:
@@ -2348,25 +2829,56 @@ def cmd_compose(args):
             print(f"\n  [diag] Compás 0 — decoder output:")
             print(f"         min={vmin:.4f}  mean={vmean:.4f}  "
                   f"p50={p50:.4f}  p90={p90:.4f}  p99={p99:.4f}  max={vmax:.4f}")
-            # Estimar umbral adaptativo global desde el primer compás
-            adaptive_thr = _adaptive_threshold(bar_np, percentile=getattr(args, 'threshold_pct', 85.0))
+
+            # Umbral: --threshold fijo tiene prioridad sobre adaptativo
+            if getattr(args, 'threshold', None):
+                adaptive_thr = args.threshold
+                thr_method   = f'fijo ({args.threshold})'
+            else:
+                thr_pct      = getattr(args, 'threshold_pct', 99.0)
+                adaptive_thr = _adaptive_threshold(bar_np, percentile=thr_pct)
+                thr_method   = f'p{thr_pct}'
+
             n_active = int((bar_np > adaptive_thr).sum())
             density  = 100 * n_active / bar_np.size
-            print(f"         Umbral adaptativo: {adaptive_thr:.4f}  →  "
+            print(f"         Umbral {thr_method}: {adaptive_thr:.4f}  →  "
                   f"{n_active} píxeles activos ({density:.2f}%)")
-            if vmax < 0.05:
-                print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
-                      f"El modelo necesita más entrenamiento.")
-                print(f"         Generando con umbral relativo al máximo — "
-                      f"el resultado tendrá estructura pero puede sonar raro.")
+
+            # En sweep el compás 0 arranca desde contexto frío — no emitir avisos
+            if mode != 'sweep':
+                if density < 0.2:
+                    print(f"  [diag] ⚠  Densidad baja ({density:.2f}%) — "
+                          f"prueba --threshold-pct 99.5 o --threshold-pct 99.9")
+                elif density > 8.0:
+                    print(f"  [diag] ⚠  Densidad alta ({density:.2f}%) — "
+                          f"prueba --threshold-pct 98 o --threshold-pct 95")
+                elif vmean > 0.4:
+                    print(f"  [diag] ⚠  mean={vmean:.3f} — modelo aún indeciso (cerca de 0.5).")
+                    print(f"         Necesita más épocas para separar notas de silencio.")
+                elif vmax < 0.05:
+                    print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
+                          f"El modelo necesita más entrenamiento.")
+            else:
+                print(f"  [diag] (sweep: compás 0 desde contexto frío — normal que sea escaso)")
 
         for ridx, role in enumerate(role_list):
             bars_per_role[role].append(bar_np[ridx])   # (res, 128)
 
-        # Actualizar ctx_buffer con el compás generado (binarizado para
-        # evitar acumulación de ruido continuo en el contexto)
-        bar_binary = (bar_np > (adaptive_thr or 0.3)).astype(np.float32)
-        new_bar = torch.tensor(bar_binary).unsqueeze(0).unsqueeze(2).to(device)
+        # Actualizar ctx_buffer
+        if getattr(args, 'fixed_context', False) and rolls_ref is not None:
+            # Contexto fijo: usar siempre el compás siguiente del MIDI original.
+            # Evita la degradación progresiva cuando el output generado es escaso.
+            next_idx = min(bar_idx + 1, min(r.shape[0] for r in rolls_ref.values()) - 1)
+            ref_next_np = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
+            for ridx, role in enumerate(role_list):
+                if role in rolls_ref:
+                    ref_next_np[ridx] = rolls_ref[role][next_idx]
+            new_bar = torch.tensor(ref_next_np).unsqueeze(0).unsqueeze(2).to(device)
+        else:
+            # Contexto realimentado: usar el compás generado (binarizado)
+            bar_binary = (bar_np > (adaptive_thr or 0.3)).astype(np.float32)
+            new_bar = torch.tensor(bar_binary).unsqueeze(0).unsqueeze(2).to(device)
+
         # new_bar: (1, N_ROLES, 1, res, 128)
         if ctx_bars > 1:
             ctx_buffer = torch.cat([ctx_buffer[:, :, 1:, :, :], new_bar], dim=2)
@@ -2383,10 +2895,12 @@ def cmd_compose(args):
         if bars_per_role[role]:
             final_rolls[role] = np.stack(bars_per_role[role], axis=0)  # (n_bars, res, 128)
 
-    # Guardar con umbral adaptativo (ya estimado)
+    # Umbral final: --threshold fijo tiene prioridad
+    final_thr = getattr(args, 'threshold', None) or adaptive_thr
     n_notes = _rolls_to_midi(final_rolls, cfg, palette, args.output,
-                              bpm=args.bpm, threshold=adaptive_thr)
-    print(f"[compose] MIDI guardado en {args.output}  ({n_notes} notas, umbral={adaptive_thr:.3f})")
+                              bpm=args.bpm, threshold=final_thr,
+                              adaptive_per_bar=getattr(args, 'adaptive_per_bar', False))
+    print(f"[compose] MIDI guardado en {args.output}  ({n_notes} notas, umbral={final_thr:.3f})")
     if n_notes == 0:
         print("[compose] ⚠  ADVERTENCIA: MIDI vacío. Prueba con --threshold-pct 70 "
               "o revisa que el modelo haya entrenado suficientes épocas.")
@@ -2503,16 +3017,32 @@ def cmd_round_trip(args):
         with open(config_path) as f:
             cfg = json.load(f)
         print(f"[round-trip] Config cargada desde {config_path}")
+        print(f"[round-trip] Roles activos : {cfg.get('roles', ROLES)}")
+        n_pitch = cfg.get('n_pitch', 128)
+        if n_pitch < 128:
+            print(f"[round-trip] Rango de pitch: MIDI {cfg.get('pitch_lo',0)}–"
+                  f"{cfg.get('pitch_hi',127)}  ({n_pitch} notas)")
     else:
+        disabled     = set(getattr(args, 'disable_roles', None) or [])
+        active_roles = [r for r in ROLES if r not in disabled]
+        pr           = _pitch_range(getattr(args, 'pitch_range', None))
+        pitch_lo     = pr[0] if pr else 0
+        pitch_hi     = pr[1] if pr else 127
+        n_pitch      = (pitch_hi - pitch_lo + 1) if pr else 128
         cfg = {
             'resolution':   args.resolution,
             'window_bars':  4,
-            'roles':        ROLES,
-            'n_roles':      len(ROLES),
+            'roles':        active_roles,
+            'n_roles':      len(active_roles),
             'tension_dim':  8,
+            'pitch_lo':     pitch_lo,
+            'pitch_hi':     pitch_hi,
+            'n_pitch':      n_pitch,
         }
         print(f"[round-trip] Config manual: resolution={args.resolution}, "
-              f"roles={ROLES}")
+              f"roles={active_roles}")
+        if pr:
+            print(f"[round-trip] Rango de pitch: MIDI {pitch_lo}–{pitch_hi}  ({n_pitch} notas)")
 
     palette = {}
     if args.palette:
@@ -2549,15 +3079,15 @@ def cmd_round_trip(args):
 
 def cmd_reconstruct(args):
     """
-    Encode → decode puro sin ningún paso de difusión.
+    v3: denoising con strength muy bajo (~0.05) compás a compás.
 
-    Útil para:
-      · Diagnosticar si el decoder ha convergido (p90 > 0.05 = bien).
-      · Escuchar cómo suena el espacio latente antes de que el denoiser madure.
-      · Verificar que la arquitectura funciona antes de usar compose.
+    En v3 no existe encoder/decoder separado — el modelo opera directamente
+    sobre el piano roll. Este comando hace el equivalente: añade poco ruido
+    al input y lo elimina con el denoiser, verificando que la U-Net funciona.
 
-    Si output_recon.mid suena musical → el decoder está bien, esperar más épocas.
-    Si suena ruidoso → el decoder aún no ha convergido.
+    Diagnóstico:
+      p90 > 0.3  → U-Net OK, resultado musical
+      p90 < 0.05 → U-Net aún no ha convergido, esperar más épocas
     """
     import torch, numpy as np
 
@@ -2572,72 +3102,84 @@ def cmd_reconstruct(args):
     model.to(device)
 
     print(f"[reconstruct] Procesando {args.input} ...")
-    rolls = _midi_to_rolls(args.input, cfg)
+    rolls    = _midi_to_rolls(args.input, cfg)
     if not rolls:
         print("[reconstruct] ERROR: no se pudieron extraer rolls del MIDI")
         import sys; sys.exit(1)
 
-    role_list  = cfg['roles']
-    n_roles    = cfg['n_roles']
-    resolution = cfg['resolution']
-    n_bars     = min(r.shape[0] for r in rolls.values())
+    role_list   = cfg['roles']
+    n_roles     = cfg['n_roles']
+    resolution  = cfg['resolution']
+    window_bars = cfg['window_bars']
+    ctx_bars    = window_bars - 1
+    tension_dim = cfg['tension_dim']
+    n_pitch     = cfg.get('n_pitch', 128)
+    n_bars      = min(r.shape[0] for r in rolls.values())
     print(f"[reconstruct] Roles: {list(rolls.keys())}  |  "
           f"Compases: {n_bars}  |  Resolución: {resolution}")
 
-    bars_recon = {role: [] for role in role_list}
+    ctx_np      = _rolls_to_context_tensor(rolls, cfg)
+    ctx_buffer  = torch.tensor(ctx_np).unsqueeze(0).to(device)
+    z_style_t   = model._get_style(ctx_buffer)
+
+    strength    = args.strength if hasattr(args, 'strength') else 0.05
+    bars_out    = {role: [] for role in role_list}
+    adaptive_thr = None
 
     with torch.no_grad():
         for bar_idx in range(n_bars):
-            bar = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+            bar = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
             for ri, role in enumerate(role_list):
                 if role in rolls and bar_idx < rolls[role].shape[0]:
                     bar[ri] = rolls[role][bar_idx]
 
-            x   = torch.tensor(bar).unsqueeze(0).to(device)
-            mu, _ = model.encoder(x)
-            recon = model.decoder.decode_probs(mu)   # sin ruido, sin difusión
-            recon_np = recon[0].cpu().numpy()         # (N_ROLES, res, 128)
+            x_ref   = torch.tensor(bar).unsqueeze(0).to(device)
+            tension = torch.zeros(1, tension_dim).to(device)
+
+            out = model.denoise_from_ref(
+                x_ref, ctx_buffer, tension, z_style_t,
+                strength=strength, n_ddim_steps=20, eta=0.0)
+            out_np = out[0].cpu().numpy()   # (N_ROLES, res, 128)
 
             if bar_idx == 0:
-                flat = recon_np.flatten()
+                flat = out_np.flatten()
                 nz   = flat[flat > 0.001]
                 p90  = float(np.percentile(nz, 90)) if len(nz) > 0 else 0.0
                 p99  = float(np.percentile(nz, 99)) if len(nz) > 0 else 0.0
                 thr_diag = args.threshold if args.threshold else p99 * 0.5
                 n_active = int((flat > thr_diag).sum())
-                print(f"\n[diag] Compás 0 — reconstrucción encoder/decoder:")
+                print(f"\n[diag] Compás 0 — denoising leve (strength={strength}):")
                 print(f"       min={flat.min():.4f}  mean={flat.mean():.4f}  "
                       f"p50={float(np.percentile(flat,50)):.4f}  "
                       f"p90={p90:.4f}  p99={p99:.4f}  max={float(flat.max()):.4f}")
                 print(f"       Umbral: {thr_diag:.4f}  →  {n_active} píxeles activos "
                       f"({100*n_active/len(flat):.2f}%)")
-                if p90 < 0.01:
-                    print(f"       ⚠  p90={p90:.4f} — decoder aún ruidoso, necesita más épocas")
-                elif p90 < 0.05:
-                    print(f"       ~  p90={p90:.4f} — decoder en progreso")
+                if p90 < 0.05:
+                    print(f"       ⚠  p90={p90:.4f} — U-Net aún no ha convergido")
+                elif p90 < 0.20:
+                    print(f"       ~  p90={p90:.4f} — U-Net en progreso")
                 else:
-                    print(f"       ✓  p90={p90:.4f} — separación ruido/notas aceptable")
+                    print(f"       ✓  p90={p90:.4f} — U-Net funcionando correctamente")
+                adaptive_thr = thr_diag
+
+            # Actualizar contexto
+            bar_bin = (out_np > adaptive_thr).astype(np.float32)
+            bar_t   = torch.tensor(bar_bin).unsqueeze(0).to(device)
+            ctx_buffer = torch.cat([
+                ctx_buffer[:, :, 1:],
+                bar_t.unsqueeze(2)
+            ], dim=2)
+            z_style_t = model._get_style(ctx_buffer)
 
             for ri, role in enumerate(role_list):
-                bars_recon[role].append(recon_np[ri])
+                bars_out[role].append(out_np[ri])
 
-    final_rolls = {
-        role: np.stack(bars, axis=0)
-        for role, bars in bars_recon.items()
-    }
-
-    # Umbral global
-    all_vals = np.concatenate([r.flatten() for r in final_rolls.values()])
-    nz_all   = all_vals[all_vals > 0.001]
-    if args.threshold:
-        thr = args.threshold
-        method = 'fijo'
-    elif len(nz_all) > 0:
-        thr    = float(np.percentile(nz_all, 99)) * 0.5
-        method = 'p99×0.5'
-    else:
-        thr    = 0.5
-        method = 'default'
+    final_rolls = {role: np.stack(b, axis=0) for role, b in bars_out.items()}
+    all_vals    = np.concatenate([r.flatten() for r in final_rolls.values()])
+    nz_all      = all_vals[all_vals > 0.001]
+    thr   = args.threshold if args.threshold else (
+        float(np.percentile(nz_all, 99)) * 0.5 if len(nz_all) > 0 else 0.5)
+    method = 'fijo' if args.threshold else 'p99×0.5'
 
     n_notes = _rolls_to_midi(final_rolls, cfg, palette, args.output,
                               bpm=args.bpm, threshold=thr)
@@ -2649,6 +3191,128 @@ def cmd_reconstruct(args):
         print(f"[reconstruct] ⚠  Muchas notas ({n_notes}) — prueba --threshold 0.4")
     else:
         print("[reconstruct] ✓")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  COMANDO: inpaint
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cmd_inpaint(args):
+    """
+    Rellena los compases vacíos de un MIDI manteniendo los que tienen notas.
+
+    Usa el algoritmo RePaint: en cada paso de denoising, los compases conocidos
+    se reemplazan por su versión ruidificada al nivel correspondiente, mientras
+    los compases vacíos se generan libremente condicionados en el contexto.
+    """
+    import torch, numpy as np
+
+    model_dir = Path(args.model_dir)
+    print(f"[inpaint] Cargando modelo desde {model_dir} ...")
+    model, cfg = _load_model_and_config(model_dir)
+    model.eval()
+
+    palette = _load_palette(args.palette, cfg) if args.palette else {}
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model.to(device)
+
+    print(f"[inpaint] Procesando {args.input} ...")
+    rolls = _midi_to_rolls(args.input, cfg)
+    if not rolls:
+        print("[inpaint] ERROR: no se pudieron extraer rolls del MIDI")
+        import sys; sys.exit(1)
+
+    role_list   = cfg['roles']
+    n_roles     = cfg['n_roles']
+    resolution  = cfg['resolution']
+    window_bars = cfg['window_bars']
+    ctx_bars    = window_bars - 1
+    tension_dim = cfg['tension_dim']
+    n_bars      = min(r.shape[0] for r in rolls.values())
+
+    # ── Construir piano roll completo (N_ROLES, n_bars, res, n_pitch) ────────
+    n_pitch = cfg.get('n_pitch', 128)
+    x_np = np.zeros((n_roles, n_bars, resolution, n_pitch), dtype=np.float32)
+    for ri, role in enumerate(role_list):
+        if role in rolls:
+            x_np[ri] = rolls[role][:n_bars]
+
+    # ── Detectar compases vacíos ──────────────────────────────────────────
+    # Un compás es vacío si no tiene ninguna nota en ningún rol
+    mask_bars = np.array([
+        x_np[:, b, :, :].max() > 0
+        for b in range(n_bars)
+    ])  # True = compás conocido, False = vacío
+
+    n_known = mask_bars.sum()
+    n_empty = (~mask_bars).sum()
+    print(f"[inpaint] Compases totales: {n_bars}  |  "
+          f"Con notas: {n_known}  |  Vacíos: {n_empty}")
+
+    if n_empty == 0:
+        print("[inpaint] ⚠  No hay compases vacíos — nada que rellenar.")
+        import sys; sys.exit(0)
+
+    if n_known == 0:
+        print("[inpaint] ⚠  Todos los compases están vacíos — usa compose en su lugar.")
+        import sys; sys.exit(1)
+
+    # Mostrar mapa de compases
+    mapa = ''.join('█' if m else '░' for m in mask_bars)
+    print(f"[inpaint] Mapa (█=notas ░=vacío): {mapa}")
+
+    # ── Contexto inicial (primeros ctx_bars del MIDI) ─────────────────────
+    ctx_np     = _rolls_to_context_tensor(rolls, cfg)
+    ctx_buffer = torch.tensor(ctx_np).unsqueeze(0).to(device)
+    z_style    = model._get_style(ctx_buffer)
+
+    # ── Tensión: extraída del MIDI original ───────────────────────────────
+    tension_matrix = TensionExtractor().extract_bar_vectors(rolls, n_bars)
+    # Usar tensión media global para todos los compases
+    tension_mean = torch.tensor(
+        tension_matrix.mean(axis=0)).unsqueeze(0).to(device)
+
+    # ── Ejecutar RePaint ──────────────────────────────────────────────────
+    x_known_t = torch.tensor(x_np).unsqueeze(0).to(device)
+    # x_known_t: (1, N_ROLES, n_bars, res, 128)
+
+    print(f"[inpaint] Ejecutando RePaint "
+          f"(ddim_steps={args.ddim_steps}, resample={args.resample}) ...")
+
+    result = model.repaint(
+        x_known    = x_known_t,
+        mask_bars  = mask_bars,
+        context    = ctx_buffer,
+        tension    = tension_mean,
+        z_style    = z_style,
+        n_ddim_steps = args.ddim_steps,
+        n_resample = args.resample,
+    )
+    # result: (1, N_ROLES, n_bars, res, 128)
+
+    result_np = result[0].cpu().numpy()   # (N_ROLES, n_bars, res, 128)
+
+    # Diagnóstico de los compases generados
+    empty_indices = np.where(~mask_bars)[0]
+    if len(empty_indices) > 0:
+        sample_bar = result_np[:, empty_indices[0]]
+        vmax  = float(sample_bar.max())
+        vmean = float(sample_bar.mean())
+        print(f"\n[diag] Primer compás generado (bar {empty_indices[0]}):")
+        print(f"       mean={vmean:.4f}  max={vmax:.4f}")
+
+    # ── Binarizar y exportar ──────────────────────────────────────────────
+    thr = args.threshold if args.threshold else 0.5
+    final_rolls = {}
+    for ri, role in enumerate(role_list):
+        final_rolls[role] = result_np[ri]   # (n_bars, res, 128)
+
+    n_notes = _rolls_to_midi(final_rolls, cfg, palette, args.output,
+                              bpm=args.bpm, threshold=thr,
+                              adaptive_per_bar=True)
+    print(f"\n[inpaint] MIDI guardado en {args.output}  "
+          f"({n_notes} notas, umbral={thr:.3f})")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2672,6 +3336,29 @@ def build_parser():
     p_prep.add_argument('--window-bars', type=int, default=WINDOW_BARS_DEFAULT, metavar='INT',
         help=f'Compases por ventana (default: {WINDOW_BARS_DEFAULT})')
     p_prep.add_argument('--report',      action='store_true')
+    p_prep.add_argument('--enrich',      action='store_true',
+        help='Enriquecer el vector de condicionamiento con mscz2vec '
+             '(tensión armónica + estabilidad tonal + tonalidad → 23D). '
+             'Requiere music21 y mscz2vec. Se desactiva automáticamente si no están disponibles.')
+    p_prep.add_argument('--mscz2vec-path', default=None, metavar='FILE',
+        dest='mscz2vec_path',
+        help='Ruta al script mscz2vec.py (opcional si está en el PATH o en el mismo directorio)')
+    p_prep.add_argument('--enrich-external', action='store_true',
+        dest='enrich_external',
+        help='Cargar vector externo .vec junto a cada MIDI (mismo nombre, extensión .vec). '
+             'El vector se replica para todos los compases y se añade al condicionamiento. '
+             'Los MIDIs sin .vec se procesan sin este vector (marcado como vec:MISSING en el log).')
+    p_prep.add_argument('--disable-roles', nargs='+', metavar='ROL',
+        choices=ROLES, default=[], dest='disable_roles',
+        help='Roles a excluir del preprocesado para reducir carga computacional. '
+             f'Valores posibles: {", ".join(ROLES)}. '
+             'Ej: --disable-roles percussion counterpoint')
+    p_prep.add_argument('--pitch-range', type=int, default=None, metavar='N',
+        dest='pitch_range',
+        help='Limitar el piano roll a N valores MIDI centrados en Do central (MIDI 60). '
+             'Reduce el tamaño del modelo y la memoria. '
+             'Ej: --pitch-range 48 usa MIDI 36–83; --pitch-range 24 usa MIDI 48–71. '
+             'El modelo entrenado recuerda este rango y lo aplica en inferencia.')
     p_prep.set_defaults(func=cmd_prepare)
 
     # ── train ─────────────────────────────────────────────────────────────────
@@ -2695,6 +3382,12 @@ def build_parser():
     p_train.add_argument('--patience',         type=int,   default=50)
     p_train.add_argument('--resume',           action='store_true',
         help='Reanudar entrenamiento desde el último checkpoint')
+    p_train.add_argument('--disable-roles', nargs='+', metavar='ROL',
+        choices=ROLES, default=[], dest='disable_roles',
+        help='Roles a excluir del entrenamiento. Debe coincidir con --disable-roles '
+             'usado en prepare. '
+             f'Valores posibles: {", ".join(ROLES)}. '
+             'Ej: --disable-roles percussion counterpoint')
     p_train.set_defaults(func=cmd_train)
 
     # ── encode ────────────────────────────────────────────────────────────────
@@ -2751,10 +3444,23 @@ def build_parser():
     p_comp.add_argument('--input',         metavar='FILE', default=None)
     p_comp.add_argument('--inputs',        nargs='+', metavar='FILE', default=None)
     p_comp.add_argument('--weights',       nargs='+', type=float, default=None)
-    p_comp.add_argument('--threshold-pct', type=float, default=85.0, metavar='FLOAT',
+    p_comp.add_argument('--threshold-pct', type=float, default=99.0, metavar='FLOAT',
         dest='threshold_pct',
-        help='Percentil para umbral adaptativo de binarización (default: 85). '
-             'Bájalo (ej. 70) si el MIDI sale vacío; súbelo (ej. 95) si hay demasiado ruido.')
+        help='Percentil para umbral adaptativo (default: 99.0 para distribuciones bimodales v3). '
+             'Bájalo (ej. 99.5→99.9) si el MIDI sale vacío; súbelo (ej. 98→95) si hay demasiadas notas.')
+    p_comp.add_argument('--adaptive-per-bar', action='store_true',
+        dest='adaptive_per_bar',
+        help='Umbral adaptativo por compás: los compases cuyo máximo no alcanza '
+             'el umbral global usan max×0.5 como umbral local. '
+             'Evita compases vacíos cuando el modelo genera activaciones débiles.')
+    p_comp.add_argument('--fixed-context', action='store_true',
+        dest='fixed_context',
+        help='Usar el contexto del MIDI original en lugar del output generado. '
+             'Evita la degradación progresiva en generaciones largas. '
+             'Solo tiene efecto en modo denoise con --input.')
+    p_comp.add_argument('--threshold', type=float, default=None, metavar='FLOAT',
+        help='Umbral fijo de binarización (0.0–1.0). Tiene prioridad sobre --threshold-pct. '
+             'Para distribuciones bimodales (v3) prueba 0.5.')
     p_comp.set_defaults(func=cmd_compose)
 
     # ── style-corpus ──────────────────────────────────────────────────────────
@@ -2832,16 +3538,54 @@ def build_parser():
         """))
     p_rt.add_argument('--input',      required=True, metavar='FILE')
     p_rt.add_argument('--model-dir',  default=None,  metavar='DIR',
-        help='Si se indica, lee resolución y roles desde model_config.json')
+        help='Si se indica, lee resolución, roles y rango de pitch desde model_config.json. '
+             'Los flags --disable-roles y --pitch-range se ignoran en este caso.')
     p_rt.add_argument('--resolution', type=int, default=TICKS_PER_BAR_DEFAULT,
         metavar='INT',
         help=f'Ticks por compás (solo si no se usa --model-dir; '
              f'default: {TICKS_PER_BAR_DEFAULT})')
+    p_rt.add_argument('--disable-roles', nargs='+', metavar='ROL',
+        choices=ROLES, default=[], dest='disable_roles',
+        help='Roles a excluir (solo si no se usa --model-dir). '
+             f'Valores posibles: {", ".join(ROLES)}.')
+    p_rt.add_argument('--pitch-range', type=int, default=None, metavar='N',
+        dest='pitch_range',
+        help='Limitar a N valores MIDI centrados en Do central (solo si no se usa --model-dir).')
     p_rt.add_argument('--palette',    default=None,  metavar='FILE',
         help='Paleta de instrumentos (opcional)')
     p_rt.add_argument('--output',     default='output_roundtrip.mid', metavar='FILE')
     p_rt.add_argument('--bpm',        type=float, default=120.0)
     p_rt.set_defaults(func=cmd_round_trip)
+
+    # ── inpaint ───────────────────────────────────────────────────────────────
+    p_inp = sub.add_parser('inpaint',
+        help='Rellena compases vacíos de un MIDI manteniendo los que tienen notas',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""\
+            Rellena los compases vacíos de un MIDI usando el algoritmo RePaint.
+            Los compases con notas se mantienen exactos; los vacíos se generan
+            de forma coherente con sus vecinos.
+
+            Un compás se considera vacío si no tiene ninguna nota en ningún rol.
+
+            Ejemplo:
+              inpaint --model-dir model_diff_v3/ --input midi_con_huecos.mid \\
+                      --palette palette.json --output rellenado.mid
+        """))
+    p_inp.add_argument('--model-dir',  required=True, metavar='DIR')
+    p_inp.add_argument('--input',      required=True, metavar='FILE',
+        help='MIDI con compases vacíos a rellenar')
+    p_inp.add_argument('--palette',    default=None,  metavar='FILE')
+    p_inp.add_argument('--output',     default='output_inpaint.mid', metavar='FILE')
+    p_inp.add_argument('--ddim-steps', type=int,   default=50, metavar='INT',
+        help='Pasos DDIM (default: 50; más pasos = mejor calidad, más lento)')
+    p_inp.add_argument('--resample',   type=int,   default=1, metavar='INT',
+        help='Número de re-muestreos RePaint por paso (default: 1; '
+             'valores 3-5 mejoran coherencia a costa de velocidad)')
+    p_inp.add_argument('--threshold',  type=float, default=None, metavar='FLOAT',
+        help='Umbral de binarización (default: 0.5)')
+    p_inp.add_argument('--bpm',        type=float, default=120.0)
+    p_inp.set_defaults(func=cmd_inpaint)
 
     # ── reconstruct ───────────────────────────────────────────────────────────
     p_rec = sub.add_parser('reconstruct',

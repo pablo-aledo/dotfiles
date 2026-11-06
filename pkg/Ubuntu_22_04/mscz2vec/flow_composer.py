@@ -238,7 +238,7 @@ from pathlib import Path
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONSTANTES GLOBALES  (idénticas a diffusion_composer_v4.py / latent_composer.py)
+#  CONSTANTES GLOBALES  (idénticas a diffusion_composer.py / latent_composer.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
 ROLES = ['melody', 'counterpoint', 'accompaniment', 'bass', 'percussion']
@@ -302,7 +302,7 @@ def _pad_pitch(roll, pitch_lo, n_full=128):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  UTILIDADES MIDI COMUNES  (idénticas a diffusion_composer_v4.py)
+#  UTILIDADES MIDI COMUNES  (idénticas a diffusion_composer.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _load_midi(path: str):
@@ -347,7 +347,7 @@ def _std(values: list) -> float:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  ASIGNACIÓN DE ROLES  (RoleAssigner) — idéntico a diffusion_composer_v4.py
+#  ASIGNACIÓN DE ROLES  (RoleAssigner) — idéntico a diffusion_composer.py
 # ══════════════════════════════════════════════════════════════════════════════
 
 class RoleAssigner:
@@ -463,7 +463,7 @@ class RoleAssigner:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PIANO ROLL CONVERTER  — idéntico a diffusion_composer_v4.py
+#  PIANO ROLL CONVERTER  — idéntico a diffusion_composer.py
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PianoRollConverter:
@@ -507,7 +507,7 @@ class PianoRollConverter:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  EXTRACTOR DE TENSIÓN  — idéntico a diffusion_composer_v4.py (sin enriquecimiento
+#  EXTRACTOR DE TENSIÓN  — idéntico a diffusion_composer.py (sin enriquecimiento
 #  mscz2vec opcional, omitido aquí para mantener el archivo autocontenido)
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1636,7 +1636,7 @@ def cmd_style_corpus(args):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PERFILES DE TENSIÓN  (idéntico a diffusion_composer_v4.py)
+#  PERFILES DE TENSIÓN  (idéntico a diffusion_composer.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _tension_profile(profile: str, n_bars: int, tension_dim: int):
@@ -1667,7 +1667,7 @@ def _tension_profile(profile: str, n_bars: int, tension_dim: int):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  RENDERER: rolls → MIDI  (idéntico a diffusion_composer_v4.py)
+#  RENDERER: rolls → MIDI  (idéntico a diffusion_composer.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _adaptive_threshold(roll, percentile: float = 85.0) -> float:
@@ -1968,7 +1968,7 @@ def cmd_compose(args):
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  COMANDO: round-trip  (diagnóstico sin modelo, idéntico en espíritu al de
-#  diffusion_composer_v4.py: MIDI → piano roll → MIDI)
+#  diffusion_composer.py: MIDI → piano roll → MIDI)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cmd_round_trip(args):
