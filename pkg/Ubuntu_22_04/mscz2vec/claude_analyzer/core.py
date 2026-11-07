@@ -12922,3 +12922,16 @@ def run_analysis(filepath: str, n_sections: int = 6) -> dict:
         n_sections_val=n_sections,
     )
     return results
+
+
+def build_text_report(results: dict) -> str:
+    """Informe completo de métricas en texto plano (el mismo que producía
+    claude_analyzer.py con --output). Consume el dict de run_analysis()."""
+    import inspect
+    params = inspect.signature(generate_report).parameters
+    missing = [k for k, p in params.items()
+               if p.default is inspect.Parameter.empty and k not in results]
+    if missing:
+        raise KeyError("faltan claves en results para generate_report: "
+                       + ", ".join(missing))
+    return generate_report(**{k: results[k] for k in params if k in results})

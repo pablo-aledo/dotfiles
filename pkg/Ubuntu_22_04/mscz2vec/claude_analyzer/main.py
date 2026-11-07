@@ -3,11 +3,13 @@
 main.py — punto de entrada CLI para midi_analyzer v12.0
 ════════════════════════════════════════════════════════
 
-Tres salidas independientes, activables por separado o juntas:
+Salidas independientes, activables por separado o juntas:
 
   --essay-output  pieza.txt    → ensayo narrativo (solo texto)
   --html-output   pieza.html   → informe estadístico (tablas + gráficas)
   --yaml-output   pieza.yaml   → exportación estructurada (machine-readable)
+  --output        informe.txt  → informe completo de métricas (texto plano)
+  --essay-only                 → solo el ensayo, sin métricas (excluyente)
 
 Si no se especifica ninguna salida, imprime el ensayo por stdout.
 
@@ -16,6 +18,9 @@ Uso:
     python main.py pieza.mid --essay-output analisis.txt
     python main.py pieza.mid --html-output  informe.html
     python main.py pieza.mid --yaml-output  datos.yaml
+    python main.py pieza.mid --output informe.txt
+    python main.py pieza.mid --print-report
+    python main.py pieza.mid --essay-only --essay-output ensayo.txt
     python main.py pieza.mid --essay-output analisis.txt \\
                               --html-output  informe.html \\
                               --yaml-output  datos.yaml
@@ -28,22 +33,20 @@ import os
 import argparse
 
 # ── Imports ──────────────────────────────────────────────────────
-# Permitir ejecución tanto desde la carpeta midi_analyzer/
-# como desde su directorio padre.
-_here = os.path.dirname(os.path.abspath(__file__))
-if _here not in sys.path:
-    sys.path.insert(0, _here)
-if os.path.dirname(_here) not in sys.path:
-    sys.path.insert(0, os.path.dirname(_here))
-
+# Funciona como paquete (python -m claude_analyzer.main) y como script
+# (python claude_analyzer/main.py), sea cual sea el nombre de la carpeta.
 try:
-    from midi_analyzer.core import run_analysis
-    from midi_analyzer.renderers.essay import render_essay
-    from midi_analyzer.renderers.html_report import render_html
-    from midi_analyzer.renderers.yaml_export import render_yaml
+    # Como paquete:  python -m claude_analyzer.main   /   import claude_analyzer.main
+    from .core import run_analysis, build_text_report
+    from .renderers.essay import render_essay
+    from .renderers.html_report import render_html
+    from .renderers.yaml_export import render_yaml
 except ImportError:
-    # Fallback: mismo directorio
-    from core import run_analysis
+    # Como script:  python claude_analyzer/main.py  (core y renderers desde su carpeta)
+    _here = os.path.dirname(os.path.abspath(__file__))
+    if _here not in sys.path:
+        sys.path.insert(0, _here)
+    from core import run_analysis, build_text_report
     from renderers.essay import render_essay
     from renderers.html_report import render_html
     from renderers.yaml_export import render_yaml
@@ -103,12 +106,31 @@ def build_parser() -> argparse.ArgumentParser:
         '--print-yaml', action='store_true',
         help='Imprimir YAML por stdout',
     )
+    out.add_argument(
+        '--output', metavar='ARCHIVO.txt',
+        help='Guardar el informe completo de métricas en texto plano '
+             '(equivale al --output de claude_analyzer.py)',
+    )
+    out.add_argument(
+        '--print-report', action='store_true',
+        help='Imprimir el informe completo de métricas por stdout',
+    )
+    out.add_argument(
+        '--essay-only', action='store_true',
+        help='Solo el ensayo narrativo, sin métricas: se imprime por stdout y, '
+             'con --essay-output, también se guarda. Incompatible con '
+             '--output, --print-report, --html-output, --yaml-output, '
+             '--print-yaml y --all-outputs',
+    )
 
     return p
 
 
 def _save(path: str, content: str, label: str) -> None:
     try:
+        _d = os.path.dirname(path)
+        if _d:
+            os.makedirs(_d, exist_ok=True)
         with open(path, 'w', encoding='utf-8') as f:
             f.write(content)
         size_kb = len(content.encode('utf-8')) / 1024
@@ -121,6 +143,16 @@ def _save(path: str, content: str, label: str) -> None:
 def main() -> None:
     parser = build_parser()
     args   = parser.parse_args()
+
+    # ── --essay-only es excluyente ──────────────────────────────
+    if args.essay_only:
+        _conf = [n for n, v in (
+            ('--output', args.output), ('--print-report', args.print_report),
+            ('--html-output', args.html_output), ('--yaml-output', args.yaml_output),
+            ('--print-yaml', args.print_yaml), ('--all-outputs', args.all_outputs),
+        ) if v]
+        if _conf:
+            parser.error('--essay-only es incompatible con: ' + ', '.join(_conf))
 
     # ── Expand --all-outputs ─────────────────────────────────────
     if args.all_outputs:
@@ -135,8 +167,10 @@ def main() -> None:
     # ── Check at least one output is requested ───────────────────
     any_file_output = any([
         args.essay_output, args.html_output, args.yaml_output,
+        args.output,
     ])
-    any_stdout = args.print_essay or args.print_yaml
+    any_stdout = (args.print_essay or args.print_yaml or args.print_report
+                  or args.essay_only)
 
     # Default: print essay to stdout if nothing else requested
     default_stdout = not any_file_output and not any_stdout
@@ -157,9 +191,11 @@ def main() -> None:
         sys.exit(1)
 
     # ── Determine which renderers to run ─────────────────────────
-    need_essay = bool(args.essay_output or args.print_essay or default_stdout)
+    need_essay = bool(args.essay_output or args.print_essay or default_stdout
+                      or args.essay_only)
     need_html  = bool(args.html_output)
     need_yaml  = bool(args.yaml_output or args.print_yaml)
+    need_report = bool(args.output or args.print_report)
 
     print()
 
@@ -169,9 +205,19 @@ def main() -> None:
         essay = render_essay(results)
         if args.essay_output:
             _save(args.essay_output, essay, "ensayo narrativo")
-        if args.print_essay or default_stdout:
+        if args.print_essay or args.essay_only or default_stdout:
             print()
             print(essay)
+
+    # ── Informe completo de métricas (texto plano) ──────────────
+    if need_report:
+        print("  📑  Generando informe completo de métricas...")
+        report = build_text_report(results)
+        if args.output:
+            _save(args.output, report, "informe de métricas")
+        if args.print_report:
+            print()
+            print(report)
 
     # ── HTML renderer ─────────────────────────────────────────────
     if need_html:

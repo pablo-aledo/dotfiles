@@ -15,7 +15,7 @@ Convenciones del schema:
   - Timestamps: floats en segundos (no strings)
 
 Uso:
-    from midi_analyzer.renderers.yaml_export import render_yaml
+    from claude_analyzer.renderers.yaml_export import render_yaml
     yaml_str = render_yaml(results)
     with open("pieza.yaml", "w", encoding="utf-8") as f:
         f.write(yaml_str)

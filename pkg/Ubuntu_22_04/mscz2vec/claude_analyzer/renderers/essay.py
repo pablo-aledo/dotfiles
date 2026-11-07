@@ -11,7 +11,7 @@ en lenguaje natural. Depende exclusivamente de las
 funciones write_* del módulo core.
 
 Uso:
-    from midi_analyzer.renderers.essay import render_essay
+    from claude_analyzer.renderers.essay import render_essay
     text = render_essay(results)
     with open("pieza.txt", "w") as f:
         f.write(text)
@@ -25,20 +25,36 @@ if TYPE_CHECKING:
 
 
 # ── Importar funciones de escritura del core ────────────────────
-from midi_analyzer.core import (
-    write_executive_summary,
-    write_identity,
-    write_architecture,
-    write_harmony,
-    write_melody,
-    write_rhythm,
-    write_listener_experience,
-    write_compositional_intention,
-    write_emotional_evolution,
-    write_emotional_story_section,
-    write_synthesis,
-    MODE_CHARS,
-)
+try:                      # como parte del paquete (claude_analyzer.renderers.essay)
+    from ..core import (
+        write_executive_summary,
+        write_identity,
+        write_architecture,
+        write_harmony,
+        write_melody,
+        write_rhythm,
+        write_listener_experience,
+        write_compositional_intention,
+        write_emotional_evolution,
+        write_emotional_story_section,
+        write_synthesis,
+        MODE_CHARS,
+    )
+except ImportError:       # main.py ejecutado como script: core está en sys.path
+    from core import (
+        write_executive_summary,
+        write_identity,
+        write_architecture,
+        write_harmony,
+        write_melody,
+        write_rhythm,
+        write_listener_experience,
+        write_compositional_intention,
+        write_emotional_evolution,
+        write_emotional_story_section,
+        write_synthesis,
+        MODE_CHARS,
+    )
 
 
 def render_essay(results: dict) -> str:
