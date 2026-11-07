@@ -555,6 +555,32 @@ def _role_from_name(name: str) -> Optional[str]:
     return None
 
 
+def _pick_melody_heuristic(cands: List[int], track_info: Dict[int, dict],
+                           compat: bool = False) -> int:
+    """Elige la pista melódica entre candidatas sin rol declarado.
+
+    v1.2 (y --compat): pitch medio más alto. Eso elegía pistas casi vacías (p. ej. una
+    «sección» de 6 notas en el registro agudo) como melodía y dejaba sin material a la
+    dimensión melódica. Ahora: se descartan las pistas con muy pocas notas respecto a
+    la más activa (<10 %) y se puntúa registro (40 %), actividad (35 %) y carácter
+    lineal/monofónico (25 %)."""
+    if compat or len(cands) == 1:
+        return max(cands, key=lambda ti: track_info[ti]['mean_pitch'])
+    max_n = max(track_info[ti]['n_notes'] for ti in cands) or 1
+    pool = [ti for ti in cands if track_info[ti]['n_notes'] >= 0.10 * max_n] or list(cands)
+    pitches = [track_info[ti]['mean_pitch'] for ti in pool]
+    lo, hi = min(pitches), max(pitches)
+
+    def score(ti):
+        info = track_info[ti]
+        reg = (info['mean_pitch'] - lo) / (hi - lo) if hi > lo else 1.0
+        act = info['n_notes'] / max_n
+        lin = 1.0 - info.get('chordiness', 0.0)
+        return 0.40 * reg + 0.35 * act + 0.25 * lin
+
+    return max(pool, key=score)
+
+
 def detect_topology(mid: MidiFile, ctx: Optional["EvalContext"] = None) -> Topology:
     """Clasifica la estructura de tracks y asigna roles.
 
@@ -570,13 +596,16 @@ def detect_topology(mid: MidiFile, ctx: Optional["EvalContext"] = None) -> Topol
 
     for ti, track in enumerate(mid.tracks):
         program, channels, pitches, n_drum = 0, set(), [], 0
+        onsets, abs_t = [], 0
         for msg in track:
+            abs_t += msg.time
             if msg.type == 'program_change':
                 program = msg.program
                 channels.add(msg.channel)
             elif msg.type == 'note_on' and msg.velocity > 0:
                 channels.add(msg.channel)
                 pitches.append(msg.note)
+                onsets.append(abs_t)
                 if msg.channel == _DRUM_CHANNEL:
                     n_drum += 1
         if compat:
@@ -592,6 +621,8 @@ def detect_topology(mid: MidiFile, ctx: Optional["EvalContext"] = None) -> Topol
             'n_notes':    len(pitches),
             'mean_pitch': float(np.mean(pitches)) if pitches else 0.0,
             'name':       (track.name or '').strip(),
+            # fracción de ataques simultáneos con otro (0 = línea monofónica)
+            'chordiness': (1.0 - len(set(onsets)) / len(onsets)) if onsets else 0.0,
         }
 
     active = [ti for ti, info in track_info.items() if info['n_notes'] > 0]
@@ -662,7 +693,7 @@ def detect_topology(mid: MidiFile, ctx: Optional["EvalContext"] = None) -> Topol
                             f"de registro habría elegido la pista {heur_ti}")
         melody_tracks.append(melody_ti)
     elif unknowns:
-        melody_ti = max(unknowns, key=lambda ti: track_info[ti]['mean_pitch'])
+        melody_ti = _pick_melody_heuristic(unknowns, track_info, compat)
         _set(melody_ti, 'melody', 'heuristic')
         melody_tracks.append(melody_ti)
     for ti in unknowns:
@@ -676,7 +707,7 @@ def detect_topology(mid: MidiFile, ctx: Optional["EvalContext"] = None) -> Topol
         cand = [ti for ti in active
                 if voice_map.get(ti) == 'harmony' and roles.get(ti, {}).get('source') != 'roles']
         if cand:
-            melody_ti = max(cand, key=lambda ti: track_info[ti]['mean_pitch'])
+            melody_ti = _pick_melody_heuristic(cand, track_info, compat)
             _set(melody_ti, 'melody', 'fallback')
             melody_tracks.append(melody_ti)
             warnings.append(f"ninguna pista identificada como melodía: se usa la pista {melody_ti} "

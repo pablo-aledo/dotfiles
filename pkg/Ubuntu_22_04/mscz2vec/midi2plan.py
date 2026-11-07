@@ -612,9 +612,16 @@ def compute_brief(path, suite_dir=HERE, with_form=True, force_key=None, force_te
         tracks.append({"index": ti, "name": mid["names"].get(ti, ""), "notes": len(tn),
                        "mean_pitch": round(mp, 1), "drums": drum})
     melodic = [t for t in tracks if not t["drums"]]
+    # Melodía = pista más aguda y bajo = más grave, pero solo entre pistas con actividad
+    # real (≥10 % de las notas de la más activa): una pista decorativa de 6 notas en el
+    # registro agudo ya no se lleva el rol de melodía.
+    _max_n = max((t["notes"] for t in melodic), default=0)
+    _pool = [t for t in melodic if t["notes"] >= 0.10 * _max_n] or melodic
+    _mel = max(_pool, key=lambda x: x["mean_pitch"]) if _pool else None
+    _bas = min(_pool, key=lambda x: x["mean_pitch"]) if _pool else None
     for t in melodic:
-        t["role"] = "melody" if t is max(melodic, key=lambda x: x["mean_pitch"]) else (
-            "bass" if t is min(melodic, key=lambda x: x["mean_pitch"]) and len(melodic) > 1 else "harmony")
+        t["role"] = "melody" if t is _mel else (
+            "bass" if t is _bas and len(_pool) > 1 else "harmony")
     brief = {
         "file": str(path), "tool": "midi2plan", "version": VERSION,
         "duration_s": round(dur, 1), "tpb": mid["tpb"],

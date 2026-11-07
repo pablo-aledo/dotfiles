@@ -183,6 +183,17 @@ PITCH_NAMES  = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 PITCH_NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 
 # Tónica → pitch class
+# Ortografía de los acordes generados: bemoles en tonalidades con bemoles
+# (Re menor → Eb y no D#). Se fija en main() según tónica y modo.
+_SPELL_FLATS = False
+_FLAT_MAJOR_PCS = {5, 10, 3, 8, 1, 6}                     # F Bb Eb Ab Db Gb
+_PARENT_MAJOR_OFFSET = {'major': 0, 'minor': 3, 'harmonic_minor': 3, 'melodic_minor': 3,
+                        'dorian': 10, 'phrygian': 8, 'phrygian_dominant': 8,
+                        'lydian': 7, 'mixolydian': 5, 'locrian': 1}
+
+def _uses_flats(tonic_pc: int, mode: str) -> bool:
+    return (tonic_pc + _PARENT_MAJOR_OFFSET.get(mode, 0)) % 12 in _FLAT_MAJOR_PCS
+
 NOTE_PC = {n: i for i, n in enumerate(PITCH_NAMES)}
 NOTE_PC.update({n: i for i, n in enumerate(PITCH_NAMES_FLAT)})
 NOTE_PC.update({'Cb': 11, 'Fb': 4, 'B#': 0, 'E#': 5})
@@ -595,7 +606,7 @@ def resolve_numeral(numeral: str, tonic_pc: int, complexity: float = 0.5) -> tup
     elif complexity > 0.75 and quality == '7':
         quality = '9'
 
-    root_name = PITCH_NAMES[root_pc]
+    root_name = (PITCH_NAMES_FLAT if _SPELL_FLATS else PITCH_NAMES)[root_pc]
     chord_name = f"{root_name}{quality}"
     intervals = CHORD_INTERVALS.get(quality, CHORD_INTERVALS[''])
     pitches = [(root_pc + iv) % 12 for iv in intervals]
@@ -1199,6 +1210,8 @@ def main():
         params['mode'] = 'minor'
 
     tonic_pc = NOTE_PC.get(tonic_str, 0)
+    global _SPELL_FLATS
+    _SPELL_FLATS = _uses_flats(tonic_pc, params['mode']) or 'b' in tonic_str[1:]
     if args.verbose:
         print(f"\n[resolución] Tónica: {PITCH_NAMES[tonic_pc]} ({tonic_pc})  "
               f"Modo: {params['mode']}")

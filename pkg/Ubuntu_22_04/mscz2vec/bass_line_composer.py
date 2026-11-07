@@ -2075,9 +2075,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Melodía MIDI para contrapunto automático")
 
     # Rango
-    p.add_argument("--range", nargs=2, type=int,
+    p.add_argument("--range", nargs=2, type=_midi_or_note,
                    default=[BASS_LOW_DEFAULT, BASS_HIGH_DEFAULT],
-                   metavar=("LOW", "HIGH"))
+                   metavar=("LOW", "HIGH"),
+                   help="Rango del bajo: número MIDI (38) o nombre de nota en notación "
+                        "científica, C4=60 (D2, Bb1, F#3). Ej.: --range E1 D3  ó  --range 28 50")
 
     # Parámetros de estilo
     p.add_argument("--approach-prob", type=float, default=0.6)
@@ -2107,6 +2109,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run",     action="store_true")
     p.add_argument("--listen",      action="store_true")
     return p
+
+
+def _midi_or_note(v: str) -> int:
+    """argparse type: entero MIDI o nombre de nota (C4=60): D2, Bb1, F#3, C-1."""
+    import argparse, re
+    try:
+        return int(v)
+    except ValueError:
+        pass
+    m = re.fullmatch(r"([A-Ga-g])([#b]?)(-?\d)", v.strip())
+    if not m:
+        raise argparse.ArgumentTypeError(
+            f"'{v}' no es un número MIDI ni un nombre de nota (ej. 38, D2, Bb1)")
+    base = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}[m.group(1).upper()]
+    acc = {"#": 1, "b": -1, "": 0}[m.group(2)]
+    return (int(m.group(3)) + 1) * 12 + base + acc
 
 
 def main():

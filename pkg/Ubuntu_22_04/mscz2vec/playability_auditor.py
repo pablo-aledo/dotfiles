@@ -473,6 +473,13 @@ INSTRUMENT_DB["viento_metal_gen"] = dict(
 
 # Palabras clave en nombres de pista (ES / EN / abreviaturas) → clave de perfil
 _NAME_KEYWORDS = [
+    # Secciones y plurales ANTES que los solistas: «Cuerdas (Vl II/Vla II)» contiene
+    # «vl» (→ violín) y «Trompas» contiene «trompa» (→ trompa monofónica), pero son
+    # secciones que tocan acordes.
+    (r"metales|brass|trompas\b|horns\b|trombones\b|trumpets\b|trompetas\b", "viento_metal_gen"),
+    (r"cuerdas|strings|ensemble|violines|violas\b|chelos\b|cellos\b|violonchelos\b|contrabajos\b"
+     r"|(viol[ií]n|violin|viola|cello|chelo|violonchelo|contrabajo|bass)\b.*\bsecci[oó]n"
+     r"|secci[oó]n\b.*(cuerd|string|viol[ií]n|violin|viola|cello|chelo)", "cuerdas"),
     (r"flaut[ií]n|piccolo|picc\b", "flautin"),
     (r"flaut|flute|\bfl\.?\b", "flauta"),
     (r"oboe|\bob\.?\b", "oboe"),
@@ -558,6 +565,7 @@ class TrackAudit:
     n_notes: int
     issues: List[Issue] = field(default_factory=list)
     score: float = 1.0
+    auto_note: str = ""    # explicación si el perfil se promovió a sección automáticamente
 
     def errors(self):
         return [i for i in self.issues if i.severity == "ERROR"]
@@ -619,6 +627,58 @@ def detect_instrument(trk: MidiTrackData, override: Optional[str] = None) -> str
     if trk.programs:
         return gm_to_profile(trk.programs[0])
     return "sintetizador"
+
+
+# Solista → perfil de sección al que se promueve si la pista toca acordes
+_SECTION_PROMOTION = {
+    "violin": "cuerdas", "viola": "cuerdas", "violonchelo": "cuerdas", "contrabajo": "cuerdas",
+    "trompeta": "viento_metal_gen", "trompa": "viento_metal_gen",
+    "trombon": "viento_metal_gen", "tuba": "viento_metal_gen",
+}
+
+
+def _onset_concurrency(notes: List[Note]) -> Tuple[float, int]:
+    """(fracción de ataques con más de 1 nota sonando, máximo de notas simultáneas)."""
+    events = []
+    for n in notes:
+        events.append((n.start, 1, n))
+        events.append((n.end, -1, n))
+    events.sort(key=lambda e: (e[0], e[1]))
+    active, multi, onsets, kmax = [], 0, 0, 0
+    for _, kind, n in events:
+        if kind == 1:
+            active.append(n)
+            onsets += 1
+            kmax = max(kmax, len(active))
+            if len(active) > 1:
+                multi += 1
+        elif n in active:
+            active.remove(n)
+    return (multi / onsets if onsets else 0.0), kmax
+
+
+def resolve_instrument(trk: MidiTrackData, notes: List[Note],
+                       override: Optional[str] = None) -> Tuple[str, str]:
+    """detect_instrument + promoción automática a perfil de sección.
+
+    Si la pista se clasificó como solista (violín, trompa…) pero toca acordes de
+    forma habitual (≥25 % de los ataques con otra nota sonando y ≥3 notas a la vez
+    en cuerdas / ≥2 en metales), se usa el perfil de sección (`cuerdas`,
+    `viento_metal_gen`) y se devuelve la explicación. Con --instrument explícito
+    nunca se promueve. Devuelve (clave, nota)."""
+    inst = detect_instrument(trk, override)
+    if override or inst not in _SECTION_PROMOTION:
+        return inst, ""
+    frac, kmax = _onset_concurrency(notes)
+    prof = INSTRUMENT_DB[inst]
+    need_k = 3 if not prof["mono"] else 2
+    if frac >= 0.25 and kmax >= need_k and kmax > prof["max_poly"]:
+        new = _SECTION_PROMOTION[inst]
+        return new, (f"clasificada como {prof['es']} solista pero toca acordes "
+                     f"({frac:.0%} de los ataques con notas simultáneas, máx. {kmax}); "
+                     f"se audita como {INSTRUMENT_DB[new]['es']} "
+                     f"(use --instrument {trk.index if hasattr(trk,'index') else 'N'}={inst} para forzar solista)")
+    return inst, ""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -883,7 +943,9 @@ def audit_midi(path: str,
             notes = [n for n in notes if t0 <= n.start < t1]
             if not notes:
                 continue
-        inst = detect_instrument(trk, overrides.get(idx))
+        inst, auto_note = resolve_instrument(trk, notes, overrides.get(idx))
+        if auto_note:
+            auto_note = auto_note.replace("--instrument N=", f"--instrument {idx}=")
         prof = INSTRUMENT_DB[inst]
         issues: List[Issue] = []
         for ch in checks:
@@ -893,7 +955,7 @@ def audit_midi(path: str,
         ta = TrackAudit(index=idx, name=trk.name or f"Pista {idx}",
                         instrument=inst, instrument_es=prof["es"],
                         n_notes=len(notes), issues=issues,
-                        score=_track_score(issues, len(notes)))
+                        score=_track_score(issues, len(notes)), auto_note=auto_note)
         report.tracks.append(ta)
         scores.append(ta.score)
         weights.append(len(notes))
@@ -929,7 +991,7 @@ def fix_midi(path: str, out_path: str,
         notes = extract_notes(trk)
         if not notes:
             continue
-        inst = detect_instrument(trk, overrides.get(idx))
+        inst, _auto = resolve_instrument(trk, notes, overrides.get(idx))
         prof = INSTRUMENT_DB[inst]
         lo, hi = prof["range"]
 
@@ -1044,7 +1106,8 @@ def print_report(report: AuditReport, max_issues: int = 12,
         for t in report.tracks:
             ne, nw = len(t.errors()), len(t.warnings())
             print(f"[{t.index}] {t.name:<22} {t.instrument_es:<22} "
-                  f"score={t.score:.2f}  errores={ne}  avisos={nw}")
+                  f"score={t.score:.2f}  errores={ne}  avisos={nw}"
+                  f"{'  (auto: sección)' if t.auto_note else ''}")
         print(f"GLOBAL score={report.global_score:.2f} "
               f"errores={len(report.errors())} avisos={len(report.warnings())}")
         return
@@ -1061,6 +1124,8 @@ def print_report(report: AuditReport, max_issues: int = 12,
               f"{t.n_notes} notas")
         print(f"      tocabilidad: {col}{t.score:.2f} ({_score_label(t.score)}){R}"
               f"   errores: {ne}   avisos: {nw}")
+        if t.auto_note:
+            print(f"      {_c('YEL')}ℹ {t.auto_note}{R}")
         shown = t.issues if verbose else t.issues[:max_issues]
         for it in shown:
             mark = f"{_c('RED')}✖" if it.severity == "ERROR" else f"{_c('YEL')}⚑"
@@ -1094,7 +1159,7 @@ def report_to_dict(report: AuditReport) -> dict:
             {
                 "index": t.index, "name": t.name,
                 "instrument": t.instrument, "instrument_es": t.instrument_es,
-                "n_notes": t.n_notes, "score": t.score,
+                "n_notes": t.n_notes, "score": t.score, "auto_note": t.auto_note,
                 "issues": [asdict(i) for i in t.issues],
             } for t in report.tracks
         ],

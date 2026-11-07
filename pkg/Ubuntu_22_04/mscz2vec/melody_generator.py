@@ -921,6 +921,14 @@ class GrammarEngine:
                                 len(contour) - 1)]
             target_abs = low + int(c_mid * (high - low))
             target = snap_to_scale(target_abs, scale_pitches)
+            # Variación (rng): este motor era 100 % determinista y los N candidatos
+            # salían idénticos. Se desplaza el objetivo ±1 grado en ~40 % de las frases
+            # (la 1ª y la última se mantienen para conservar inicio y cierre).
+            if 0 < ph < n_phrases - 1 and target in scale_pitches \
+                    and self.rng.random() < 0.4:
+                ti = scale_pitches.index(target) + self.rng.choice((-1, 1))
+                if 0 <= ti < len(scale_pitches) and low <= scale_pitches[ti] <= high:
+                    target = scale_pitches[ti]
             structural_pitches.extend([target] * phrase_len)
 
         if remainder:
@@ -949,9 +957,11 @@ class GrammarEngine:
                 passing = self._passing_notes(struct_pitch, dest, scale_pitches)
 
                 if passing:
-                    dur1 = beats_per_bar * 0.5
-                    dur2 = beats_per_bar * 0.25
-                    dur3 = beats_per_bar * 0.25
+                    # reparto rítmico del compás elegido al azar (rng)
+                    f1, f2 = self.rng.choice(((0.5, 0.25), (0.5, 0.25), (0.25, 0.25), (0.25, 0.5)))
+                    dur1 = beats_per_bar * f1
+                    dur2 = beats_per_bar * f2
+                    dur3 = beats_per_bar - dur1 - dur2
                     vel1 = int(vel_min + (vel_max - vel_min) * 0.5)
                     vel2 = vel1 - 10
                     vel3 = vel1 + 5
@@ -976,7 +986,7 @@ class GrammarEngine:
                 # Alta tensión: figura ornamentada
                 # bordadura superior + nota estructural + notas de paso
                 upper_nb = self._neighbor_note(struct_pitch, scale_pitches,
-                                                upper=True)
+                                                upper=self.rng.random() < 0.6)
                 dest = structural_pitches[min(bar_idx + 1, n_bars - 1)]
                 passing = self._passing_notes(struct_pitch, dest, scale_pitches)
 
@@ -2135,12 +2145,14 @@ def main():
     # ── 1. Descripción libre ────────────────────────────────────────────────
     if args.description:
         detected = params_from_description(args.description)
+        # La descripción solo rellena lo que el usuario NO fijó con un flag explícito.
+        # (Antes la comparación params[k] == args.k era siempre cierta y la descripción
+        # pisaba siempre --key/--mode/--profile/--contour.)
+        def _flag_given(name):
+            opt = "--" + name.replace("_", "-")
+            return any(a == opt or a.startswith(opt + "=") for a in sys.argv[1:])
         for k, v in detected.items():
-            if k in params and params[k] == getattr(args, k.replace("-", "_"),
-                                                     None):
-                params[k] = v  # solo sobreescribir si no fue especificado manualmente
-            elif k not in ["key", "mode", "bars", "tempo"] or \
-                 getattr(args, k, None) is None:
+            if not _flag_given(k):
                 params[k] = v
         if args.verbose:
             print(f"[descripción] '{args.description}'")

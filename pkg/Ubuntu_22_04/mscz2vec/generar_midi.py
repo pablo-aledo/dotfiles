@@ -349,9 +349,9 @@ def build_chord_from_degree(grado, tonica, modo, con_septima=False):
 def _get_seccion_modo(seccion, obra):
     """Lee modo y tónica de la sección o de la obra. Devuelve (modo, tonica) o (None,None)."""
     modo   = seccion.get('modo') or (obra or {}).get('modo')
-    tonica = seccion.get('tonica') or seccion.get('tonalidad')
+    tonica = seccion.get('tonica') or _first_key(seccion.get('tonalidad'))
     if not tonica:
-        tonica = (obra or {}).get('tonica') or (obra or {}).get('tonalidad')
+        tonica = (obra or {}).get('tonica') or _first_key((obra or {}).get('tonalidad'))
     # 'Am' → tonica='A', modo='menor' si no hay modo explícito
     if tonica and not modo:
         t = str(tonica)
@@ -491,8 +491,27 @@ MARCATO_PATTERNS['default'] = MARCATO_PATTERNS['tango']
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONSTRUCCIÓN DE TRACKS MIDI
 # ══════════════════════════════════════════════════════════════════════════════
+_META_TEXT_MAP = {'—': '-', '–': '-', '‒': '-', '―': '-', '…': '...',
+                  '“': '"', '”': '"', '‘': "'", '’': "'", '♭': 'b', '♯': '#'}
+
 def ascii_safe(s):
-    return s.encode('ascii','ignore').decode('ascii')
+    """Texto seguro para meta-eventos MIDI.
+
+    mido escribe los textos en latin-1, así que se CONSERVAN los acentos y la ñ
+    (Violín, Épico, Percusión) y solo se translitera (NFKD) o descarta lo que no
+    cabe en latin-1 (—, ♭, ideogramas…). Antes se borraba todo carácter no ASCII
+    ('Violín' → 'Violn')."""
+    import unicodedata
+    out = []
+    for ch in str(s):
+        ch = _META_TEXT_MAP.get(ch, ch)
+        for c in ch:
+            try:
+                c.encode('latin-1')
+                out.append(c)
+            except UnicodeEncodeError:
+                out.append(unicodedata.normalize('NFKD', c).encode('ascii', 'ignore').decode('ascii'))
+    return ''.join(out)
 
 def build_track(name, channel, program, events):
     track = MidiTrack()
@@ -595,6 +614,34 @@ def _build_meter_map(seccion, obra=None):
     return cambios
 
 
+def _first_key(val):
+    """Normaliza un valor de 'tonalidad' a la cadena que entiende MIDI/mido.
+
+    Acepta: 'Dm' · 'Dm / F' o 'Dm/F' (dual: se usa la primera lectura) ·
+    {midi: 'Dm', texto: 'Dm / F'} (la clave 'midi' manda). Devuelve None si no hay
+    valor. NO valida que sea una armadura legal (eso lo hace _valid_midi_key)."""
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        val = val.get('midi') or val.get('key') or val.get('tonalidad')
+        if val is None:
+            return None
+    t = str(val).strip()
+    if not t:
+        return None
+    for sep in ('/', '|', ';', ','):
+        if sep in t:
+            t = t.split(sep)[0].strip()
+    return t or None
+
+def _valid_midi_key(k):
+    """True si mido acepta k como armadura (C, Dm, Bb, F#m…)."""
+    try:
+        MetaMessage('key_signature', key=k)
+        return True
+    except (ValueError, TypeError):
+        return False
+
 def _build_key_map_for_section(seccion, obra=None):
     """Construye lista ordenada de (compas_abs, tonalidad_str) para UNA sección.
 
@@ -608,8 +655,9 @@ def _build_key_map_for_section(seccion, obra=None):
     Retorna lista ordenada: [(compas_abs, key_str), ...]
     """
     obra = obra or {}
-    key_global = obra.get('obra', {}).get('tonalidad') or obra.get('tonalidad', 'C')
-    key_sec    = seccion.get('tonalidad') or key_global
+    key_global = _first_key(obra.get('obra', {}).get('tonalidad')
+                            or obra.get('tonalidad', 'C')) or 'C'
+    key_sec    = _first_key(seccion.get('tonalidad')) or key_global
     c_ini      = seccion['compases'][0]
 
     result = [(c_ini, key_sec)]
@@ -617,17 +665,17 @@ def _build_key_map_for_section(seccion, obra=None):
     # Cambios explícitos dentro de la sección
     for entry in (seccion.get('cambios_de_tonalidad') or []):
         c_abs = int(entry['compas'])
-        nueva = entry.get('nueva_tonalidad') or entry.get('tonalidad')
+        nueva = _first_key(entry.get('nueva_tonalidad') or entry.get('tonalidad'))
         if nueva:
-            result.append((c_abs, str(nueva)))
+            result.append((c_abs, nueva))
         else:
             print(f"  ⚠ cambios_de_tonalidad: falta 'nueva_tonalidad' en c.{c_abs}")
 
     # Override por frase
     for frase in (seccion.get('frases') or []):
-        ton_frase = frase.get('tonalidad')
+        ton_frase = _first_key(frase.get('tonalidad'))
         if ton_frase:
-            result.append((int(frase['compases'][0]), str(ton_frase)))
+            result.append((int(frase['compases'][0]), ton_frase))
 
     result.sort(key=lambda x: x[0])
     # Eliminar duplicados consecutivos con la misma tonalidad
@@ -707,7 +755,7 @@ def build_global_tempo_track(secciones, obra, titulo_override=None):
     """
     obra_meta   = obra.get('obra', {})
     titulo      = titulo_override or obra_meta.get('titulo', '')
-    key_global  = obra_meta.get('tonalidad') or obra.get('tonalidad', 'C')
+    key_global  = _first_key(obra_meta.get('tonalidad') or obra.get('tonalidad', 'C')) or 'C'
 
     tt = MidiTrack()
     tt.append(MetaMessage('track_name', name=ascii_safe(titulo), time=0))
@@ -1845,9 +1893,20 @@ def process_percusion(frases, bar1):
                     events.append((t_off, 'off', int(nota_num), 0))
         else:
             for entrada in perc:
-                bar, beat, nota_num, vel = entrada
+                # Lista plana: [compás, beat, nota, vel]  (golpe corto, 0.4 beats)
+                #           o  [compás, beat, duración, nota, vel]  (mismo orden que el
+                #              resto de capas; permite platillo/rodillo sostenido)
+                if len(entrada) == 5:
+                    bar, beat, dur, nota_num, vel = entrada
+                elif len(entrada) == 4:
+                    bar, beat, nota_num, vel = entrada
+                    dur = 0.4
+                else:
+                    print(f"  ⚠ percusion: entrada con {len(entrada)} elementos ignorada "
+                          f"(usar [compás, beat, nota, vel] o [compás, beat, dur, nota, vel]): {entrada}")
+                    continue
                 t_on  = bar_beat_to_tick(int(bar), float(beat), bar1)
-                t_off = t_on + beats_to_ticks(0.4)
+                t_off = t_on + beats_to_ticks(float(dur))
                 events.append((t_on,  'on',  int(nota_num), int(vel)))
                 events.append((t_off, 'off', int(nota_num), 0))
     return events
@@ -1885,7 +1944,7 @@ def get_capa_events(capa, frases, bar1, patrones_extra=None, lm_index=None,
 def validate_yaml(obra):
     errors=0; warnings=0
     def err(msg): nonlocal errors; print(f"  ✗ {msg}"); errors+=1
-    def warn(msg): nonlocal warnings; print(f"  ⚠ {msg}")
+    def warn(msg): nonlocal warnings; print(f"  ⚠ {msg}"); warnings+=1
     print(f"\n{'─'*60}\n  VALIDANDO YAML…\n{'─'*60}")
     if 'obra' not in obra: err("Falta la clave 'obra'"); return errors
     if 'titulo' not in obra['obra']: err("obra.titulo es obligatorio")
@@ -1894,11 +1953,24 @@ def validate_yaml(obra):
     patrones_validos = set(MARCATO_PATTERNS.keys()) | set(obra.get('patrones_ritmicos', {}).keys())
     secciones=(obra.get('secciones') or [])
     if not secciones: warn("No hay secciones definidas")
+    def check_key(donde, valor):
+        # La armadura MIDI debe ser legal para mido (C, Dm, Bb…). 'Dm / F' se admite
+        # (se usa la primera lectura) pero se avisa; {midi:, texto:} se admite sin aviso.
+        k = _first_key(valor)
+        if k is None: return
+        if not _valid_midi_key(k):
+            err(f"{donde}: tonalidad '{valor}' no es una armadura MIDI válida "
+                f"(ej. C, Dm, Bb, F#m); use {{midi: Dm, texto: 'Dm / F'}} para lecturas duales")
+        elif isinstance(valor, str) and k != valor.strip():
+            warn(f"{donde}: tonalidad dual '{valor}' → la armadura MIDI usará '{k}'")
+    if obra['obra'].get('tonalidad') is not None:
+        check_key("obra.tonalidad", obra['obra'].get('tonalidad'))
     prev_fin=None
     for sec in secciones:
         sid=sec.get('id','?'); prefix=f"Sec.{sid}"
         for campo in ('id','nombre','compases','tempo'):
             if campo not in sec: err(f"{prefix}: falta '{campo}'")
+        check_key(f"{prefix}.tonalidad", sec.get('tonalidad'))
         if 'compases' in sec:
             c_ini,c_fin=sec['compases']
             if c_ini>c_fin: err(f"{prefix}: c_ini({c_ini}) > c_fin({c_fin})")
@@ -1919,6 +1991,8 @@ def validate_yaml(obra):
             nueva = ct_entry.get('nueva_tonalidad') or ct_entry.get('tonalidad')
             if not nueva:
                 err(f"{prefix}: cambios_de_tonalidad: falta 'nueva_tonalidad'")
+            else:
+                check_key(f"{prefix}.cambios_de_tonalidad", nueva)
             c_abs = ct_entry.get('compas')
             if c_abs and 'compases' in sec:
                 if not (sec['compases'][0] <= int(c_abs) <= sec['compases'][1]):
@@ -1936,6 +2010,14 @@ def validate_yaml(obra):
                 fc_ini,fc_fin=frase['compases']; sc_ini,sc_fin=sec['compases']
                 if fc_ini<sc_ini or fc_fin>sc_fin:
                     err(f"{fp}: compases [{fc_ini},{fc_fin}] fuera de [{sc_ini},{sc_fin}]")
+            check_key(f"{fp}.tonalidad", frase.get('tonalidad'))
+            perc_f = frase.get('percusion')
+            if isinstance(perc_f, list):
+                for k_, ent in enumerate(perc_f):
+                    if not isinstance(ent, (list, tuple)) or len(ent) not in (4, 5):
+                        err(f"{fp}: percusion[{k_}] debe ser [compás, beat, nota, vel] o "
+                            f"[compás, beat, dur, nota, vel] (tiene {len(ent) if hasattr(ent,'__len__') else '?'} elementos)")
+                        break
             lm=frase.get('leitmotiv')
             if lm and lm not in lm_ids and lm not in ('null','None',None):
                 warn(f"{fp}: leitmotiv '{lm}' no definido")
@@ -3610,6 +3692,11 @@ def generate_leitmotiv_midis(obra, output_dir):
     if not grupos:
         print("  ⚠ No hay frases con leitmotiv asignado")
         return []
+    if leitmotivs and set(grupos.keys()) <= {'_sin_leitmotiv'}:
+        print(f"  ⚠ Hay {len(leitmotivs)} leitmotiv(s) definido(s) en 'leitmotivs:' pero NINGUNA "
+              f"frase tiene el campo 'leitmotiv: <ID>'; todo se exporta a _sin_leitmotiv.mid. "
+              f"Añada 'leitmotiv: {leitmotivs[0].get('id','ID')}' a las frases que lo usan "
+              f"(origen_leitmotiv solo controla la generación de la melodía desde las notas canónicas).")
 
     # Orden: primero los leitmotivs definidos (en su orden), luego _sin_leitmotiv
     lm_ids_ordenados = [lm['id'] for lm in leitmotivs]

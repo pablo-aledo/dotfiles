@@ -1261,9 +1261,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--type", dest="phrase_type", type=str, default="parallel",
                    choices=ALL_TYPES,
                    help="Tipo de relación A→C (default: parallel)")
-    p.add_argument("--cadences", nargs=2, metavar=("ANT", "CONS"),
+    p.add_argument("--cadences", nargs="+", metavar=("ANT", "CONS"),
                    default=["HC", "AC"],
-                   help="Cadencias antecedente y consecuente (default: HC AC)")
+                   help="Cadencias antecedente y consecuente (default: HC AC). "
+                        "Se admite '--cadences HC AC' y '--cadences \"HC AC\"' / 'HC,AC'")
     p.add_argument("--bars", type=int, default=8,
                    help="Compases totales (default: 8)")
     p.add_argument("--beats", type=int, default=4,
@@ -1335,7 +1336,10 @@ def main():
     # ── Determinar qué combinaciones generar ─────────────────────────────────
     forms  = ALL_FORMS  if args.all_forms  else [args.form]
     types  = ALL_TYPES  if args.all_types  else [args.phrase_type]
-    cadence_ant, cadence_cons = args.cadences
+    _cad = [t for a in args.cadences for t in a.replace(",", " ").split()]
+    if len(_cad) != 2:
+        p.error(f"--cadences necesita exactamente 2 cadencias (ANT CONS), recibido: {_cad}")
+    cadence_ant, cadence_cons = _cad
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
