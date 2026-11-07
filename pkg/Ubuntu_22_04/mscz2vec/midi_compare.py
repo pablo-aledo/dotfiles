@@ -193,7 +193,7 @@ def motif_from_midi(path):
     best = max(p.pitched(), key=lambda t: len(t["notes"]), default=None)
     if not best:
         raise ValueError("el MIDI del motivo no tiene notas")
-    return [n[2] for n in top_line(best["notes"])]
+    return [n[1] for n in top_line(best["notes"])]
 
 
 def top_line(notes):

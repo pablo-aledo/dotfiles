@@ -266,7 +266,7 @@ def detect(path, forced=None):
             for i in ranked[1:]:
                 s, why = mel_score[i]
                 f = feats[i]
-                if s >= 0.80 * best_s and f["linearity"] >= 0.7 and f["n_notes"] >= 0.2 * max_n:
+                if s >= 0.70 * best_s and f["linearity"] >= 0.7 and f["n_notes"] >= 0.2 * max_n:
                     setrole(i, "countermelody", 0.5 + min(0.3, s - 0.5 * best_s), why)
                 else:
                     hs = 0.5 + 0.3 * f["chordiness"] + 0.2 * min(1, f["mean_dur_beats"] / 3)
