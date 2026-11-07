@@ -866,6 +866,10 @@ def harvest(midi_path: str,
                 print("    No se encontraron motivos repetidos.")
             else:
                 print(f"    {len(motifs)} motivos repetidos encontrados.")
+                # Un motivo (3-10 notas) es intrínsecamente corto: --min-bars
+                # no puede exigirse al fragmento con padding (descartaba todo).
+                motif_min_ticks = min(min_ticks, bar_ticks)
+                motif_skipped = 0
                 for mi, (motif_key, count, positions) in enumerate(motifs[:12]):  # top 12
                     ranges = motif_positions_to_ticks(positions, notes_sorted, len(motif_key))
 
@@ -876,7 +880,8 @@ def harvest(midi_path: str,
                         s = max(0, s - bar_ticks // 2)
                         e = min(total_ticks, e + bar_ticks // 2)
 
-                        if (e - s) < min_ticks:
+                        if (e - s) < motif_min_ticks:
+                            motif_skipped += 1
                             continue
 
                         suffix = f"motif_{mi+1:02d}"
@@ -897,7 +902,8 @@ def harvest(midi_path: str,
                         for ri, (rs, re) in enumerate(ranges[1:], 2):
                             rs2 = max(0, rs - bar_ticks // 2)
                             re2 = min(total_ticks, re + bar_ticks // 2)
-                            if (re2 - rs2) < min_ticks:
+                            if (re2 - rs2) < motif_min_ticks:
+                                motif_skipped += 1
                                 continue
                             suffix_occ = f"motif_{mi+1:02d}_occ{ri:02d}"
                             out_path2 = os.path.join(out_dir, f"{stem}.{suffix_occ}.mid")
@@ -908,6 +914,9 @@ def harvest(midi_path: str,
                                          'path': out_path2}
                                 saved.append(info2)
                                 report_data['fragments'].append(info2)
+                if motif_skipped:
+                    print(f"    ({motif_skipped} fragmentos de motivo descartados por ser "
+                          f"más cortos que {motif_min_ticks} ticks; baja --min-bars si procede)")
 
     # ─────────────────────────────────────────
     # MODO: TEXTURE

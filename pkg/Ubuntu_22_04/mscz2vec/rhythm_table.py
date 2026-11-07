@@ -1006,7 +1006,7 @@ def pattern_to_midi(entry: dict, events: list, beats_per_char: float,
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _parse_midi_raw(midi_path: str):
-    """Devuelve (events, tpb) con events = lista de (abs_tick, 'on'|'off', note)."""
+    """Devuelve (events, tpb) con events = lista de (abs_tick, "on"|"off", note, canal)."""
     import struct as _struct
     with open(midi_path, 'rb') as f:
         data = f.read()
@@ -1052,10 +1052,10 @@ def _parse_midi_raw(midi_path: str):
             if msg_type == 0x90:
                 note = data[pos]; vel = data[pos + 1]; pos += 2
                 etype = 'on' if vel > 0 else 'off'
-                all_events.append((abs_tick, etype, note))
+                all_events.append((abs_tick, etype, note, running & 0x0F))
             elif msg_type == 0x80:
                 note = data[pos]; pos += 2
-                all_events.append((abs_tick, 'off', note))
+                all_events.append((abs_tick, 'off', note, running & 0x0F))
             elif msg_type in (0xB0, 0xA0, 0xE0): pos += 2
             elif msg_type in (0xC0, 0xD0): pos += 1
             elif running == 0xFF:
@@ -1081,13 +1081,16 @@ def midi_to_onset_grid(midi_path: str, meter: str = '4/4', bars: int = None,
     'n_slots', 'slot_beats', 'total_bars', 'bpb'.
     """
     events, tpb = _parse_midi_raw(midi_path)
-    note_ons = [(tick / tpb, note) for tick, etype, note in events if etype == 'on']
+    # (beat, nota, es_percusión): solo el canal 10 GM (índice 9) es percusión;
+    # antes las notas melódicas de cualquier canal se interpretaban como
+    # timbales/hihat/etc. y generaban falsos positivos (soca, shuffle...).
+    note_ons = [(tick / tpb, note, ch == 9) for tick, etype, note, ch in events if etype == 'on']
     if not note_ons:
         return {'combined': '', 'voices': {}, 'n_slots': 0,
                'slot_beats': 0.0, 'total_bars': 0, 'bpb': meter_beats_per_bar(meter)}
 
     bpb = meter_beats_per_bar(meter)
-    max_beat = max(b for b, _ in note_ons)
+    max_beat = max(b for b, _, _ in note_ons)
     total_bars = bars if bars else max(1, math.ceil(max_beat / bpb))
     total_beats = total_bars * bpb
     slot_beats = 1.0 / resolution
@@ -1095,12 +1098,12 @@ def midi_to_onset_grid(midi_path: str, meter: str = '4/4', bars: int = None,
 
     combined = ['.'] * n_slots
     voice_grids = {}
-    for beat, note in note_ons:
+    for beat, note, is_perc in note_ons:
         idx = int(round(beat / slot_beats))
         if idx >= n_slots:
             continue
         combined[idx] = 'x'
-        voice = VOICE_FROM_GM_NOTE.get(note)
+        voice = VOICE_FROM_GM_NOTE.get(note) if is_perc else None
         if voice:
             grid = voice_grids.setdefault(voice, ['.'] * n_slots)
             grid[idx] = 'x'

@@ -679,6 +679,7 @@ def cmd_health(args):
         elif r["error"]:
             stats["corrupt"] += 1
             stats["errors"].append(str(r["error"])[:60])
+            stats.setdefault("bad_files", []).append((path.name, str(r["error"])[:60]))
         else:
             stats["ok"] += 1
             stats["durations"].append(r["duration_s"])
@@ -697,6 +698,11 @@ def cmd_health(args):
     print(f"  {'Corruptos':<25} {red(str(stats['corrupt']))}")
     print(f"  {'Demasiado cortos (<2s)':<25} {yellow(str(stats['too_short']))}")
     print(f"  {'Muy pocas notas (<4)':<25} {yellow(str(stats['too_few_notes']))}")
+    if sample_size < total:
+        print(yellow(f"  ⚠ Solo se analizó una muestra ({sample_size}/{total}); los archivos "
+                     f"corruptos fuera de ella no se detectan. Usa --sample {total} para exhaustivo."))
+    for _n, _e in stats.get("bad_files", [])[:50]:
+        print(f"    ✗ {_n}: {_e}")
     print()
 
     if stats["durations"]:
@@ -743,7 +749,7 @@ def cmd_health(args):
         print(f"  {bold('DISTRIBUCIÓN DE PISTAS')}")
         for k in sorted(tracks_c.keys())[:8]:
             pct = tracks_c[k] / n * 100
-            print(f"  {k} pista(s){'s' if k>1 else ' ':<12} {tracks_c[k]:>5}  ({pct:.1f}%)")
+            print(f"  {str(k) + (' pistas' if k != 1 else ' pista'):<20} {tracks_c[k]:>5}  ({pct:.1f}%)")
         print()
 
         tempos_sorted = sorted(stats["tempos"])

@@ -119,8 +119,19 @@ def _c(k):
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
 
-def pc_name(pc: int) -> str:
-    return NOTE_NAMES[pc % 12]
+FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+
+
+def pc_name(pc: int, flats: bool = False) -> str:
+    """Nombre de la clase de altura. flats=True usa bemoles (Bb, Eb, Ab...)."""
+    return (FLAT_NAMES if flats else NOTE_NAMES)[pc % 12]
+
+
+def _key_uses_flats(tonic_pc: int, mode: str) -> bool:
+    """Ortografía según la armadura convencional (Bb, Eb, Ab, Db / Dm, Gm, Cm, Fm...)."""
+    if mode == "min":
+        return tonic_pc in (0, 2, 3, 5, 7, 10)      # Cm Dm Ebm Fm Gm Bbm
+    return tonic_pc in (1, 3, 5, 8, 10)             # Db Eb F Ab Bb
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -326,6 +337,7 @@ def analyze_harmony(path: str, key: Optional[str] = None,
             t0, t1 = tc.bar_range_ticks(bar, bar)
             segments.append((t0, t1))
 
+    _fl = _key_uses_flats(tonic_pc, mode)
     chords = []
     for si, (t0, t1) in enumerate(segments):
         seg_notes = [n for n in notes if n.start < t1 and n.end > t0]
@@ -345,13 +357,13 @@ def analyze_harmony(path: str, key: Optional[str] = None,
         inv = ""
         if bass_pc != root:
             rel = (bass_pc - root) % 12
-            inv = {4: "6", 3: "6", 7: "6/4", 10: "7", 11: "7"}.get(rel, "/" + pc_name(bass_pc))
+            inv = {4: "6", 3: "6", 7: "6/4", 10: "7", 11: "7"}.get(rel, "/" + pc_name(bass_pc, _fl))
         chords.append({
             "bar": tc.bar(t0),
-            "chord": pc_name(root) + suffix,
+            "chord": pc_name(root, _fl) + suffix,
             "root_pc": root, "suffix": suffix,
             "roman": num, "function": func,
-            "bass": pc_name(bass_pc), "inversion": inv,
+            "bass": pc_name(bass_pc, _fl), "inversion": inv,
             "score": round(float(score), 2),
         })
 
@@ -407,7 +419,7 @@ def analyze_harmony(path: str, key: Optional[str] = None,
 
     return {
         "file": path,
-        "key": f"{pc_name(tonic_pc)}{'m' if mode == 'min' else 'maj'}",
+        "key": f"{pc_name(tonic_pc, _key_uses_flats(tonic_pc, mode))}{'m' if mode == 'min' else 'maj'}",
         "key_source": "manual" if key else "detectada",
         "n_bars": int(n_bars),
         "chords": chords,
