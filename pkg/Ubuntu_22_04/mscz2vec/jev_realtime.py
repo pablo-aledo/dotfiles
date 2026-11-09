@@ -63,7 +63,7 @@ Controles (nanoKONTROL2): faders 1-8 = sliders; knobs 1-3 volúmenes, 5 tempo ±
 6 humanización, 7 temperatura, 8 amplitud de registro; S1-3 mute melodía/acordes/bajo;
 M1-8 bloquea el fader; R1 cadencia (V7→I); R2 modular +5ª; Play pausa; Stop parada;
 Rew/FF octava; Rec grabar; Track ◄ ► tonalidad ∓1 semitono.
-Consola: «valencia 0.8», «cadence», «key 1», «octave -1», «chord Am», «q».
+Consola: «valencia 0.8», «cadence», «key 1», «octave -1», «chord Am», «driftreset», «q».
 
 DEPENDENCIAS: numpy; mido + python-rtmidi (MIDI en vivo y train); pyfluidsynth + .sf2
 (sonido). render, bench y el modelo no necesitan hardware.
@@ -1042,7 +1042,8 @@ class Progress:
     """Barra de progreso con porcentaje, velocidad y ETA. En una terminal se redibuja en la
     misma línea; si la salida va a un fichero/pipe imprime una línea cada ~10 %."""
 
-    def __init__(self, label, total, unit='', width=26, min_dt=0.15):
+    def __init__(self, label, total, unit='', width=26, min_dt=0.15, tty_only=False):
+        self.tty_only = tty_only
         self.label, self.total, self.unit, self.width, self.min_dt = label, max(1, total), unit, width, min_dt
         self.t0, self.last, self.tty = time.time(), 0.0, sys.stdout.isatty()
         self.n, self.next_pct, self.extra, self.shown = 0, 10, '', False
@@ -1057,7 +1058,7 @@ class Progress:
             sys.stdout.write('\r' + self._line() + '\033[K')
             sys.stdout.flush()
             self.shown = True
-        else:
+        elif not self.tty_only:
             pct = 100.0 * n / self.total
             if pct >= self.next_pct or n >= self.total:
                 self.next_pct = (int(pct) // 10 + 1) * 10
@@ -1210,7 +1211,7 @@ def cmd_train(a):
         order = rng.permutation(train)
         tot = 0.0
         eprog = Progress(f"[época {ep + 1:>{len(str(a.epochs))}}/{a.epochs}]", len(order), ' consultas',
-                         min_dt=0.25)
+                         min_dt=0.25, tty_only=True)
         for b in range(0, len(order), a.batch_size):
             batch = order[b:b + a.batch_size]
             eprog.update(b, f"ce {tot / max(1, b):.3f}" if b else '')
@@ -1764,7 +1765,7 @@ class Rhythm:
 # MOTOR EN TIEMPO REAL
 # ═══════════════════════════════════════════════════════════════════════════════
 
-COMMANDS = ['cadence', 'modulate', 'play', 'stop']
+COMMANDS = ['cadence', 'modulate', 'play', 'stop', 'driftreset']
 
 
 class Engine:
@@ -1793,6 +1794,9 @@ class Engine:
         self.ladder_i = LADDER.index(self.mode) if self.mode in LADDER else 4
         self.bpm = clock.bpm
         self.progs = [int(x) for x in args.programs.split(',')]
+        self.drift_name = args.drift_slider
+        self.drift_hist = deque(maxlen=8)           # últimos intervalos melódicos reales (semitonos)
+        self.drift_off = 0                          # desplazamiento acumulado de la ventana (semitonos, múltiplos de 12)
         self.info = {'tempo': self.bpm, 'chord': '-', 'bar': 0}
 
     def post(self, *c):
@@ -1817,7 +1821,80 @@ class Engine:
                 lo = int(f)
                 lv = lo + 1 if self.rng.random() < f - lo else lo
             out[v] = lv
+        if self.drift_name in out:                  # el slider de drift no entra en la query
+            out[self.drift_name] = L // 2
         return out
+
+    def drift_state(self):
+        """(d, s, shift) del drift: d = valor − 0.5; s = fuerza 0..1 (0 = sin efecto);
+        shift = desplazamiento del centro de la gaussiana en semitonos respecto a la nota actual."""
+        if not self.drift_name:
+            return 0.0, 0.0, 0.0
+        d = self.panel.get(self.drift_name) - 0.5
+        return d, min(1.0, 2.0 * abs(d)), d * self.args.drift_gain
+
+    def drift_indicator(self):
+        """Texto compacto para la línea de estado: posición del control (┊ = centro, ● = valor),
+        sentido (▲ agudo / ▼ grave / = inactivo), desplazamiento del centro, fuerza, y el
+        intervalo medio REAL de las últimas notas (para ver si el drift está surtiendo efecto)."""
+        if not self.drift_name:
+            return ''
+        d, s, shift = self.drift_state()
+        n = 11
+        pos = max(0, min(n - 1, int(round((n - 1) / 2 + d * (n - 1)))))
+        cells = ['·'] * n
+        cells[(n - 1) // 2] = '┊'
+        cells[pos] = '●'
+        arrow = '=' if s < 1e-3 else ('▲' if d > 0 else '▼')
+        real = (sum(self.drift_hist) / len(self.drift_hist)) if self.drift_hist else 0.0
+        return (f" drift:{self.drift_name[:4]} [{''.join(cells)}] {arrow}{shift:+5.1f}st "
+                f"{100 * s:3.0f}% Δ{real:+4.1f} 8ª{self.drift_off // 12:+d}")
+
+    def drift_weights(self, opts, prev):
+        """Pesos gaussianos sobre las notas candidatas (None = sin efecto).
+        Centro = nota actual + (valor − 0.5) · ganancia (semitonos); σ configurable.
+        En el punto medio el efecto es nulo: se eleva la gaussiana a s = min(1, 2·|valor − 0.5|),
+        lo que equivale a ensanchar σ a σ/√s (s=0 → uniforme, s=1 → σ configurada)."""
+        if not self.drift_name:
+            return None
+        d, s, shift = self.drift_state()
+        if s < 1e-3:
+            return None
+        mu = prev + shift
+        sig = max(0.5, self.args.drift_sigma)
+        return [math.exp(-s * (o['midi'] - mu) ** 2 / (2 * sig * sig)) for o in opts]
+
+    def eff_center(self):
+        """Centro de la ventana de notas = registro + octavas acumuladas por el drift."""
+        return int(clamp(self.cur_center + self.drift_off, 30, 100))
+
+    def drift_octave_step(self, prev):
+        """Si el drift sigue empujando y la última nota ya está en el borde de la ventana en ese
+        sentido, la ventana salta una octava (hasta --drift-octaves) y la melodía puede seguir."""
+        if not self.drift_name or prev is None:
+            return
+        d, s, _ = self.drift_state()
+        if s < 0.05:
+            return
+        hw = self.note_params()['half_width']
+        edge = max(2, hw // 4)
+        c = self.eff_center()
+        lim = 12 * max(0, int(self.args.drift_octaves))
+        if d > 0 and prev >= c + hw - edge and self.drift_off + 12 <= lim and c < 100:
+            self.drift_off += 12
+        elif d < 0 and prev <= c - hw + edge and self.drift_off - 12 >= -lim and c > 30:
+            self.drift_off -= 12
+
+    def drift_relax(self):
+        """Con el drift en reposo, la ventana vuelve hacia la octava base a --drift-return st/compás."""
+        r = self.args.drift_return
+        if not self.drift_name or r <= 0 or self.drift_off == 0 or self.drift_state()[1] >= 0.05:
+            return
+        step = 12 if r >= 12 else r
+        if abs(self.drift_off) <= step:
+            self.drift_off = 0
+        else:
+            self.drift_off -= math.copysign(step, self.drift_off)
 
     def center(self):
         lo, hi = self.P['reg_lo'], self.P['reg_hi']
@@ -1829,7 +1906,7 @@ class Engine:
     def query(self, kind, bar, opts, chord=None, beat=0.0, dur=0.0):
         return Query(kind, self.desc, self.tonic, self.mode, self.beats, bar, self.levels,
                      self.P['levels'], list(self.mem.window()), opts, beat=beat, dur=dur,
-                     cur=chord, center=self.cur_center)
+                     cur=chord, center=self.eff_center())
 
     # ── salida de eventos ────────────────────────────────────────────────────
     def emit(self, start, dur, ch, note, vel):
@@ -1930,6 +2007,7 @@ class Engine:
         self.cur_bar, self.bar_start = bar, t0
         self.levels = self.levels_now()
         self.cur_center = self.center()
+        self.drift_relax()
         if self.source is not None:
             chord = self.keyboard_chord(t0)
             if chord is None:                                   # aún no se ha tocado ningún acorde
@@ -1973,10 +2051,20 @@ class Engine:
             if self.args.live_sliders:
                 self.levels = self.levels_now()
                 self.cur_center = self.center()
+            self.drift_octave_step(self.mem.last_midi)
             opts = note_options(self.note_params(), self.tonic, self.mode, chord,
-                                self.mem.last_midi, self.cur_center)
+                                self.mem.last_midi, self.eff_center())
             q = self.query('nota', self.cur_bar, opts, chord, t - self.bar_start, dur)
-            midi = opts[sample(self.jev.ask(q), self.temp(), self.rng)]['midi']
+            probs = self.jev.ask(q)
+            w = self.drift_weights(opts, self.mem.last_midi if self.mem.last_midi is not None
+                                   else self.eff_center())
+            if w is not None:
+                probs = [p * x for p, x in zip(probs, w)]
+                tot = sum(probs)
+                probs = [p / tot for p in probs] if tot > 1e-30 else [1.0 / len(probs)] * len(probs)
+            midi = opts[sample(probs, self.temp(), self.rng)]['midi']
+            if self.drift_name and self.mem.last_midi is not None:
+                self.drift_hist.append(midi - self.mem.last_midi)
             self.cur_entry['notes'].append((midi, dur))
             self.mem.last_midi = midi
             self.emit(t, dur, 0, midi, self.vel_mel(t))
@@ -2002,6 +2090,8 @@ class Engine:
             elif k == 'key':
                 base = self.tonic if self.pending_key is None else self.pending_key
                 self.pending_key = (base + c[1]) % 12
+            elif k == 'driftreset':
+                self.drift_off = 0
             elif k == 'octave':
                 self.octave = max(-2, min(2, self.octave + c[1]))
             elif k == 'layer':
@@ -2075,7 +2165,7 @@ class Engine:
         src = 'KB' if self.source is not None else 'JV'
         return (f"\r{PITCH_NAMES[self.tonic]:>2} {self.mode[:9]:<9} {i['chord']:<10} {i['tempo']:5.1f}bpm "
                 f"c.{i['bar']:<4} [{meters}] {lay} {src}" + ('  ⏸' if not self.playing else '')
-                + (f" 🔒{locks}" if locks else "") + "  ")
+                + (f" 🔒{locks}" if locks else "") + self.drift_indicator() + "  ")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2333,6 +2423,22 @@ def build_parser():
                      help='La valencia cambia el modo (frigio…lidio) en cada compás')
     eng.add_argument('--live-sliders', action='store_true', dest='live_sliders',
                      help='Las notas usan el valor actual de los sliders (no el del inicio del compás)')
+    eng.add_argument('--drift-slider', choices=SLIDERS + KNOBS, default=None, dest='drift_slider',
+                     help='Slider/knob que actúa como «pitch drift»: en 0.5 no hace nada; por encima '
+                          'favorece notas más agudas que la actual, por debajo más graves. En la línea '
+                          'de estado muestra posición, sentido, desplazamiento (st), fuerza (%%) y '
+                          'Δ = intervalo medio real de las últimas 8 notas')
+    eng.add_argument('--drift-gain', type=float, default=12.0, dest='drift_gain',
+                     help='Semitonos de desplazamiento del centro por unidad de distancia al medio '
+                          '(valor 1.0 = +gain/2 semitonos; default 12)')
+    eng.add_argument('--drift-sigma', type=float, default=4.0, dest='drift_sigma',
+                     help='Desviación típica (semitonos) de la gaussiana de drift (default 4)')
+    eng.add_argument('--drift-octaves', type=int, default=3, dest='drift_octaves',
+                     help='Octavas máximas (arriba/abajo) que el drift puede desplazar la ventana de '
+                          'notas al llegar a su borde (0 = ventana fija; default 3)')
+    eng.add_argument('--drift-return', type=float, default=0.0, dest='drift_return',
+                     help='Con el drift en reposo (≈0.5), semitonos por compás con que la ventana vuelve '
+                          'a la octava base (0 = se queda donde está; «driftreset» la devuelve; default 0)')
     eng.add_argument('--chord-source', choices=['model', 'keyboard'], default='model',
                      dest='chord_source', help='Acorde del compás: generado por Jev o leído de un teclado')
     eng.add_argument('--kb-port', default=None, dest='kb_port', help='Fragmento del nombre del teclado MIDI')
