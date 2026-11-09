@@ -65,6 +65,16 @@ el prior de la referencia según `--ref-strength` (0 = ignorarla, 1 = casi liter
   --ref-accomp                         acompañamiento fiel (armonía del MIDI) en vez de plantillas
   --ref-melody-track N                 pista (0-based) con la melodía de la referencia
 
+Dos referencias (--references A.mid B.mid --ref-fader NOMBRE --ref-top T):
+  Con s = valor normalizado (0..1) del fader elegido, cada decisión (acorde, nota, duración)
+  mezcla geométricamente  Jev^(1-T) · A^(T·s) · B^(T·(1-s)).  s=1 → solo A, s=0 → solo B.
+  Tonalidad, modo, compás, tempo y descripción salen de A; B se transpone a la tónica de A
+  (y ambas a --tonic si se da). T sustituye a --ref-strength y no se relaja con los sliders.
+  Con --ref-chords follow el acorde se SAMPLEA de la mezcla (no se copia); con --ref-rhythm
+  follow y --ref-accomp cada compás manda una referencia, sorteada con el peso T·s : T·(1-s).
+  Con --ref-sliders las trayectorias de las dos referencias se mezclan con s. El fader de
+  mezcla deja de entrar en la consulta a Jev. No se combina con --reference.
+
 Sin `--reference`, `--desc/--tonic/--mode/--beats` conservan sus valores por defecto
 («obra instrumental», C, major, 4).
 
@@ -700,6 +710,19 @@ def combine(probs, prior, s):
     return [x / tot for x in p] if tot > 1e-30 else [1.0 / len(p)] * len(p)
 
 
+def combine_multi(probs, w0, items):
+    """Mezcla geométrica probs^w0 · Π prior_j^w_j (items = [(prior, w)]), renormalizada.
+    Con un solo prior y w0 = 1-s, w = s equivale a combine()."""
+    out = []
+    for i, p in enumerate(probs):
+        v = max(p, 1e-12) ** w0
+        for pr, w in items:
+            v *= max(pr[i], 1e-12) ** w
+        out.append(v)
+    tot = sum(out)
+    return [x / tot for x in out] if tot > 1e-30 else [1.0 / len(out)] * len(out)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ANÁLISIS DE MIDIS: tonalidad, acorde por compás y variables de los sliders
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1100,6 +1123,13 @@ class Reference:
 def resolve_eng(args):
     """Resuelve --desc/--tonic/--mode/--beats/--bpm: explícito > referencia > default.
     Devuelve el `Reference` cargado (o None)."""
+    refs = getattr(args, 'references', None)
+    if refs:
+        if getattr(args, 'reference', None):
+            fail("--reference y --references son incompatibles")
+        if not args.ref_fader:
+            fail("--references necesita --ref-fader NOMBRE")
+        args.reference = refs[0]
     if getattr(args, 'reference', None):
         ns = argparse.Namespace(beats=None, melody_track=args.ref_melody_track, quant=0.25,
                                 desc=None, key=None, mode=None)
@@ -1122,7 +1152,14 @@ def resolve_eng(args):
             args.beats = ref.beats
         if args.bpm is None and args.ref_tempo and ref.bpm:
             args.bpm = ref.bpm
-        return ref
+        ref2 = None
+        if refs:                                              # 2ª referencia: misma tónica y modo
+            ns2 = argparse.Namespace(beats=args.beats, melody_track=args.ref_melody_track,
+                                     quant=0.25, desc=None, key=None, mode=None)
+            p2 = analyze_midi(refs[1], ns2)
+            d2 = (tonic - p2.tonic) % 12
+            ref2 = Reference(p2, d2 - 12 if d2 > 6 else d2, tonic, mode)
+        return ref, ref2
     if args.tonic is None:
         args.tonic = 'C'
     tu, th = parse_key(args.tonic)
@@ -1133,7 +1170,7 @@ def resolve_eng(args):
         args.desc = 'obra instrumental'
     if args.beats is None:
         args.beats = 4
-    return None
+    return None, None
 
 
 def piece_queries(p, norm, P, stats):
@@ -2004,7 +2041,7 @@ COMMANDS = ['cadence', 'modulate', 'play', 'stop', 'driftreset']
 
 
 class Engine:
-    def __init__(self, args, est, panel, clock, out, source=None, ref=None):
+    def __init__(self, args, est, panel, clock, out, source=None, ref=None, ref2=None):
         self.args, self.est, self.panel, self.clock, self.out = args, est, panel, clock, out
         self.jev = LiveJev(est)
         self.P = est.params
@@ -2013,6 +2050,8 @@ class Engine:
         self.tonic, self.mode = parse_key(args.tonic)[0], args.mode
         self.desc, self.beats = args.desc, args.beats
         self.source, self.ref = source, ref
+        self.ref2, self.multi = ref2, ref2 is not None
+        self.cur_ref2, self.lead_ref, self.lead_idx = None, None, None
         self.cur_ref, self.ref_extra_until = None, 0.0
         self.mem = Memory(self.P['depth'])
         self.mel_t, self.cur_bar, self.bar_start = 0.0, -1, 0.0
@@ -2043,20 +2082,69 @@ class Engine:
         """Valor efectivo de un slider: con --ref-sliders es la trayectoria de la referencia
         más el desplazamiento del fader del usuario; sin él, el fader tal cual."""
         u = self.panel.get(name)
-        if name not in SLIDERS or self.ref is None or not self.args.ref_sliders \
-                or self.cur_ref is None:
+        if name not in SLIDERS or self.ref is None or not self.args.ref_sliders:
+            return u
+        if self.multi:                              # trayectorias de las dos refs mezcladas por el fader
+            sf = clamp(self.panel.get(self.args.ref_fader))
+            rvs = []
+            for r_, bi_, w_ in ((self.ref, self.cur_ref, sf), (self.ref2, self.cur_ref2, 1.0 - sf)):
+                if bi_ is not None and r_.bars[bi_]['sliders']:
+                    rvs.append((r_.bars[bi_]['sliders'][name], w_))
+            if not rvs:
+                return u
+            tw = sum(w for _, w in rvs)
+            rv = (sum(v * w for v, w in rvs) / tw if tw > 1e-9
+                  else sum(v for v, _ in rvs) / len(rvs))
+            return clamp(rv + (u - 0.5) * 2.0 * self.args.ref_slider_gain)
+        if self.cur_ref is None:
             return u
         rv = self.ref.bars[self.cur_ref]['sliders']
         if not rv:
             return u
         return clamp(rv[name] + (u - 0.5) * 2.0 * self.args.ref_slider_gain)
 
-    def ref_bar(self, bar):
-        if self.ref is None:
+    def ref_bar(self, bar, ref=None):
+        ref = ref or self.ref
+        if ref is None:
             return None
-        if bar < self.ref.nbars:
+        if bar < ref.nbars:
             return bar
-        return bar % self.ref.nbars if self.args.ref_loop else None
+        return bar % ref.nbars if self.args.ref_loop else None
+
+    # ── modo --references: pesos (1-top) modelo, top·s ref A, top·(1-s) ref B ──
+    def top(self):
+        return clamp(self.args.ref_top)
+
+    def ref_weights(self):
+        """(w_modelo, w_A, w_B) con s = valor normalizado del fader --ref-fader."""
+        top = self.top()
+        s = clamp(self.panel.get(self.args.ref_fader))
+        return 1.0 - top, top * s, top * (1.0 - s)
+
+    def ref_infos(self):
+        """[(ref, índice de compás, peso)] de las referencias activas en este compás."""
+        _, wa, wb = self.ref_weights()
+        return [(r, bi, w) for r, bi, w in ((self.ref, self.cur_ref, wa), (self.ref2, self.cur_ref2, wb))
+                if bi is not None and w > 1e-9]
+
+    def pick_lead(self):
+        """Referencia que manda en ritmo 'follow' y acompañamiento fiel este compás (sorteo por peso)."""
+        infos = self.ref_infos()
+        if not infos:
+            self.lead_ref, self.lead_idx = None, None
+            return
+        r, acc = self.rng.random() * sum(w for _, _, w in infos), 0.0
+        for rr, bi, w in infos:
+            acc += w
+            if r <= acc:
+                break
+        self.lead_ref, self.lead_idx = rr, bi
+
+    def mix_indicator(self):
+        if not self.multi:
+            return ''
+        w0, wa, wb = self.ref_weights()
+        return f" mix J{100 * w0:.0f} A{100 * wa:.0f} B{100 * wb:.0f}"
 
     def ref_strength(self, dims):
         """Fuerza de la referencia para una decisión, relajada por los sliders que la gobiernan
@@ -2090,6 +2178,8 @@ class Engine:
             out[v] = lv
         if self.drift_name in out:                  # el slider de drift no entra en la query
             out[self.drift_name] = L // 2
+        if self.multi and self.args.ref_fader in out:   # ni el fader de mezcla de referencias
+            out[self.args.ref_fader] = L // 2
         return out
 
     def drift_state(self):
@@ -2254,10 +2344,10 @@ class Engine:
         opts.append(o)
         return o
 
-    def ref_chord_dist(self, opts, b, dev_v, dev_t, s):
+    def ref_chord_dist(self, opts, b, dev_v, dev_t, s, ref=None):
         """Prior de acordes: (1-s)·uniforme + s·uno en el de la referencia, multiplicado por los
         términos de calidad/función que activan valencia/tension (sección 3.6.3)."""
-        target = self._chord_option(opts, self.ref.bars[b]['chord'])
+        target = self._chord_option(opts, (ref or self.ref).bars[b]['chord'])
         n = len(opts)
         p = [1e-6] * n
         p[opts.index(target)] = 1.0
@@ -2274,19 +2364,21 @@ class Engine:
         tot = sum(p)
         return [x / tot for x in p]
 
-    def ref_note_target(self, b, local, center):
+    def ref_note_target(self, b, local, center, ref=None):
         """Nota de la referencia en esa posición, desplazada una octava global hacia el centro."""
-        m = self.ref.note_at(b, local, tol=0.25)
+        ref = ref or self.ref
+        m = ref.note_at(b, local, tol=0.25)
         if m is None:
             return None
-        return m['midi'] + 12 * round((center - self.ref.mel_mean) / 12.0)
+        return m['midi'] + 12 * round((center - ref.mel_mean) / 12.0)
 
-    def ref_note_dist(self, opts, b, local, target=None):
+    def ref_note_dist(self, opts, b, local, target=None, ref=None):
         """Prior de notas: gaussiana sobre la nota de la referencia en esa posición; fuera de
         ella, contorno (intervalos) e histograma de clases de altura de la referencia."""
         if target is not None:
             return [math.exp(-((o['midi'] - target) ** 2) / (2 * 0.7 ** 2)) + 1e-6 for o in opts]
-        hp, hi = self.ref.pc_hist, self.ref.iv_hist
+        ref = ref or self.ref
+        hp, hi = ref.pc_hist, ref.iv_hist
         thp, thi = sum(hp.values()) or 1, sum(hi.values()) or 1
         prev, out = self.mem.last_midi, []
         for o in opts:
@@ -2297,21 +2389,23 @@ class Engine:
             out.append(w)
         return out
 
-    def ref_dur_prior(self, b, local):
-        c = self.ref.dur_by_pos.get(round((local % 1.0) * 4) / 4)
+    def ref_dur_prior(self, b, local, ref=None):
+        c = (ref or self.ref).dur_by_pos.get(round((local % 1.0) * 4) / 4)
         if not c:
             return None
         return [c.get(d, 0.0) + 0.02 for d in Rhythm.GRID]
 
-    def ref_rhythm_step(self, t):
+    def ref_rhythm_step(self, t, ref=None, b=None):
         """Ritmo en modo follow: (dur, rest) de la referencia, ajustado por densidad."""
-        b, local, bar_end = self.cur_ref, t - self.bar_start, self.beats
+        ref = ref or self.ref
+        b = self.cur_ref if b is None else b
+        local, bar_end = t - self.bar_start, self.beats
         devd = clamp((self.panel.get('densidad') - 0.5) * 2.0, -1.0, 1.0)
-        match = self.ref.note_at(b, local)
+        match = ref.note_at(b, local)
         if match is None:
             if t < self.ref_extra_until - EPS:                 # continuación de una subdivisión
                 return None
-            nxt = min([n['start'] for n in self.ref.bars[b]['notes'] if n['start'] > local + 0.125],
+            nxt = min([n['start'] for n in ref.bars[b]['notes'] if n['start'] > local + 0.125],
                       default=bar_end)
             return max(0.25, nxt - local), True
         dur = match['dur']
@@ -2323,10 +2417,10 @@ class Engine:
             return dur, True
         return dur, False
 
-    def play_ref_accomp(self, b, t, d):
+    def play_ref_accomp(self, b, t, d, ref=None):
         """Toca la armonía de la referencia en los canales 1/2 según tesitura."""
         e = self.sv('energia')
-        for n in self.ref.bars[b]['harm']:
+        for n in (ref or self.ref).bars[b]['harm']:
             st = max(0.0, n['start'])
             if st >= d - EPS:
                 continue
@@ -2354,6 +2448,8 @@ class Engine:
                 if (want == 'V7' and c['numeral'] == 'V7') or \
                    (want == 'tonic' and c['numeral'] in ('I', 'i') and len(c['pitches']) == 3):
                     return c
+        if self.multi and self.args.ref_chords != 'off':
+            return self.decide_chord_multi(bar, opts)
         b = self.ref_bar(bar)
         use_ref = (self.ref is not None and b is not None
                    and self.args.ref_chords != 'off'
@@ -2372,10 +2468,30 @@ class Engine:
             p = [x / tot for x in p] if tot > 1e-30 else [1.0 / len(p)] * len(p)
         return opts[sample(p, self.sample_T(s), self.rng)]['chord']
 
+    def decide_chord_multi(self, bar, opts):
+        """Acorde con dos referencias: p_J^(1-top) · prior_A^(top·s) · prior_B^(top·(1-s))."""
+        infos = self.ref_infos()
+        for r, bi, _ in infos:                       # añadir antes de consultar a Jev (si no son diatónicos)
+            self._chord_option(opts, r.bars[bi]['chord'])
+        q = self.query('acorde', bar, opts, dur=self.beats)
+        p = self.jev.ask(q)
+        if infos:
+            fd = self.args.ref_fader
+            dev_v = 0.0 if fd == 'valencia' else clamp((self.panel.get('valencia') - 0.5) * 2.0)
+            dev_t = 0.0 if fd == 'tension' else clamp((self.panel.get('tension') - 0.5) * 2.0)
+            items = [(self.ref_chord_dist(opts, bi, dev_v, dev_t, 1.0, r), w) for r, bi, w in infos]
+            p = combine_multi(p, 1.0 - self.top(), items)
+        return opts[sample(p, self.sample_T(sum(w for _, _, w in infos)), self.rng)]['chord']
+
     def begin_bar(self, bar):
         t0 = bar * self.beats
         b = self.ref_bar(bar)
         self.cur_ref, self.ref_extra_until = b, 0.0
+        if self.multi:
+            self.cur_ref2 = self.ref_bar(bar, self.ref2)
+            self.pick_lead()
+        else:
+            self.lead_ref, self.lead_idx = self.ref, b
         if self.pending_key is not None:
             self.tonic, self.pending_key = self.pending_key, None
         if self.args.valence_mode:
@@ -2396,8 +2512,9 @@ class Engine:
             chord = self.decide_chord(bar)
         self.cur_chord = chord
         self.cur_entry = self.mem.add(chord, bar)
-        if self.args.ref_accomp and b is not None and self.ref.bars[b]['harm']:
-            self.play_ref_accomp(b, t0, self.beats)
+        if (self.args.ref_accomp and self.lead_ref is not None and self.lead_idx is not None
+                and self.lead_ref.bars[self.lead_idx]['harm']):
+            self.play_ref_accomp(self.lead_idx, t0, self.beats, self.lead_ref)
         elif self.source is None:
             self.play_chord(chord, t0, self.beats)
         else:
@@ -2423,10 +2540,18 @@ class Engine:
         chord = self.cur_chord
         bar_end = self.bar_start + self.beats
         b = self.cur_ref
-        use_ref = (self.ref is not None and b is not None and self.args.ref_rhythm != 'off')
-        s_r = self.ref_strength(['densidad', 'groove']) if use_ref else 0.0
-        step = (self.ref_rhythm_step(t) if use_ref and self.args.ref_rhythm == 'follow'
-                and s_r > 1e-9 else None)
+        rinfos = []
+        if self.multi:
+            rinfos = self.ref_infos() if self.args.ref_rhythm != 'off' else []
+            use_ref = bool(rinfos)
+            s_r = sum(w for _, _, w in rinfos)
+            lref, lb = self.lead_ref, self.lead_idx
+        else:
+            use_ref = (self.ref is not None and b is not None and self.args.ref_rhythm != 'off')
+            s_r = self.ref_strength(['densidad', 'groove']) if use_ref else 0.0
+            lref, lb = self.ref, b
+        step = (self.ref_rhythm_step(t, lref, lb) if use_ref and self.args.ref_rhythm == 'follow'
+                and s_r > 1e-9 and lref is not None else None)
         if step is not None:
             dur, rest = step
             if dur <= EPS:
@@ -2434,9 +2559,16 @@ class Engine:
         else:
             prior = None
             if use_ref and self.args.ref_rhythm == 'bias' and s_r > 0:
-                raw = self.ref_dur_prior(b, t - self.bar_start)
-                if raw:
-                    prior = [x ** s_r for x in raw]
+                if self.multi:
+                    for r_, bi_, w_ in rinfos:
+                        raw = self.ref_dur_prior(bi_, t - self.bar_start, r_)
+                        if raw:
+                            pw = [x ** w_ for x in raw]
+                            prior = pw if prior is None else [a * c for a, c in zip(prior, pw)]
+                else:
+                    raw = self.ref_dur_prior(b, t - self.bar_start)
+                    if raw:
+                        prior = [x ** s_r for x in raw]
             dur, rest = self.rhythm.sample(self.rng, t, bar_end - t, self.sv('densidad'),
                                            self.sv('groove'), self.beats, self.cur_bar,
                                            self.last_rest, prior=prior)
@@ -2448,14 +2580,23 @@ class Engine:
                 self.levels = self.levels_now()
                 self.cur_center = self.center()
             self.drift_octave_step(self.mem.last_midi)
-            s_n, ref_target = 0.0, None
-            if self.ref is not None and b is not None and self.args.ref_melody == 'bias' \
+            s_n, ref_target, mtargets = 0.0, None, []
+            if self.multi:
+                if self.args.ref_melody == 'bias' and t >= self.ref_extra_until - EPS:
+                    ec = self.eff_center()
+                    mtargets = [(r_, bi_, w_, self.ref_note_target(bi_, t - self.bar_start, ec, r_))
+                                for r_, bi_, w_ in self.ref_infos()]
+                    s_n = sum(m_[2] for m_ in mtargets)
+            elif self.ref is not None and b is not None and self.args.ref_melody == 'bias' \
                     and t >= self.ref_extra_until - EPS:
                 s_n = self.ref_strength(['valencia', 'tension', 'sorpresa', 'registro'])
                 if s_n > 0:
                     ref_target = self.ref_note_target(b, t - self.bar_start, self.eff_center())
             opts = note_options(self.note_params(), self.tonic, self.mode, chord,
                                 self.mem.last_midi, self.eff_center())
+            for m_ in mtargets:
+                if m_[3] is not None and not any(o['midi'] == m_[3] for o in opts):
+                    opts.append(note_option(self.tonic, self.mode, chord, self.mem.last_midi, m_[3]))
             if ref_target is not None and not any(o['midi'] == ref_target for o in opts):
                 opts.append(note_option(self.tonic, self.mode, chord, self.mem.last_midi, ref_target))
             q = self.query('nota', self.cur_bar, opts, chord, t - self.bar_start, dur)
@@ -2466,7 +2607,11 @@ class Engine:
                 probs = [p * x for p, x in zip(probs, w)]
                 tot = sum(probs)
                 probs = [p / tot for p in probs] if tot > 1e-30 else [1.0 / len(probs)] * len(probs)
-            if s_n > 0:
+            if self.multi and mtargets:
+                items = [(self.ref_note_dist(opts, bi_, t - self.bar_start, tg_, r_), w_)
+                         for r_, bi_, w_, tg_ in mtargets]
+                probs = combine_multi(probs, 1.0 - self.top(), items)
+            elif s_n > 0:
                 pr = self.ref_note_dist(opts, b, t - self.bar_start, ref_target)
                 probs = combine(probs, pr, s_n)
             midi = opts[sample(probs, self.sample_T(s_n), self.rng)]['midi']
@@ -2575,7 +2720,7 @@ class Engine:
         src = 'KB' if self.source is not None else 'JV'
         return (f"\r{PITCH_NAMES[self.tonic]:>2} {self.mode[:9]:<9} {i['chord']:<10} {i['tempo']:5.1f}bpm "
                 f"c.{i['bar']:<4} [{meters}] {lay} {src}" + ('  ⏸' if not self.playing else '')
-                + (f" 🔒{locks}" if locks else "") + self.drift_indicator() + "  ")
+                + (f" 🔒{locks}" if locks else "") + self.drift_indicator() + self.mix_indicator() + "  ")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2592,7 +2737,7 @@ def load_estimator(args):
 
 
 def build(args, out, clock, live_kb=False):
-    ref = resolve_eng(args)
+    ref, ref2 = resolve_eng(args)
     if ref is not None and args.ref_sliders and args.demo:
         fail("--ref-sliders y --demo son incompatibles")
     if ref is not None and args.chord_source == 'keyboard' and args.ref_chords != 'off':
@@ -2611,7 +2756,7 @@ def build(args, out, clock, live_kb=False):
             source = ChordKeyboard(args.kb_port)
         else:
             fail("render/bench con --chord-source keyboard necesitan --kb-chords \"C Am F G7\"")
-    eng = Engine(args, est, panel, clock, out, source, ref)
+    eng = Engine(args, est, panel, clock, out, source, ref, ref2)
     return eng
 
 
@@ -2835,6 +2980,15 @@ def build_parser():
     eng.add_argument('--beats', type=int, default=None, help='Pulsos por compás (default: el del MIDI de referencia o 4)')
     eng.add_argument('--reference', default=None, metavar='FILE.mid',
                      help='MIDI de referencia: guía la tonalidad, modo, compás, tempo, acordes, melodía y ritmo')
+    eng.add_argument('--references', nargs=2, default=None, metavar=('A.mid', 'B.mid'),
+                     help='Dos MIDIs de referencia mezclados con Jev: pesos (1-top) Jev, top·s para A y '
+                          'top·(1-s) para B, con s = valor del fader --ref-fader. Tonalidad, compás y '
+                          'tempo salen de A; B se transpone a la misma tónica. Requiere --ref-fader')
+    eng.add_argument('--ref-fader', choices=SLIDERS + KNOBS, default=None, dest='ref_fader',
+                     help='Slider/knob que mezcla las dos referencias (1 = solo A, 0 = solo B)')
+    eng.add_argument('--ref-top', type=float, default=0.7, dest='ref_top',
+                     help='Peso total de las referencias frente a Jev en --references (0 = solo Jev, '
+                          '1 = solo MIDIs; default: 0.7). Sustituye a --ref-strength')
     eng.add_argument('--ref-strength', type=float, default=0.6, dest='ref_strength',
                      help='Intensidad con que se sigue la referencia (0 = ignorar, 1 = casi literal; default: 0.6)')
     eng.add_argument('--ref-chords', choices=['follow', 'bias', 'off'], default='follow', dest='ref_chords',
