@@ -46,13 +46,40 @@ Fuente del acorde (--chord-source):
 Sin --model-dir se usa un estimador de reglas (NO es el modelo) para probar el motor.
 
 ────────────────────────────────────────────────────────────────────────────
+Referencia MIDI (--reference FILE.mid)
+────────────────────────────────────────────────────────────────────────────
+Con `--reference` el MIDI guía la generación: de él salen la tonalidad, el modo, el
+compás, el tempo, la descripción y —según los modos— los acordes, el contorno melódico
+y el ritmo por compás. La salida no es una copia: Jev sigue decidiendo y se mezcla con
+el prior de la referencia según `--ref-strength` (0 = ignorarla, 1 = casi literal; con
+`--temperature 0.05` y strength ≥ 0.95 se vuelve casi determinista).
+
+  --ref-chords   follow | bias | off   acordes de la referencia o mezclados con Jev
+  --ref-melody   bias | off            contorno de la referencia mezclado con Jev
+  --ref-rhythm   follow | bias | off   duraciones y silencios de la referencia
+  --ref-sliders                        los 8 sliders siguen los valores de la referencia
+  --ref-slider-gain K                  fader en 0.5 = «como la referencia»; moverlo desvía
+  --ref-slider-relax / --no-ref-slider-relax   mover un slider reduce la fuerza de la ref
+  --ref-tempo / --no-ref-tempo         usar el tempo del MIDI como --bpm base
+  --ref-loop / --no-ref-loop           al acabar la referencia, repetir o dejar libre a Jev
+  --ref-accomp                         acompañamiento fiel (armonía del MIDI) en vez de plantillas
+  --ref-melody-track N                 pista (0-based) con la melodía de la referencia
+
+Sin `--reference`, `--desc/--tonic/--mode/--beats` conservan sus valores por defecto
+(«obra instrumental», C, major, 4).
+
+────────────────────────────────────────────────────────────────────────────
 Subcomandos
 ────────────────────────────────────────────────────────────────────────────
   train DIR --model-dir model/     MIDIs (y X.txt opcionales) → datos → entrena
+  train X.mid --reference-mode     Un MIDI: validación por bloques, sin calibrar
   analyze DIR                      Muestra lo que se extrae de cada MIDI
   run --model-dir model/ --desc "Nana melancólica"          Tocar en vivo
+  run --model-dir model/ --reference X.mid                  Tocar guiado por un MIDI
   run --chord-source keyboard --kb-port "Keystation"        Acordes desde teclado
   render --bars 32 --demo --out-file demo.mid               Offline a .mid
+  render --reference X.mid --out-file seg.mid               Seguir un MIDI offline
+  compare REF.mid OUT.mid          Similitud de clases, intervalos, ritmo y acordes
   bench --model-dir model/                                  Latencia por consulta
   ports | monitor                                           Diagnóstico MIDI
 
@@ -333,6 +360,29 @@ def pitched(window):
     return [(m, d) for e in window for m, d in e['notes'] if m is not None]
 
 
+def note_option(tonic, mode, chord, prev, m):
+    """Opción de nota con su papel armónico y el movimiento respecto a `prev`."""
+    scale = MODE_INTERVALS[mode]
+    root = chord['pitches'][0]
+    pc = m % 12
+    pv = prev if prev is not None else m
+    if pc in chord['pitches']:
+        role, rk = f"chord tone ({CHORD_ROLE.get((pc - root) % 12, 'tone')} of {chord['name']})", 'ct'
+    else:
+        rel = (pc - tonic) % 12
+        if rel in scale:
+            role, rk = f"passing scale tone (degree {scale.index(rel) + 1})", 'pass'
+        else:
+            role, rk = "chromatic tone", 'chrom'
+    if pc == tonic:
+        role += ', the tonic'
+    d = m - pv
+    motion = ('repeats the previous note' if d == 0
+              else f"{'up' if d > 0 else 'down'} {abs(d)} semitone(s)")
+    return {'label': midi_to_name(m), 'desc': f"{role}; {motion}", 'midi': m,
+            'role': rk, 'istonic': pc == tonic, 'tone': (pc - root) % 12, 'delta': d}
+
+
 def note_options(P, tonic, mode, chord, prev, center):
     """Notas candidatas: escala ∪ acorde, ventana de registro, salto ≤ leap."""
     hw, leap = int(P['half_width']), int(P['leap'])
@@ -344,26 +394,7 @@ def note_options(P, tonic, mode, chord, prev, center):
     pool = [m for m in range(max(lo, pv - leap), min(hi, pv + leap) + 1) if m % 12 in allowed]
     if not pool:
         pool = [m for m in range(lo, hi + 1) if m % 12 in allowed] or [pv]
-    root = chord['pitches'][0]
-    out = []
-    for m in pool:
-        pc = m % 12
-        if pc in chord['pitches']:
-            role, rk = f"chord tone ({CHORD_ROLE.get((pc - root) % 12, 'tone')} of {chord['name']})", 'ct'
-        else:
-            rel = (pc - tonic) % 12
-            if rel in scale:
-                role, rk = f"passing scale tone (degree {scale.index(rel) + 1})", 'pass'
-            else:
-                role, rk = "chromatic tone", 'chrom'
-        if pc == tonic:
-            role += ', the tonic'
-        d = m - pv
-        motion = ('repeats the previous note' if d == 0
-                  else f"{'up' if d > 0 else 'down'} {abs(d)} semitone(s)")
-        out.append({'label': midi_to_name(m), 'desc': f"{role}; {motion}", 'midi': m,
-                    'role': rk, 'istonic': pc == tonic, 'tone': (pc - root) % 12, 'delta': d})
-    return out
+    return [note_option(tonic, mode, chord, pv, m) for m in pool]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -662,6 +693,13 @@ def sample(probs, T, rng):
     return len(w) - 1
 
 
+def combine(probs, prior, s):
+    """Mezcla geométrica probs^(1-s) · prior^s, renormalizada con protección."""
+    p = [max(a, 1e-12) ** (1.0 - s) * max(b, 1e-12) ** s for a, b in zip(probs, prior)]
+    tot = sum(p)
+    return [x / tot for x in p] if tot > 1e-30 else [1.0 / len(p)] * len(p)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ANÁLISIS DE MIDIS: tonalidad, acorde por compás y variables de los sliders
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -675,13 +713,15 @@ def read_midi(path):
         mid = mido.MidiFile(path)
     except Exception as e:
         fail(f"no se pudo leer {path}: {e}")
-    tpb, notes, beats = mid.ticks_per_beat, [], None
+    tpb, notes, beats, tempo_us = mid.ticks_per_beat, [], None, None
     for ti, track in enumerate(mid.tracks):
         t, active = 0, {}
         for msg in track:
             t += msg.time
             if msg.type == 'time_signature' and beats is None:
                 beats = max(1, round(msg.numerator * 4 / msg.denominator))
+            elif msg.type == 'set_tempo' and tempo_us is None:
+                tempo_us = msg.tempo
             elif msg.type == 'note_on' and msg.velocity > 0:
                 active.setdefault((msg.channel, msg.note), []).append((t, msg.velocity))
             elif msg.type in ('note_off', 'note_on'):
@@ -697,7 +737,8 @@ def read_midi(path):
     notes = [n for n in notes if n['channel'] != 9]
     if not notes:
         fail(f"{path}: sin notas")
-    return notes, beats or 4
+    bpm = 60_000_000 / tempo_us if tempo_us else None
+    return notes, beats or 4, bpm
 
 
 def split_melody_harmony(notes, melody_track=None):
@@ -877,7 +918,7 @@ class Piece:
 
 
 def analyze_midi(path, a):
-    notes, beats0 = read_midi(path)
+    notes, beats0, bpm = read_midi(path)
     beats = a.beats or beats0
     mel, harm = split_melody_harmony(notes, a.melody_track)
     mel = quantize_melody(mel, a.quant)
@@ -907,14 +948,17 @@ def analyze_midi(path, a):
         if b < nbars:
             mb[b].append(n)
     p = Piece()
-    p.name, p.desc, p.tonic, p.mode, p.beats, p.nbars, p.path = stem, desc, tonic, mode, beats, nbars, path
+    (p.name, p.desc, p.tonic, p.mode, p.beats, p.nbars, p.path,
+     p.bpm) = stem, desc, tonic, mode, beats, nbars, path, bpm
     p.bars = []
     for b in range(nbars):
         b0, b1 = b * beats, (b + 1) * beats
         notes_b = [{'start': n['start'] - b0, 'dur': min(n['dur'], b1 - n['start']), 'midi': n['midi']}
                    for n in mb[b]]
+        harm_b = [{'start': n['start'] - b0, 'dur': n['end'] - n['start'], 'midi': n['pitch']}
+                  for n in hb[b] if n['start'] < b1 and n['end'] > b0]
         chord, cov = detect_bar_chord(hb[b], mb[b], b0, b1, cands)
-        bar = {'b': b, 'chord': None, 'notes': notes_b}
+        bar = {'b': b, 'chord': None, 'notes': notes_b, 'harm': harm_b}
         if chord is not None:
             bar.update(chord=chord['chord'], label=chord['label'],
                        raw=bar_raws(b0, b1, beats, chord['chord'], cov, hb[b], mb[b], mode))
@@ -986,6 +1030,110 @@ class Norm:
 
 def to_levels(values, L):
     return {v: min(L - 1, int(values[v] * L)) for v in SLIDERS}
+
+
+def transpose_chord(chord, shift, tonic):
+    """Transpone un acorde y recalcula su numeral respecto a la nueva tónica."""
+    root = (chord['root'] + shift) % 12
+    ivs = [(pc - chord['root']) % 12 for pc in chord['pitches']]
+    return make_chord(root, chord['q'], tonic, ivs)
+
+
+class Reference:
+    """MIDI de referencia: guía armónica, melódica y rítmica por compás.
+
+    `transpose` desplaza las alturas cuando el usuario fija una --tonic distinta; los
+    numerales se recalculan respecto a la tónica resultante. Solo lectura tras la carga."""
+
+    def __init__(self, p, transpose, tonic, mode):
+        self.tonic, self.mode = tonic, mode
+        self.beats, self.bpm = p.beats, p.bpm
+        self.desc, self.nbars, self.path = p.desc, p.nbars, p.path
+        norm = Norm([p])
+        bars, prev = [], None
+        for bar in p.bars:
+            chord = bar['chord']
+            if chord is not None:
+                chord = transpose_chord(chord, transpose, tonic) if transpose else chord
+                prev = chord
+            notes = [{'start': n['start'], 'dur': n['dur'], 'midi': n['midi'] + transpose}
+                     for n in bar['notes']]
+            harm = [{'start': n['start'], 'dur': n['dur'], 'midi': n['midi'] + transpose}
+                    for n in bar.get('harm', [])]
+            sliders = norm.values(bar['raw']) if bar.get('raw') else None
+            bars.append({'chord': chord, 'notes': notes, 'harm': harm, 'sliders': sliders})
+        for b in bars:                                        # heredar el acorde anterior
+            if b['chord'] is None:
+                b['chord'] = prev
+            else:
+                prev = b['chord']
+        if bars and bars[0]['chord'] is None:                 # sin acorde: tónica del modo
+            bars[0]['chord'] = make_chord(tonic, 'm' if MODE_INTERVALS[mode][2] == 3 else '', tonic)
+            for b in bars:
+                if b['chord'] is None:
+                    b['chord'] = bars[0]['chord']
+        self.bars = bars
+        allm = [n['midi'] for b in bars for n in b['notes']]
+        self.mel_mean = sum(allm) / len(allm) if allm else 60.0
+        self.pc_hist, self.iv_hist, self.dur_by_pos = Counter(), Counter(), {}
+        prev_m = None
+        for b in bars:
+            for n in b['notes']:
+                self.pc_hist[(n['midi'] - tonic) % 12] += 1
+                if prev_m is not None:
+                    self.iv_hist[max(-12, min(12, n['midi'] - prev_m))] += 1
+                prev_m = n['midi']
+                self.dur_by_pos.setdefault(round((n['start'] % 1.0) * 4) / 4, Counter())[n['dur']] += 1
+
+    def bar(self, idx, loop=True):
+        if idx < self.nbars:
+            return self.bars[idx]
+        return self.bars[idx % self.nbars] if loop and self.nbars else None
+
+    def note_at(self, b, local, tol=0.125):
+        for n in self.bars[b]['notes']:
+            if abs(n['start'] - local) <= tol:
+                return n
+        return None
+
+
+def resolve_eng(args):
+    """Resuelve --desc/--tonic/--mode/--beats/--bpm: explícito > referencia > default.
+    Devuelve el `Reference` cargado (o None)."""
+    if getattr(args, 'reference', None):
+        ns = argparse.Namespace(beats=None, melody_track=args.ref_melody_track, quant=0.25,
+                                desc=None, key=None, mode=None)
+        p = analyze_midi(args.reference, ns)
+        user_tonic = user_hint = None
+        if args.tonic:
+            user_tonic, user_hint = parse_key(args.tonic)
+        user_mode = args.mode or user_hint
+        tonic = p.tonic if user_tonic is None else user_tonic
+        mode = p.mode if user_mode is None else user_mode
+        shift = 0
+        if user_tonic is not None:
+            d = (user_tonic - p.tonic) % 12
+            shift = d - 12 if d > 6 else d                         # sentido más corto
+        ref = Reference(p, shift, tonic, mode)
+        args.tonic, args.mode = PITCH_NAMES[tonic], mode
+        if args.desc is None:
+            args.desc = ref.desc
+        if args.beats is None:
+            args.beats = ref.beats
+        if args.bpm is None and args.ref_tempo and ref.bpm:
+            args.bpm = ref.bpm
+        return ref
+    if args.tonic is None:
+        args.tonic = 'C'
+    tu, th = parse_key(args.tonic)
+    args.tonic = PITCH_NAMES[tu]
+    if args.mode is None:
+        args.mode = th or 'major'
+    if args.desc is None:
+        args.desc = 'obra instrumental'
+    if args.beats is None:
+        args.beats = 4
+    return None
 
 
 def piece_queries(p, norm, P, stats):
@@ -1102,6 +1250,78 @@ def analyze_corpus(a):
     return pieces, Norm(pieces)
 
 
+def _pcs_hist(p):
+    c = Counter()
+    for b in p.bars:
+        for n in b['notes']:
+            c[(n['midi'] - p.tonic) % 12] += 1
+    return np.array([c.get(i, 0) for i in range(12)], dtype=float)
+
+
+def _iv_hist(p):
+    c, prev = Counter(), None
+    for b in p.bars:
+        for n in b['notes']:
+            if prev is not None:
+                c[max(-12, min(12, n['midi'] - prev))] += 1
+            prev = n['midi']
+    return c
+
+
+def _grid_hist(p):
+    c = Counter()
+    for b in p.bars:
+        for n in b['notes']:
+            c[(round(n['start'] * 4), round(n['dur'] * 4))] += 1
+    return c
+
+
+def _cos(a, b):
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    na, nb = np.linalg.norm(a), np.linalg.norm(b)
+    return float(a @ b / (na * nb)) if na > 0 and nb > 0 else 1.0
+
+
+def _hist_cos(ca, cb, keys=None):
+    keys = keys if keys is not None else (set(ca) | set(cb))
+    keys = sorted(keys)
+    return _cos([ca.get(k, 0) for k in keys], [cb.get(k, 0) for k in keys])
+
+
+def _edit_sim(sa, sb):
+    if not sa and not sb:
+        return 1.0
+    d = list(range(len(sb) + 1))
+    for i, x in enumerate(sa, 1):
+        nd = [i]
+        for j, y in enumerate(sb, 1):
+            nd.append(min(d[j] + 1, nd[j - 1] + 1, d[j - 1] + (x != y)))
+        d = nd
+    return 1.0 - d[-1] / max(len(sa), len(sb), 1)
+
+
+def cmd_compare(a):
+    ns = argparse.Namespace(beats=a.beats, melody_track=a.melody_track, quant=0.25,
+                            desc=None, key=a.key, mode=a.mode)
+    r, o = analyze_midi(a.ref, ns), analyze_midi(a.out, ns)
+    pcs = _cos(_pcs_hist(r), _pcs_hist(o))
+    ivs = _hist_cos(_iv_hist(r), _iv_hist(o))
+    grid = _hist_cos(_grid_hist(r), _grid_hist(o))
+    rc = [rel_chord(b['chord'], r.tonic) for b in r.bars if b['chord']]
+    oc = [rel_chord(b['chord'], o.tonic) for b in o.bars if b['chord']]
+    m = min(len(rc), len(oc))
+    chords = _edit_sim(rc[:m], oc[:m])
+    if a.verbose:
+        print('  ref acordes:', ' '.join(rc))
+        print('  out acordes:', ' '.join(oc))
+    print(f"ref: {r.nbars} compases, {PITCH_NAMES[r.tonic]} {r.mode}, {r.beats}/4")
+    print(f"out: {o.nbars} compases, {PITCH_NAMES[o.tonic]} {o.mode}, {o.beats}/4")
+    print(f"  clases de altura (coseno):   {pcs:.3f}")
+    print(f"  intervalos melódicos:        {ivs:.3f}")
+    print(f"  onsets/duraciones (rejilla): {grid:.3f}")
+    print(f"  secuencia de acordes:        {chords:.3f}")
+
+
 def cmd_analyze(a):
     pieces, norm = analyze_corpus(a)
     L = a.levels
@@ -1151,7 +1371,7 @@ def cmd_train(a):
         gprog.update(gi, f"{p.name[:24]}  {len(samples)} consultas")
         for q, idx in piece_queries(p, norm, P, stats):
             qi, oi, optr = featurize(q, a.bits)
-            samples.append((qi, oi, optr, idx, len(q.options), KINDS.index(q.kind), gi))
+            samples.append((qi, oi, optr, idx, len(q.options), KINDS.index(q.kind), gi, q.bar))
             stats['consultas ' + q.kind] += 1
             if dump:
                 dump.write(json.dumps({'piece': p.name, 'kind': q.kind, 'state': q.state_text(),
@@ -1167,7 +1387,17 @@ def cmd_train(a):
 
     rng = np.random.default_rng(a.seed)
     ng = len(pieces)
-    if ng >= 3 and a.val_frac > 0:
+    if a.reference_mode and ng < 3 and a.val_frac > 0:
+        val = []
+        for gi, p in enumerate(pieces):
+            th = (1.0 - a.val_frac) * p.nbars                # bloques de compases contiguos
+            val += [i for i, s in enumerate(samples) if s[6] == gi and s[7] >= th]
+        if val:
+            print(f"[train] --reference-mode: validación por bloques de compases (últimos "
+                  f"{100 * a.val_frac:.0f}%), sin calibrar la temperatura")
+        else:
+            warn("--reference-mode: no quedan compases para validar")
+    elif ng >= 3 and a.val_frac > 0:
         nv = max(1, int(round(a.val_frac * ng)))
         vg = set(rng.permutation(ng)[:nv].tolist())
         val = [i for i, s in enumerate(samples) if s[6] in vg]
@@ -1250,7 +1480,7 @@ def cmd_train(a):
         model.save(str(mdir / BEST_NAME))
     best = TwoTower.load(mdir / BEST_NAME, a.bits, a.dim)
     tau = 1.0
-    if val and not a.no_calibrate:
+    if val and not a.no_calibrate and not (a.reference_mode and ng < 3):
         lg, tg = [], []
         for i in val:
             s = samples[i]
@@ -1353,6 +1583,7 @@ class Out:
         self.backend, self.record = backend, record
         self.lock = threading.RLock()
         self.sounding, self.log, self.tempos, self.programs = {}, [], [], {}
+        self.meter = (4, 4)
 
     def _be(self, m):
         if self.backend:
@@ -1458,7 +1689,9 @@ def write_smf(path, out, tpb=480):
     tempos = sorted(out.tempos) or [(0.0, 100.0)]
     tev = [(int(round(b * tpb)), 0, b'\xff\x51\x03' + int(60_000_000 / bpm).to_bytes(3, 'big'))
            for b, bpm in tempos]
-    tev.insert(0, (0, -1, b'\xff\x58\x04\x04\x02\x18\x08'))
+    num, den = getattr(out, 'meter', (4, 4))
+    tev.insert(0, (0, -1, b'\xff\x58\x04' + bytes([max(1, num), int(math.log2(max(1, den))),
+                                                   24, 8])))
     tracks = [track(tev)]
     for ch in sorted({e[2] for e in out.log}):
         evs = []
@@ -1728,11 +1961,11 @@ class VirtualClock:
 class Rhythm:
     GRID = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]
 
-    def sample(self, rng, t, max_dur, density, groove, beats, bar_idx, last_rest):
+    def sample(self, rng, t, max_dur, density, groove, beats, bar_idx, last_rest, prior=None):
         opb = 0.25 * (16.0 ** density)
         target = math.log2(1.0 / opb)
         ws = []
-        for d in self.GRID:
+        for i, d in enumerate(self.GRID):
             if d > max_dur + EPS:
                 ws.append(0.0)
                 continue
@@ -1744,6 +1977,8 @@ class Rhythm:
                 w *= 0.3
             if d in (0.75, 1.5, 3.0):
                 w *= 0.5 + 1.2 * groove
+            if prior is not None:
+                w *= max(prior[i], 1e-6)
             ws.append(w)
         if sum(ws) <= 0:
             d = min(max_dur, 0.25)
@@ -1769,7 +2004,7 @@ COMMANDS = ['cadence', 'modulate', 'play', 'stop', 'driftreset']
 
 
 class Engine:
-    def __init__(self, args, est, panel, clock, out, source=None):
+    def __init__(self, args, est, panel, clock, out, source=None, ref=None):
         self.args, self.est, self.panel, self.clock, self.out = args, est, panel, clock, out
         self.jev = LiveJev(est)
         self.P = est.params
@@ -1777,7 +2012,8 @@ class Engine:
         self.rng = random.Random(args.rng)
         self.tonic, self.mode = parse_key(args.tonic)[0], args.mode
         self.desc, self.beats = args.desc, args.beats
-        self.source = source
+        self.source, self.ref = source, ref
+        self.cur_ref, self.ref_extra_until = None, 0.0
         self.mem = Memory(self.P['depth'])
         self.mel_t, self.cur_bar, self.bar_start = 0.0, -1, 0.0
         self.cur_chord, self.cur_entry, self.kb_seen = None, None, None
@@ -1803,8 +2039,39 @@ class Engine:
         self.cmds.append(c)
 
     # ── utilidades ───────────────────────────────────────────────────────────
+    def sv(self, name):
+        """Valor efectivo de un slider: con --ref-sliders es la trayectoria de la referencia
+        más el desplazamiento del fader del usuario; sin él, el fader tal cual."""
+        u = self.panel.get(name)
+        if name not in SLIDERS or self.ref is None or not self.args.ref_sliders \
+                or self.cur_ref is None:
+            return u
+        rv = self.ref.bars[self.cur_ref]['sliders']
+        if not rv:
+            return u
+        return clamp(rv[name] + (u - 0.5) * 2.0 * self.args.ref_slider_gain)
+
+    def ref_bar(self, bar):
+        if self.ref is None:
+            return None
+        if bar < self.ref.nbars:
+            return bar
+        return bar % self.ref.nbars if self.args.ref_loop else None
+
+    def ref_strength(self, dims):
+        """Fuerza de la referencia para una decisión, relajada por los sliders que la gobiernan
+        (con los sliders en el centro valen la fuerza nominal)."""
+        s = self.args.ref_strength
+        if self.args.ref_slider_relax:
+            dev = sum(abs(self.panel.get(v) - 0.5) * 2.0 for v in dims) / len(dims)
+            s *= max(0.0, 1.0 - dev)
+        return clamp(s)
+
+    def sample_T(self, s):
+        return min(self.temp(), 0.05) if s >= 0.95 else self.temp()
+
     def gain(self, name):
-        return min((2.0 * self.panel.get(name)) ** 1.3, 1.8)
+        return min((2.0 * self.sv(name)) ** 1.3, 1.8)
 
     def temp(self):
         return self.args.temperature * (0.5 + self.panel.get('temperatura'))
@@ -1812,7 +2079,7 @@ class Engine:
     def levels_now(self):
         L, out = self.P['levels'], {}
         for v in SLIDERS:
-            f = self.panel.get(v) * L - 0.5
+            f = self.sv(v) * L - 0.5
             if f <= 0:
                 lv = 0
             elif f >= L - 1:
@@ -1830,7 +2097,7 @@ class Engine:
         shift = desplazamiento del centro de la gaussiana en semitonos respecto a la nota actual."""
         if not self.drift_name:
             return 0.0, 0.0, 0.0
-        d = self.panel.get(self.drift_name) - 0.5
+        d = self.sv(self.drift_name) - 0.5
         return d, min(1.0, 2.0 * abs(d)), d * self.args.drift_gain
 
     def drift_indicator(self):
@@ -1898,7 +2165,7 @@ class Engine:
 
     def center(self):
         lo, hi = self.P['reg_lo'], self.P['reg_hi']
-        return int(clamp(lo + self.panel.get('registro') * (hi - lo) + 12 * self.octave, 30, 100))
+        return int(clamp(lo + self.sv('registro') * (hi - lo) + 12 * self.octave, 30, 100))
 
     def note_params(self):
         return dict(self.P, half_width=max(4, int(self.P['half_width'] * (0.5 + self.panel.get('amplitud')))))
@@ -1912,7 +2179,7 @@ class Engine:
     def emit(self, start, dur, ch, note, vel):
         if not self.layers[LAYERS[ch]]:
             return
-        g, h = self.panel.get('groove'), 0.6 * self.panel.get('humanizar')
+        g, h = self.sv('groove'), 0.6 * self.panel.get('humanizar')
         sw = g * 0.8 / 6.0
         jit = (self.rng.random() - .5) * 2 * h * 0.02
 
@@ -1925,7 +2192,7 @@ class Engine:
         self.sched.add(e, 'off', ch, note, 0, tok)
 
     def vel_mel(self, t):
-        e, h = self.panel.get('energia'), 0.6 * self.panel.get('humanizar')
+        e, h = self.sv('energia'), 0.6 * self.panel.get('humanizar')
         v = 42 + 62 * e
         fr = t % self.beats
         v += 10 if fr < EPS else 5 if abs(fr - round(fr)) < EPS else 0
@@ -1939,7 +2206,7 @@ class Engine:
         return out
 
     def play_bass(self, chord, t, d):
-        e = self.panel.get('energia')
+        e = self.sv('energia')
         vb = clamp((55 + 45 * e) * self.gain('vol_bajo'), 1, 127)
         root = 36 + (chord['root'] - 36) % 12
         if e < 0.35 or d < 2:
@@ -1955,7 +2222,7 @@ class Engine:
                 i += 1
 
     def play_chord(self, chord, t, d):
-        e, c = self.panel.get('energia'), self.panel.get('complejidad')
+        e, c = self.sv('energia'), self.sv('complejidad')
         pcs = list(chord['pitches'])
         if c > 0.7 and len(pcs) < 5:
             pcs.append((pcs[0] + 2) % 12)
@@ -1974,6 +2241,102 @@ class Engine:
                 i += 1
         self.play_bass(chord, t, d)
 
+    # ── referencia: prior de acordes, notas, ritmo y acompañamiento ───────────
+    def _chord_option(self, opts, chord):
+        """Opción de acorde de la referencia; si no es diatónica, se añade a opts."""
+        for o in opts:
+            if o['chord']['name'] == chord['name']:
+                return o
+        c = dict(chord)
+        c['label'] = f"{c['numeral']} ({c['name']})"
+        c['desc'] = chord_desc(c)
+        o = {'label': c['label'], 'desc': c['desc'], 'chord': c}
+        opts.append(o)
+        return o
+
+    def ref_chord_dist(self, opts, b, dev_v, dev_t, s):
+        """Prior de acordes: (1-s)·uniforme + s·uno en el de la referencia, multiplicado por los
+        términos de calidad/función que activan valencia/tension (sección 3.6.3)."""
+        target = self._chord_option(opts, self.ref.bars[b]['chord'])
+        n = len(opts)
+        p = [1e-6] * n
+        p[opts.index(target)] = 1.0
+        p = [(1.0 - s) / n + s * x for x in p]
+        if dev_v or dev_t:
+            for i, o in enumerate(opts):
+                c = o['chord']
+                f = 1.0
+                if dev_v:
+                    f *= math.exp(1.2 * dev_v * (QUAL_VALENCE.get(c['q'], .5) - 0.5))
+                if dev_t:
+                    f *= math.exp(0.8 * dev_t * (FN_TENSION[c['fn']] - 0.5))
+                p[i] *= f
+        tot = sum(p)
+        return [x / tot for x in p]
+
+    def ref_note_target(self, b, local, center):
+        """Nota de la referencia en esa posición, desplazada una octava global hacia el centro."""
+        m = self.ref.note_at(b, local, tol=0.25)
+        if m is None:
+            return None
+        return m['midi'] + 12 * round((center - self.ref.mel_mean) / 12.0)
+
+    def ref_note_dist(self, opts, b, local, target=None):
+        """Prior de notas: gaussiana sobre la nota de la referencia en esa posición; fuera de
+        ella, contorno (intervalos) e histograma de clases de altura de la referencia."""
+        if target is not None:
+            return [math.exp(-((o['midi'] - target) ** 2) / (2 * 0.7 ** 2)) + 1e-6 for o in opts]
+        hp, hi = self.ref.pc_hist, self.ref.iv_hist
+        thp, thi = sum(hp.values()) or 1, sum(hi.values()) or 1
+        prev, out = self.mem.last_midi, []
+        for o in opts:
+            w = 0.5 + 6.0 * hp.get((o['midi'] - self.tonic) % 12, 0) / thp
+            if prev is not None:
+                d = max(-12, min(12, o['midi'] - prev))
+                w *= 0.3 + 8.0 * hi.get(d, 0) / thi
+            out.append(w)
+        return out
+
+    def ref_dur_prior(self, b, local):
+        c = self.ref.dur_by_pos.get(round((local % 1.0) * 4) / 4)
+        if not c:
+            return None
+        return [c.get(d, 0.0) + 0.02 for d in Rhythm.GRID]
+
+    def ref_rhythm_step(self, t):
+        """Ritmo en modo follow: (dur, rest) de la referencia, ajustado por densidad."""
+        b, local, bar_end = self.cur_ref, t - self.bar_start, self.beats
+        devd = clamp((self.panel.get('densidad') - 0.5) * 2.0, -1.0, 1.0)
+        match = self.ref.note_at(b, local)
+        if match is None:
+            if t < self.ref_extra_until - EPS:                 # continuación de una subdivisión
+                return None
+            nxt = min([n['start'] for n in self.ref.bars[b]['notes'] if n['start'] > local + 0.125],
+                      default=bar_end)
+            return max(0.25, nxt - local), True
+        dur = match['dur']
+        if devd > 0 and dur > 0.5 and self.rng.random() < devd:
+            half = max(0.25, round(dur / 2 / 0.25) * 0.25)
+            self.ref_extra_until = self.bar_start + local + dur
+            return half, False
+        if devd < 0 and self.rng.random() < -devd:
+            return dur, True
+        return dur, False
+
+    def play_ref_accomp(self, b, t, d):
+        """Toca la armonía de la referencia en los canales 1/2 según tesitura."""
+        e = self.sv('energia')
+        for n in self.ref.bars[b]['harm']:
+            st = max(0.0, n['start'])
+            if st >= d - EPS:
+                continue
+            dur = min(n['dur'] + min(0.0, n['start']), d - st)   # recorta notas que cruzan el compás
+            if dur <= EPS:
+                continue
+            ch = 2 if n['midi'] < 60 else 1
+            v = clamp((40 + 40 * e) * self.gain('vol_bajo' if ch == 2 else 'vol_acordes'), 1, 127)
+            self.emit(t + st, dur, ch, n['midi'], v)
+
     # ── compás: acorde (modelo o teclado) ────────────────────────────────────
     def keyboard_chord(self, t):
         ver, rq = self.source.get(t)
@@ -1991,16 +2354,32 @@ class Engine:
                 if (want == 'V7' and c['numeral'] == 'V7') or \
                    (want == 'tonic' and c['numeral'] in ('I', 'i') and len(c['pitches']) == 3):
                     return c
+        b = self.ref_bar(bar)
+        use_ref = (self.ref is not None and b is not None
+                   and self.args.ref_chords != 'off'
+                   and not (self.source is not None))
+        s = self.ref_strength(['valencia', 'tension', 'complejidad', 'sorpresa']) if use_ref else 0.0
+        if use_ref and s > 1e-9 and self.args.ref_chords == 'follow':
+            return self.ref.bars[b]['chord']
         q = self.query('acorde', bar, opts, dur=self.beats)
         p = self.jev.ask(q)
-        return opts[sample(p, self.temp(), self.rng)]['chord']
+        if use_ref and s > 1e-9:
+            dev_v = clamp((self.panel.get('valencia') - 0.5) * 2.0)
+            dev_t = clamp((self.panel.get('tension') - 0.5) * 2.0)
+            pr = self.ref_chord_dist(opts, b, dev_v, dev_t, s)
+            p = [a * bb for a, bb in zip(p, pr)]
+            tot = sum(p)
+            p = [x / tot for x in p] if tot > 1e-30 else [1.0 / len(p)] * len(p)
+        return opts[sample(p, self.sample_T(s), self.rng)]['chord']
 
     def begin_bar(self, bar):
         t0 = bar * self.beats
+        b = self.ref_bar(bar)
+        self.cur_ref, self.ref_extra_until = b, 0.0
         if self.pending_key is not None:
             self.tonic, self.pending_key = self.pending_key, None
         if self.args.valence_mode:
-            f = self.panel.get('valencia') * (len(LADDER) - 1)
+            f = self.sv('valencia') * (len(LADDER) - 1)
             if abs(f - self.ladder_i) > 0.65:
                 self.ladder_i = int(round(f))
             self.mode = LADDER[self.ladder_i]
@@ -2017,7 +2396,9 @@ class Engine:
             chord = self.decide_chord(bar)
         self.cur_chord = chord
         self.cur_entry = self.mem.add(chord, bar)
-        if self.source is None:
+        if self.args.ref_accomp and b is not None and self.ref.bars[b]['harm']:
+            self.play_ref_accomp(b, t0, self.beats)
+        elif self.source is None:
             self.play_chord(chord, t0, self.beats)
         else:
             self.play_bass(chord, t0, self.beats)
@@ -2041,19 +2422,42 @@ class Engine:
             self.refresh_keyboard(t)
         chord = self.cur_chord
         bar_end = self.bar_start + self.beats
-        dur, rest = self.rhythm.sample(self.rng, t, bar_end - t, self.panel.get('densidad'),
-                                       self.panel.get('groove'), self.beats, self.cur_bar,
-                                       self.last_rest)
-        if dur <= EPS:
-            dur = bar_end - t
+        b = self.cur_ref
+        use_ref = (self.ref is not None and b is not None and self.args.ref_rhythm != 'off')
+        s_r = self.ref_strength(['densidad', 'groove']) if use_ref else 0.0
+        step = (self.ref_rhythm_step(t) if use_ref and self.args.ref_rhythm == 'follow'
+                and s_r > 1e-9 else None)
+        if step is not None:
+            dur, rest = step
+            if dur <= EPS:
+                dur = bar_end - t
+        else:
+            prior = None
+            if use_ref and self.args.ref_rhythm == 'bias' and s_r > 0:
+                raw = self.ref_dur_prior(b, t - self.bar_start)
+                if raw:
+                    prior = [x ** s_r for x in raw]
+            dur, rest = self.rhythm.sample(self.rng, t, bar_end - t, self.sv('densidad'),
+                                           self.sv('groove'), self.beats, self.cur_bar,
+                                           self.last_rest, prior=prior)
+            if dur <= EPS:
+                dur = bar_end - t
         self.last_rest = rest
         if not rest:
             if self.args.live_sliders:
                 self.levels = self.levels_now()
                 self.cur_center = self.center()
             self.drift_octave_step(self.mem.last_midi)
+            s_n, ref_target = 0.0, None
+            if self.ref is not None and b is not None and self.args.ref_melody == 'bias' \
+                    and t >= self.ref_extra_until - EPS:
+                s_n = self.ref_strength(['valencia', 'tension', 'sorpresa', 'registro'])
+                if s_n > 0:
+                    ref_target = self.ref_note_target(b, t - self.bar_start, self.eff_center())
             opts = note_options(self.note_params(), self.tonic, self.mode, chord,
                                 self.mem.last_midi, self.eff_center())
+            if ref_target is not None and not any(o['midi'] == ref_target for o in opts):
+                opts.append(note_option(self.tonic, self.mode, chord, self.mem.last_midi, ref_target))
             q = self.query('nota', self.cur_bar, opts, chord, t - self.bar_start, dur)
             probs = self.jev.ask(q)
             w = self.drift_weights(opts, self.mem.last_midi if self.mem.last_midi is not None
@@ -2062,12 +2466,17 @@ class Engine:
                 probs = [p * x for p, x in zip(probs, w)]
                 tot = sum(probs)
                 probs = [p / tot for p in probs] if tot > 1e-30 else [1.0 / len(probs)] * len(probs)
-            midi = opts[sample(probs, self.temp(), self.rng)]['midi']
+            if s_n > 0:
+                pr = self.ref_note_dist(opts, b, t - self.bar_start, ref_target)
+                probs = combine(probs, pr, s_n)
+            midi = opts[sample(probs, self.sample_T(s_n), self.rng)]['midi']
             if self.drift_name and self.mem.last_midi is not None:
                 self.drift_hist.append(midi - self.mem.last_midi)
             self.cur_entry['notes'].append((midi, dur))
             self.mem.last_midi = midi
-            self.emit(t, dur, 0, midi, self.vel_mel(t))
+            ed = (dur / max(1e-6, 1.0 - 0.45 * self.sv('groove'))
+                  if step is not None else dur)
+            self.emit(t, ed, 0, midi, self.vel_mel(t))
         self.mel_t = round(t + dur, 6)
 
     def advance(self, upto):
@@ -2131,13 +2540,14 @@ class Engine:
         if self.args.bpm:
             tgt = self.args.bpm * (0.8 + 0.4 * self.panel.get('tempo'))
         else:
-            tgt = (62 + 78 * self.panel.get('energia')) * (0.8 + 0.4 * self.panel.get('tempo'))
+            tgt = (62 + 78 * self.sv('energia')) * (0.8 + 0.4 * self.panel.get('tempo'))
         self.bpm += (tgt - self.bpm) * (1 - math.exp(-dt / 1.0))
         if abs(self.bpm - self.clock.bpm) > 0.5:
             self.clock.set_bpm(self.bpm)
             self.out.tempo(self.clock.now(), self.bpm)
 
     def start(self):
+        self.out.meter = (self.beats, 4)
         for ch, p in enumerate(self.progs[:3]):
             self.out.program(ch, p)
         self.out.cc(0, 91, 55)
@@ -2159,7 +2569,7 @@ class Engine:
     def status_line(self):
         i = self.info
         bars = "▁▂▃▄▅▆▇█"
-        meters = "".join(bars[min(7, int(self.panel.get(n) * 8))] for n in SLIDERS)
+        meters = "".join(bars[min(7, int(self.sv(n) * 8))] for n in SLIDERS)
         locks = "".join(str(k + 1) for k, n in enumerate(SLIDERS) if self.panel.locked[n])
         lay = "".join(l[0].upper() if self.layers[l] else "·" for l in LAYERS)
         src = 'KB' if self.source is not None else 'JV'
@@ -2182,9 +2592,17 @@ def load_estimator(args):
 
 
 def build(args, out, clock, live_kb=False):
+    ref = resolve_eng(args)
+    if ref is not None and args.ref_sliders and args.demo:
+        fail("--ref-sliders y --demo son incompatibles")
+    if ref is not None and args.chord_source == 'keyboard' and args.ref_chords != 'off':
+        warn("con --chord-source keyboard el acorde del teclado manda: --ref-chords se ignora")
     est = load_estimator(args)
     cc_map = json.load(open(args.map, encoding='utf-8')) if getattr(args, 'map', None) else None
     panel = Panel(cc_map)
+    if ref is not None and args.ref_sliders:
+        for v in SLIDERS:                                     # fader en 0.5 = «como la referencia»
+            panel.value[v] = panel.target[v] = 0.5
     source = None
     if args.chord_source == 'keyboard':
         if args.kb_chords:
@@ -2193,7 +2611,7 @@ def build(args, out, clock, live_kb=False):
             source = ChordKeyboard(args.kb_port)
         else:
             fail("render/bench con --chord-source keyboard necesitan --kb-chords \"C Am F G7\"")
-    eng = Engine(args, est, panel, clock, out, source)
+    eng = Engine(args, est, panel, clock, out, source, ref)
     return eng
 
 
@@ -2411,10 +2829,37 @@ def build_parser():
 
     eng = argparse.ArgumentParser(add_help=False)
     eng.add_argument('--model-dir', help='Modelo entrenado (sin él: estimador de reglas)')
-    eng.add_argument('--desc', default='obra instrumental', help='Descripción de la obra')
-    eng.add_argument('--tonic', default='C')
-    eng.add_argument('--mode', default='major', choices=MODES)
-    eng.add_argument('--beats', type=int, default=4)
+    eng.add_argument('--desc', default=None, help='Descripción de la obra (default: el MIDI de referencia o «obra instrumental»)')
+    eng.add_argument('--tonic', default=None, help='Tónica (default: la del MIDI de referencia o C)')
+    eng.add_argument('--mode', default=None, choices=MODES, help='Modo (default: el del MIDI de referencia o major)')
+    eng.add_argument('--beats', type=int, default=None, help='Pulsos por compás (default: el del MIDI de referencia o 4)')
+    eng.add_argument('--reference', default=None, metavar='FILE.mid',
+                     help='MIDI de referencia: guía la tonalidad, modo, compás, tempo, acordes, melodía y ritmo')
+    eng.add_argument('--ref-strength', type=float, default=0.6, dest='ref_strength',
+                     help='Intensidad con que se sigue la referencia (0 = ignorar, 1 = casi literal; default: 0.6)')
+    eng.add_argument('--ref-chords', choices=['follow', 'bias', 'off'], default='follow', dest='ref_chords',
+                     help='Acordes: follow = los de la referencia; bias = mezcla con Jev; off (default: follow)')
+    eng.add_argument('--ref-melody', choices=['bias', 'off'], default='bias', dest='ref_melody',
+                     help='Alturas: bias = mezcla el contorno de la referencia con Jev; off (default: bias)')
+    eng.add_argument('--ref-rhythm', choices=['follow', 'bias', 'off'], default='follow', dest='ref_rhythm',
+                     help='Ritmo: follow = duraciones y silencios de la referencia; bias; off (default: follow)')
+    eng.add_argument('--ref-sliders', action='store_true', dest='ref_sliders',
+                     help='Pilotar los 8 sliders con los valores por compás de la referencia')
+    eng.add_argument('--ref-slider-gain', type=float, default=1.0, dest='ref_slider_gain',
+                     help='Ganancia del desplazamiento del slider sobre la referencia (default: 1.0)')
+    eng.add_argument('--ref-slider-relax', dest='ref_slider_relax', action='store_true', default=True,
+                     help='Mover un slider reduce la fuerza de la referencia en su decisión (default: on)')
+    eng.add_argument('--no-ref-slider-relax', dest='ref_slider_relax', action='store_false')
+    eng.add_argument('--ref-tempo', dest='ref_tempo', action='store_true', default=True,
+                     help='Usar el tempo del MIDI como --bpm base (default: on)')
+    eng.add_argument('--no-ref-tempo', dest='ref_tempo', action='store_false')
+    eng.add_argument('--ref-loop', dest='ref_loop', action='store_true', default=True,
+                     help='Al acabar la referencia, volver al compás 0 (default: on)')
+    eng.add_argument('--no-ref-loop', dest='ref_loop', action='store_false')
+    eng.add_argument('--ref-melody-track', type=int, default=None, dest='ref_melody_track',
+                     help='Pista (0-based) con la melodía de la referencia')
+    eng.add_argument('--ref-accomp', action='store_true', dest='ref_accomp',
+                     help='Acompañamiento fiel: toca la armonía de la referencia en vez de las plantillas')
     eng.add_argument('--bpm', type=float, default=None, help='Tempo base fijo (default: lo marca la energía)')
     eng.add_argument('--lookahead', type=float, default=1.5, help='Pulsos de antelación')
     eng.add_argument('--programs', default='0,48,32', help='Programas GM de melodía, acordes y bajo')
@@ -2461,6 +2906,8 @@ def build_parser():
     p.add_argument('--val-frac', type=float, default=0.15, dest='val_frac')
     p.add_argument('--label-smoothing', type=float, default=0.02, dest='label_smoothing')
     p.add_argument('--no-calibrate', action='store_true', dest='no_calibrate')
+    p.add_argument('--reference-mode', action='store_true', dest='reference_mode',
+                   help='Un solo MIDI: validación por bloques de compases contiguos y sin calibrar')
     p.add_argument('--dump-queries', default=None, dest='dump_queries',
                    help='Guardar las consultas generadas (texto legible) en un JSONL')
     p.add_argument('--seed', type=int, default=42)
@@ -2490,6 +2937,16 @@ def build_parser():
     p.add_argument('--script', help='[{"bar": 8, "set": {"valencia": 0.9, "cadence": 1}}, ...]')
     p.add_argument('--demo', action='store_true')
     p.set_defaults(fn=cmd_render)
+
+    p = sub.add_parser('compare', help='Comparar un .mid generado con el de referencia')
+    p.add_argument('ref', metavar='REF.mid')
+    p.add_argument('out', metavar='OUT.mid')
+    p.add_argument('--beats', type=int, default=None)
+    p.add_argument('--key', default=None)
+    p.add_argument('--mode', default=None, choices=MODES)
+    p.add_argument('--melody-track', type=int, default=None, dest='melody_track')
+    p.add_argument('--verbose', action='store_true')
+    p.set_defaults(fn=cmd_compare)
 
     p = sub.add_parser('bench', parents=[eng], help='Latencia por consulta')
     p.add_argument('--n', type=int, default=300)
