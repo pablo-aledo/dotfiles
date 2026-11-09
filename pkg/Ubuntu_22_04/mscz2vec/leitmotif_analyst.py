@@ -42,6 +42,7 @@ Opciones
   --save-all          Guardar forma fundamental + todas las apariciones
   --save-dir DIR      Carpeta de destino para los MIDIs exportados
   --verbose           Salida detallada
+  --no-color          Aceptado por uniformidad con la suite (no emite color ANSI)
 
 ── Otras opciones del parser ──
   --map-cols N                Compases por columna en el mapa de apariciones
@@ -185,13 +186,31 @@ def extract_notes(midi_path: str) -> tuple:
 
     # Extraer tempo y compás
     tempo_us = 500_000
-    ts_num, ts_den = 4, 4
+    ts_events = []   # (tick, num, den) de todas las pistas
+    end_tick = 0
     for track in mid.tracks:
+        t_abs = 0
         for msg in track:
+            t_abs += msg.time
             if msg.type == 'set_tempo':
                 tempo_us = msg.tempo
             elif msg.type == 'time_signature':
-                ts_num, ts_den = msg.numerator, msg.denominator
+                ts_events.append((t_abs, msg.numerator, msg.denominator))
+        end_tick = max(end_tick, t_abs)
+    # Compás dominante (el que cubre más ticks), no «el último que aparezca»;
+    # mismo criterio que reference_finder.py.
+    ts_num, ts_den = 4, 4
+    if ts_events:
+        ts_events.sort()
+        span = {}
+        for i, (t, n, d) in enumerate(ts_events):
+            t_end = ts_events[i + 1][0] if i + 1 < len(ts_events) else max(end_tick, t)
+            span[(n, d)] = span.get((n, d), 0) + max(0, t_end - t)
+        best = max(span.values())
+        for _t, n, d in ts_events:
+            if span[(n, d)] == best:
+                ts_num, ts_den = n, d
+                break
 
     tempo_bpm = round(60_000_000 / max(tempo_us, 1), 1)
     beats_per_bar = ts_num * (4.0 / ts_den)
@@ -1099,7 +1118,7 @@ def trace_leitmotif(leitmotif: dict, notes: list, tpb: int,
 
 def print_banner():
     print("╔══════════════════════════════════════════════════════════════════╗")
-    print("║               LEITMOTIF ANALYST  v1.0                           ║")
+    print(f"║{('LEITMOTIF ANALYST  v' + VERSION).center(66)}║")
     print("║  Identificación de leitmotifs y variaciones en obra MIDI        ║")
     print("╚══════════════════════════════════════════════════════════════════╝")
 
@@ -1520,6 +1539,9 @@ Ejemplos:
 
     p.add_argument("--verbose",        action="store_true",
                    help="Salida detallada")
+    p.add_argument("--no-color",       action="store_true",
+                   help="Sin color ANSI (esta herramienta no emite color; "
+                        "se acepta por uniformidad con el resto de la suite)")
     return p
 
 

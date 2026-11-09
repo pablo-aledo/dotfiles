@@ -301,6 +301,7 @@ def _read(path):
     mid = mido.MidiFile(path, clip=True)
     tpb = mid.ticks_per_beat
     tempos, tsigs, voices = [], [], {}
+    chan_prog = {}   # primer program_change visto por canal (en cualquier pista)
     for ti, tr in enumerate(mid.tracks):
         t = 0
         name = ""
@@ -318,6 +319,7 @@ def _read(path):
                 tsigs.append((t, m.numerator, m.denominator))
             elif m.type == "program_change":
                 progs.setdefault(m.channel, m.program)
+                chan_prog.setdefault(m.channel, m.program)
             elif m.type == "note_on" and m.velocity > 0:
                 active.setdefault((m.channel, m.note), []).append(t)
             elif m.type in ("note_off", "note_on"):
@@ -336,8 +338,34 @@ def _read(path):
         v["notes"].sort()
         v["name"] = v["name"] or ""
         if v["prog"] is None:
-            v["prog"] = progs.get(v["ch"])
+            v["prog"] = chan_prog.get(v["ch"])
     return tpb, sorted(tempos), sorted(tsigs), [v for _, v in sorted(voices.items())]
+
+
+def _dominant_meter(tsigs, end_tick):
+    """Compás que cubre más ticks hasta end_tick (en vez de «el primero»).
+    Con firmas repetidas o cambios (p. ej. 4/4 → 2/4) elige el dominante;
+    en empate gana el más temprano. Sin firmas: 4/4."""
+    if not tsigs:
+        return 4, 4
+    ts = sorted(tsigs)
+    span = {}
+    for i, (t, n, d) in enumerate(ts):
+        t_end = ts[i + 1][0] if i + 1 < len(ts) else max(end_tick, t)
+        span[(n, d)] = span.get((n, d), 0) + max(0, t_end - t)
+    best = max(span.values())
+    for _t, n, d in ts:
+        if span[(n, d)] == best:
+            return n, d
+
+
+def _bar8(meter):
+    """Corcheas por compás a partir de «n/d» (4/4 → 8, 3/4 → 6, 6/8 → 6)."""
+    try:
+        n, d = (int(x) for x in str(meter).split("/"))
+        return max(1, int(round(8.0 * n / d)))
+    except Exception:
+        return 8
 
 
 def _seconds(tick, tpb, tempos):
@@ -367,9 +395,9 @@ def extract_features(path):
     allnotes = [n for v in pitched for n in v["notes"]]
     if not allnotes:
         raise ValueError("sin notas")
-    num, den = (tsigs[0][1], tsigs[0][2]) if tsigs else (4, 4)
-    bar = max(1, int(tpb * 4 * num / den))
     last = max(e for _, e, _ in allnotes)
+    num, den = _dominant_meter(tsigs, last)
+    bar = max(1, int(tpb * 4 * num / den))
     dur = _seconds(last, tpb, tempos)
     bpm = 60.0 * (last / tpb) / dur if dur > 0 else 120.0     # tempo medio ponderado
 
@@ -435,9 +463,9 @@ def extract_features(path):
     }
 
 
-def cell_presence(grid, pat):
-    """Fracción de periodos con ataque que contienen la célula (mejor fase)."""
-    L = len(pat)
+def _presence_period(grid, pat, L):
+    """Presencia de `pat` (rellena con silencios hasta L corcheas) en ventanas de L."""
+    pat = pat.ljust(L, ".")
     need = [i for i, ch in enumerate(pat) if ch == "x"]
     nx = len(need)
     first, last = grid.find("x"), grid.rfind("x")
@@ -456,6 +484,22 @@ def cell_presence(grid, pat):
                 car += 1
         if tot:
             best = max(best, (car / tot) * min(1.0, tot / 6.0))
+    return best
+
+
+def cell_presence(grid, pat, bar8=None):
+    """Fracción de periodos con ataque que contienen la célula (mejor fase).
+
+    Se mide con el periodo propio de la célula (len(pat)) y, si se da `bar8`
+    (corcheas por compás) y la célula es más corta que el compás, también con
+    el compás como periodo (célula + silencios hasta completarlo). Así una
+    célula de 3 pulsos como «marcato» (x.xxx.) se detecta tanto repetida cada
+    3 pulsos como una vez por compás de 4/4 (x.xxx...). Devuelve el máximo.
+    """
+    L = len(pat)
+    best = _presence_period(grid, pat, L)
+    if bar8 and bar8 > L:
+        best = max(best, _presence_period(grid, pat, bar8))
     return best
 
 
@@ -479,7 +523,7 @@ def _range(v):
 def parse_brief(text):
     b, warns = {}, []
     for raw in text.splitlines():
-        line = raw.split("#", 1)[0].strip()
+        line = re.split(r"(?:^|\s)#", raw, maxsplit=1)[0].strip()   # «F#m» no es comentario
         if not line:
             continue
         if ":" not in line:
@@ -620,7 +664,8 @@ def score_features(f, brief):
     if brief.get("rhythm"):
         parts, best_ev, ss = [], "", []
         for name, pat in brief["rhythm"]:
-            sc = max(cell_presence(f["grid_bass"], pat), cell_presence(f["grid_rest"], pat))
+            b8 = _bar8(f["meter"])
+            sc = max(cell_presence(f["grid_bass"], pat, b8), cell_presence(f["grid_rest"], pat, b8))
             ss.append(sc)
             parts.append(f"{name} {sc:.0%}")
         add("rhythm", sum(ss) / len(ss), ", ".join(parts))
@@ -815,7 +860,8 @@ def cmd_profile(args):
         print(f"  tipo: {_kind(f)}   duración {f['duration_s']}s ({f['bars']} comp.)   {f['meter']}   {f['tempo_bpm']} bpm")
         print(f"  tonalidad {f['key']} (r={f['key_r']}), 2.ª {f['key2']}   cromatismo {f['chromatic']:.1%}   "
               f"repetición {f['repetition']:.0%}")
-        cells = {n: max(cell_presence(f['grid_bass'], pt), cell_presence(f['grid_rest'], pt)) for n, pt in CELLS.items()}
+        b8 = _bar8(f['meter'])
+        cells = {n: max(cell_presence(f['grid_bass'], pt, b8), cell_presence(f['grid_rest'], pt, b8)) for n, pt in CELLS.items()}
         top = sorted(cells.items(), key=lambda kv: -kv[1])[:3]
         print("  células: " + ", ".join(f"{n} {s:.0%}" for n, s in top))
         print(f"  entradas de voz en compases: {', '.join(map(str, f['entries'][:10]))}")

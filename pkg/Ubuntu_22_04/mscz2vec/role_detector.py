@@ -62,6 +62,16 @@ from collections import defaultdict
 import mido
 import numpy as np
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    if isinstance(path, (str, bytes, os.PathLike)):
+        d = os.path.dirname(os.path.abspath(os.fsdecode(path)))
+        if d:
+            os.makedirs(d, exist_ok=True)
+    return path
+
+
 VERSION = "1.0"
 ROLES = ("melody", "countermelody", "bass", "harmony", "percussion")
 BASS_PROGRAMS = set(range(32, 40))               # GM bajos
@@ -311,7 +321,7 @@ def cmd_detect(a):
         if a.json == "-":
             print(txt)
             return 0
-        open(a.json, "w", encoding="utf-8").write(txt)
+        open(_ensure_parent(a.json), "w", encoding="utf-8").write(txt)
     B, R, G = _c("B"), _c("R"), _c("G")
     print(f"\n  {B}ROLE DETECTOR v{VERSION} · {rep['file']}{R}   ({rep['bars']} compases)")
     if forced:
@@ -374,7 +384,7 @@ def cmd_override(a):
             print(f"[ERROR] '{kv}': índice entero y rol en {ROLES}", file=sys.stderr)
             return 2
         cur[k] = v
-    json.dump({"roles": cur}, open(p, "w", encoding="utf-8"), indent=1)
+    json.dump({"roles": cur}, open(_ensure_parent(p), "w", encoding="utf-8"), indent=1)
     print(f"  ✓ {p}: {cur}")
     return 0
 
@@ -410,7 +420,7 @@ def _synthetic(path):
     mk("Contrabajo", 43, 1, bas)
     mk("Cuerdas", 48, 2, chords)
     mk("Adorno", 40, 3, deco)
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 def cmd_selftest(a):

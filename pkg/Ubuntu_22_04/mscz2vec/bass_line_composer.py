@@ -73,7 +73,7 @@ Opciones
   --chords-midi FILE    Pista de acordes en MIDI
   --chords-json FILE    Acordes desde .chords.json
   --melody-midi FILE    Melodía para contrapunto
-  --range LOW HIGH      Rango MIDI (default: 28 55 = E1-G3)
+  --range LOW HIGH      Rango: número MIDI o nota (default: 28 55 = E1-G3; ej. E1 D3)
   --swing F             Swing 0-1 (0=straight, 1=full swing, default: auto)
   --approach-prob F     Probabilidad de approach notes 0-1 (default: 0.6)
   --ostinato-pattern S  Patrón para style=ostinato ("D3:2 C3:1 Bb2:1")
@@ -112,7 +112,7 @@ description          str    # Descripción libre en lenguaje natural
 --chords-midi        file  io=in ext=mid  # Pista de acordes en MIDI
 --chords-json        file  io=out ext=json  # Acordes desde .chords.json
 --melody-midi        file  io=in ext=mid  # Melodía MIDI para contrapunto automático
---range              list  of=int
+--range              list  of=str
 --approach-prob      float default=0.6 min=0 max=1 typical=0..1
 --swing              float default=0.0
 --ostinato-pattern   str    # Patrón para ostinato: 'D3:2 C3:1 Bb2:1'

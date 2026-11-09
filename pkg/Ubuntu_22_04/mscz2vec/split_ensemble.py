@@ -59,6 +59,16 @@ from collections import defaultdict
 
 import mido
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    if isinstance(path, (str, bytes, os.PathLike)):
+        d = os.path.dirname(os.path.abspath(os.fsdecode(path)))
+        if d:
+            os.makedirs(d, exist_ok=True)
+    return path
+
+
 VERSION = "1.0"
 
 
@@ -241,7 +251,7 @@ def cmd_split(a):
             prog = a.programs[i] if a.programs and i < len(a.programs) else t["program"]
             out.tracks.append(make_track(f"{t['name']} · V{i + 1}", prog, t["channel"], v))
     path = a.output or os.path.splitext(a.midi)[0] + "_voces.mid"
-    out.save(path)
+    out.save(_ensure_parent(path))
     print(f"  → {path}")
     return 0
 

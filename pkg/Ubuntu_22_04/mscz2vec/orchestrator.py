@@ -26,7 +26,10 @@ PLANTILLA ORQUESTAL GENERADA:
 ────────────────────────────────────────────────────────────────────────────
 Opciones
 ────────────────────────────────────────────────────────────────────────────
-  --template     chamber | full | strings-only   (default: chamber)
+  --template     chamber | full | strings_only | progressive   (default: chamber)
+                 progressive = acumulativa: viola+cello → +violín I/contrabajo/clarinete
+                 → +violín II/oboe/fagot/trompa → +flauta/trompeta/trombón; cada
+                 instrumento entra en su etapa y se queda; entra con velocidad al 70 %
   --library      nucleus | metropolis | generic  (default: nucleus)
   --ks-config    JSON con keyswitches personalizados (ver --dump-ks)
   --dump-ks      Exportar tabla de KS defaults a JSON y salir
@@ -69,7 +72,7 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 [*]
 midi               file  io=in ext=mid required  # MIDI de entrada (obra_final.mid de stitcher.py)
 fingerprints       list  of=file io=in ext=json  # Archivos .fingerprint.json
---template         enum  default=chamber values=chamber|full|strings_only
+--template         enum  default=chamber values=chamber|full|strings_only|progressive
 --library          enum  default=nucleus values=nucleus|metropolis|generic
 --ks-config        file  io=in ext=json  # JSON con tabla de keyswitches personalizada
 --dump-ks          bool  default=false  # Exportar tabla KS defaults a JSON y salir
@@ -258,6 +261,29 @@ TEMPLATES = {
             {'name': 'horn',       'source': 'Accompaniment', 'role': 'pad',           'channel': 10},
             {'name': 'trumpet',    'source': 'Melody',        'role': 'melody_double', 'channel': 11, 'section_filter': ['C']},
             {'name': 'trombone',   'source': 'Accompaniment', 'role': 'pad',           'channel': 12, 'section_filter': ['C', 'D']},
+        ],
+        'perc_channel': 9,
+    },
+    'progressive': {
+        # Acumulativa: cada instrumento ENTRA en una etapa (0-3) y se queda hasta el
+        # final. Las etapas se reparten sobre las secciones de la obra (o sobre su
+        # duración si solo hay una); en su primera sección entra con ganancia
+        # reducida (entry_gain: entrada pp que luego crece con CC1/tensión).
+        #   0: viola (voz) + cello (bajo)      1: violín I, contrabajo, clarinete
+        #   2: violín II, oboe, fagot, trompa   3: flauta, trompeta, trombón (tutti)
+        'instruments': [
+            {'name': 'viola',      'source': 'Melody',        'role': 'melody',        'channel': 0,  'enter': 0},
+            {'name': 'cello',      'source': 'Bass',          'role': 'bass',          'channel': 1,  'enter': 0},
+            {'name': 'violin1',    'source': 'Melody',        'role': 'melody_double', 'channel': 2,  'enter': 1, 'entry_gain': 0.7},
+            {'name': 'contrabass', 'source': 'Bass',          'role': 'bass',          'channel': 3,  'enter': 1, 'entry_gain': 0.7, 'octave_shift': -1},
+            {'name': 'clarinet',   'source': 'Counterpoint',  'role': 'counterpoint',  'channel': 4,  'enter': 1, 'entry_gain': 0.7},
+            {'name': 'violin2',    'source': 'Counterpoint',  'role': 'counterpoint',  'channel': 5,  'enter': 2, 'entry_gain': 0.7},
+            {'name': 'oboe',       'source': 'Melody',        'role': 'melody_double', 'channel': 6,  'enter': 2, 'entry_gain': 0.7},
+            {'name': 'bassoon',    'source': 'Bass',          'role': 'bass_double',   'channel': 7,  'enter': 2, 'entry_gain': 0.7},
+            {'name': 'horn',       'source': 'Accompaniment', 'role': 'pad',           'channel': 8,  'enter': 2, 'entry_gain': 0.7},
+            {'name': 'flute',      'source': 'Melody',        'role': 'melody_double', 'channel': 10, 'enter': 3, 'entry_gain': 0.7},
+            {'name': 'trumpet',    'source': 'Melody',        'role': 'melody_double', 'channel': 11, 'enter': 3, 'entry_gain': 0.7},
+            {'name': 'trombone',   'source': 'Accompaniment', 'role': 'pad',           'channel': 12, 'enter': 3, 'entry_gain': 0.7},
         ],
         'perc_channel': 9,
     },
@@ -740,6 +766,40 @@ def filter_by_section(notes, section, section_filter):
     return [(t, p, d, v) for t, p, d, v in notes if start <= t < end]
 
 
+def resolve_progressive(template, sections, total_end):
+    """Convierte la etapa `enter` (0..N) de cada instrumento en ticks de entrada.
+
+    Con >=2 secciones, la etapa se reparte linealmente sobre ellas (la última etapa
+    cae en la última sección); con una sola, sobre la duración de la obra. Devuelve
+    una COPIA de la plantilla con `enter_tick` y `entry_end_tick` (fin de la sección
+    de entrada, donde acaba la ganancia reducida) y la lista de entradas para el
+    informe. Las plantillas sin `enter` se devuelven tal cual."""
+    import copy
+    stages = [i['enter'] for i in template['instruments'] if 'enter' in i]
+    if not stages:
+        return template, []
+    top = max(max(stages), 1)
+    out = copy.deepcopy(template)
+    n = len(sections)
+    plan = []
+    for cfg in out['instruments']:
+        if 'enter' not in cfg:
+            continue
+        st = cfg['enter']
+        if n >= 2:
+            idx = min(n - 1, int(st * (n - 1) / top + 0.5))
+            et = sections[idx]['start_tick']
+            ee = sections[idx + 1]['start_tick'] if idx + 1 < n else total_end
+            lab = sections[idx]['label']
+        else:
+            et = int(total_end * st / (top + 1))
+            ee = int(total_end * (st + 1) / (top + 1))
+            lab = f"{100 * st // (top + 1)}%"
+        cfg['enter_tick'], cfg['entry_end_tick'] = et, max(ee, et)
+        plan.append((cfg['name'], lab))
+    return out, plan
+
+
 def process_instrument_notes(raw_notes, instr_cfg, sections, ks_table, library,
                               add_ks, add_cc, tempo_humanize, verbose):
     """
@@ -770,6 +830,14 @@ def process_instrument_notes(raw_notes, instr_cfg, sections, ks_table, library,
                 e = section['end_tick'] if section['end_tick'] else float('inf')
                 filtered += [(t, p, d, v) for t, p, d, v in raw_notes if s <= t < e]
         raw_notes = sorted(filtered, key=lambda x: x[0])
+
+    # Plantilla progressive: nada antes de la entrada; entrada pp en su primera sección
+    enter_tick = instr_cfg.get('enter_tick')
+    if enter_tick is not None:
+        gain = instr_cfg.get('entry_gain', 1.0)
+        entry_end = instr_cfg.get('entry_end_tick', enter_tick)
+        raw_notes = [(t, p, d, max(1, int(v * gain)) if t < entry_end and gain != 1.0 else v)
+                     for t, p, d, v in raw_notes if t >= enter_tick]
 
     if not raw_notes:
         return events
@@ -809,7 +877,16 @@ def process_instrument_notes(raw_notes, instr_cfg, sections, ks_table, library,
     # CC1 al inicio de la pista (valor medio para iniciar la dinámica)
     first_section = get_section_for_tick(raw_notes[0][0])
     init_tension  = first_section['tension_curve'].get('entry', 0.4)
-    init_cc1 = int(np.clip(init_tension * 100 + 15, 20, 115))
+    # Ganancia de entrada (plantilla progressive): afecta a CC1 y a la velocidad de
+    # las notas largas (donde la velocity no manda), durante la sección de entrada.
+    _enter = instr_cfg.get('enter_tick')
+    _egain = instr_cfg.get('entry_gain', 1.0)
+    _eend  = instr_cfg.get('entry_end_tick', 0)
+
+    def _g(t):
+        return _egain if (_enter is not None and _enter <= t < _eend) else 1.0
+
+    init_cc1 = int(np.clip((init_tension * 100 + 15) * _g(raw_notes[0][0]), 20, 115))
     if add_cc:
         events.append((raw_notes[0][0], 'cc', 1, init_cc1))
         events.append((raw_notes[0][0], 'cc', 11, 100))
@@ -854,7 +931,7 @@ def process_instrument_notes(raw_notes, instr_cfg, sections, ks_table, library,
 
         # Emitir CC1 si toca
         if add_cc and t_on >= next_cc1_tick:
-            cc1_val = int(np.clip(tension * 100 + 15, 15, 120))
+            cc1_val = int(np.clip((tension * 100 + 15) * _g(t_on), 15, 120))
             # Suavizar: no saltar más de 15 en un step
             if last_cc1 >= 0:
                 cc1_val = int(np.clip(cc1_val, last_cc1 - 15, last_cc1 + 15))
@@ -879,7 +956,7 @@ def process_instrument_notes(raw_notes, instr_cfg, sections, ks_table, library,
         # Velocidad: en articulaciones largas la dinámica viene del CC1
         # → normalizamos la vel a un valor medio para que el CC1 controle
         if family in ('strings', 'brass') and art in ('legato', 'sustain', 'tremolo'):
-            effective_vel = 80  # CC1 es quien manda en longs
+            effective_vel = int(80 * _g(t_on))  # CC1 es quien manda en longs
         else:
             # Shorts: la velocity sí importa; escalar con tensión
             effective_vel = int(np.clip(vel * (0.7 + tension * 0.5), 30, 127))
@@ -2521,7 +2598,7 @@ def main():
     parser.add_argument('midi', help='MIDI de entrada (obra_final.mid de stitcher.py)')
     parser.add_argument('fingerprints', nargs='*', help='Archivos .fingerprint.json')
     parser.add_argument('--template',   default='chamber',
-                        choices=['chamber', 'full', 'strings_only'])
+                        choices=['chamber', 'full', 'strings_only', 'progressive'])
     parser.add_argument('--library',    default='nucleus',
                         choices=['nucleus', 'metropolis', 'generic'])
     parser.add_argument('--ks-config',  default=None,
@@ -2756,6 +2833,12 @@ def main():
                     print(f"    + {_added} instrumento(s) de leitmotif añadidos a la plantilla")
         except Exception as _e:
             print(f"  ⚠ No se pudo cargar --leitmotif-hints: {_e}")
+
+    # ── Plantilla progressive: etapas → ticks de entrada ─────────────────────
+    _total_end = max((t + d for _n in tracks_raw.values() for t, _p, d, _v in _n), default=0)
+    template, _entries = resolve_progressive(template, sections, _total_end)
+    if _entries:
+        print("  Entradas progresivas: " + ", ".join(f"{INSTRUMENT_NAMES.get(n, n)}@{l}" for n, l in _entries))
 
     # ── Solo informe ──────────────────────────────────────────────────────────
     _raw_output = args.output or Path(args.midi).stem + '_orquestado'

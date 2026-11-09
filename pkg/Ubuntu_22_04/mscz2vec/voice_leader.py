@@ -46,6 +46,8 @@ MODOS DE ENTRADA:
     --chords "Cm:2 G7:2 Fm:1 Bb7:1" — duración en beats tras ':'
     --chords-midi acordes.mid        — pista de acordes en MIDI
     --soprano melodia.mid            — fija la voz Soprano y genera S/A/T/B
+    --alto viola.mid                 — fija ADEMÁS la voz Alto (p. ej. violín + viola
+                                       en unísono); T y B se generan alrededor
 
   ESTILOS DE VOICING (--style):
     chorale    — coral clásico (Bach). Movimiento mínimo, voz leading
@@ -72,6 +74,11 @@ Opciones
   --chords S          Progresión de acordes en texto
   --chords-midi FILE  Progresión desde MIDI
   --soprano FILE      MIDI de melodía soprano (fija la voz S)
+  --alto FILE         MIDI de línea contralto (fija la voz A). Con --soprano a la vez,
+                      ambas líneas se respetan tal cual (sin ajustar a rango vocal,
+                      sin penalizar unísonos/paralelas/cruces entre ellas: son
+                      decisiones tuyas) y solo T y B se conducen por reglas.
+                      Se fija una altura por acorde (la más aguda que ataca en él).
   --key KEY           Tonalidad: "C", "Am", "Bb major" (default: auto)
   --style S           chorale|open|close|jazz|keyboard (default: chorale)
   --all-styles        Generar una versión por cada estilo
@@ -101,6 +108,7 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 --chords       str   excludes=--chords-midi  # Progresión: "C Am F G7" o "Cm:2 G7:2 Fm:4"
 --chords-midi  file  io=in ext=mid excludes=--chords  # MIDI de acordes bloque
 --soprano      file  io=in ext=mid  # MIDI de melodía para fijar la voz Soprano
+--alto         file  io=in ext=mid  # MIDI de línea para fijar la voz Alto (con o sin --soprano)
 --key          str   default="C major"  # Tonalidad
 --style        enum  default=chorale values=chorale|open|close|jazz|keyboard|auto|baroque|blues|diatonic|flamenco|folk|impressionist|modal|pop|romantic
 --all-styles   bool  default=false  # Generar una versión por cada estilo
@@ -125,6 +133,7 @@ Ejemplos de uso
   python voice_leader.py --chords "Dm:2 G7:2 CM7:4" --key Dm
   python voice_leader.py --chords "C Am F G" --style jazz --tempo 120
   python voice_leader.py --soprano melodia.mid --chords "C F G C"
+  python voice_leader.py --soprano violin.mid --alto viola.mid --chords "Dm Gm A7 Dm" --key Dm
   python voice_leader.py --chords-midi acordes.mid --style chorale
   python voice_leader.py --chords "C Am F G" --all-styles
   python voice_leader.py --chords "C Am F G" --report --verbose
@@ -137,7 +146,8 @@ Ejemplos de uso
       chords,
       key="C major",
       style="chorale",
-      soprano_hint=None,   # lista de MIDI pitches para fijar soprano
+      soprano_hints=None,  # lista de MIDI pitches para fijar soprano
+      alto_hints=None,     # ídem para fijar el alto (T y B se generan)
       seed=42,
   )
   # result → lista de ChordBlock(soprano, alto, tenor, bass, duration)
@@ -356,7 +366,8 @@ def chord_pcs(root_pc: int, quality: str) -> List[int]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _initial_voicing(root_pc: int, quality: str, style: str,
-                     soprano_hint: Optional[int] = None) -> Tuple[int, int, int, int]:
+                     soprano_hint: Optional[int] = None,
+                     alto_hint: Optional[int] = None) -> Tuple[int, int, int, int]:
     """
     Genera un voicing inicial para el primer acorde de la progresión.
     Devuelve (soprano, alto, tenor, bass).
@@ -405,7 +416,31 @@ def _initial_voicing(root_pc: int, quality: str, style: str,
         tenor  = _closest_pitch_in_range(pcs[2] if len(pcs) > 2 else pcs[0],
                                           t_lo, min(alto - 1, t_hi))
 
+    if alto_hint is not None:
+        # Voz A dada: se respeta tal cual; S (si es dada) también sin ajustar a rango.
+        alto = alto_hint
+        if soprano_hint is not None:
+            soprano = soprano_hint
+        elif soprano < alto:
+            soprano = _closest_pitch_in_range(soprano % 12, alto, alto + 12)
+        tenor = _below(pcs[2] if len(pcs) > 2 else pcs[0], alto - 1, t_lo, t_hi)
+        bass = _below(root_pc, tenor, b_lo, b_hi)
     return soprano, alto, tenor, bass
+
+
+def _below(pc: int, limit: int, lo: int, hi: int) -> int:
+    """Pitch de clase `pc` lo más cerca posible del rango [lo, hi] y ≤ limit.
+    Si `limit` queda por debajo del rango (voz superior fija muy grave), baja
+    octavas hasta cumplirlo: la voz inferior nunca queda por encima de la fija."""
+    top = min(hi, limit)
+    if top >= lo:
+        return _closest_pitch_in_range(pc, lo, top)
+    p = pc
+    while p + 12 <= limit:
+        p += 12
+    while p > limit:
+        p -= 12
+    return max(0, p)
 
 
 def _closest_pitch_in_range(pc: int, lo: int, hi: int) -> int:
@@ -434,11 +469,14 @@ def _closest_pitch_in_range(pc: int, lo: int, hi: int) -> int:
 def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
                        root_pc: int, quality: str,
                        key_pc: int, is_major: bool,
-                       style: str) -> Tuple[float, List[str]]:
+                       style: str,
+                       fixed: frozenset = frozenset()) -> Tuple[float, List[str]]:
     """
     Evalúa un voicing candidato dado el acorde previo.
     Devuelve (score, lista_de_violaciones).
     score = 1.0 es perfecto; cada violación reduce el score.
+    `fixed`: índices de voz (0=S 1=A 2=T 3=B) impuestos por el usuario; no se
+    puntúan sus rangos, saltos ni las relaciones entre dos voces impuestas.
     """
     s, a, t, b = cand
     ps, pa, pt, pb = prev.soprano, prev.alto, prev.tenor, prev.bass
@@ -448,7 +486,7 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
 
     # ── R04: Sin cruzamientos ─────────────────────────────────────────────────
     if not (s >= a >= t >= b):
-        if s < a:
+        if s < a and not {0, 1} <= fixed:
             violations.append("R04:S-A_cruce")
             score -= 0.5
         if a < t:
@@ -462,6 +500,8 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
     for voice, pitch, label in [("S", s, "R06:S"), ("A", a, "R06:A"),
                                   ("T", t, "R06:T"), ("B", b, "R06:B")]:
         lo, hi = VOICE_RANGES[voice]
+        if "SATB".index(voice) in fixed:
+            continue
         if not (lo <= pitch <= hi):
             violations.append(f"{label}_rango")
             score -= 0.3
@@ -481,6 +521,8 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
         return iv
 
     for i, j in itertools.combinations(range(4), 2):
+        if i in fixed and j in fixed:
+            continue                      # relación entre dos líneas dadas: no es del motor
         motion_i = voices_now[i] - voices_prev[i]
         motion_j = voices_now[j] - voices_prev[j]
         same_direction = (motion_i > 0 and motion_j > 0) or (motion_i < 0 and motion_j < 0)
@@ -522,6 +564,8 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
 
     # ── R07: Penalizar saltos grandes ────────────────────────────────────────
     for vi, (now, prev_p) in enumerate(zip(voices_now, voices_prev)):
+        if vi in fixed:
+            continue
         leap = abs(now - prev_p)
         if leap > 9:   # mayor que 6ª
             violations.append(f"R07:salto_grande_{voice_names[vi]}_{leap}st")
@@ -533,6 +577,8 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
     if quality in ("7", "M7", "m7", "dim7", "m7b5"):
         seventh_pc = (root_pc + CHORD_INTERVALS[quality][3]) % 12
         for vi, (now, prev_p) in enumerate(zip(voices_now, voices_prev)):
+            if vi in fixed:
+                continue
             if prev_p % 12 == seventh_pc:
                 if now > prev_p:  # la 7ª debería bajar
                     violations.append(f"R08:7a_no_resuelve_{voice_names[vi]}")
@@ -541,6 +587,8 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
     # ── R09: Sensible resuelve hacia arriba ──────────────────────────────────
     leading_tone = (key_pc + 11) % 12
     for vi, (now, prev_p) in enumerate(zip(voices_now, voices_prev)):
+        if vi in fixed:
+            continue
         if prev_p % 12 == leading_tone:
             tonic = key_pc % 12
             if now % 12 != tonic:
@@ -554,7 +602,10 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
 
     # ── R12: No duplicar sensible ni 7ª ──────────────────────────────────────
     leading_tone_pc = (key_pc + 11) % 12
-    lt_count = sum(1 for p in voices_now if p % 12 == leading_tone_pc)
+    # Las voces impuestas cuentan como una sola (un unísono dado no es duplicación del motor)
+    lt_count = sum(1 for k, p in enumerate(voices_now) if k not in fixed and p % 12 == leading_tone_pc)
+    if any(voices_now[k] % 12 == leading_tone_pc for k in fixed):
+        lt_count += 1
     if lt_count > 1:
         violations.append("R12:sensible_duplicada")
         score -= 0.3
@@ -568,7 +619,8 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
 
 def _generate_candidates(root_pc: int, quality: str, style: str,
                           prev: ChordBlock,
-                          soprano_hint: Optional[int] = None) -> List[Tuple[int, int, int, int]]:
+                          soprano_hint: Optional[int] = None,
+                          alto_hint: Optional[int] = None) -> List[Tuple[int, int, int, int]]:
     """
     Genera candidatos de voicing (S, A, T, B) para el acorde actual.
     """
@@ -580,10 +632,15 @@ def _generate_candidates(root_pc: int, quality: str, style: str,
 
     # Soprano: si hay hint fijo, solo ese; si no, candidatos cerca del previo
     if soprano_hint is not None:
-        s_candidates = [soprano_hint] if s_lo <= soprano_hint <= s_hi else \
-                        [_closest_pitch_in_range(soprano_hint % 12, s_lo, s_hi)]
+        if alto_hint is not None or s_lo <= soprano_hint <= s_hi:
+            s_candidates = [soprano_hint]          # con A dada, S se respeta tal cual
+        else:
+            s_candidates = [_closest_pitch_in_range(soprano_hint % 12, s_lo, s_hi)]
     else:
         s_candidates = _nearby_pitches(prev.soprano, pcs, s_lo, s_hi, n=3)
+        if alto_hint is not None:
+            s_candidates = [x for x in s_candidates if x >= alto_hint] or \
+                           [_closest_pitch_in_range(pcs[0], alto_hint, alto_hint + 12)]
 
     # Bajo: típicamente root (posición fundamental) o quinta para cadencias
     b_root = _closest_pitch_in_range(root_pc, b_lo, b_hi)
@@ -595,19 +652,33 @@ def _generate_candidates(root_pc: int, quality: str, style: str,
     for s in s_candidates:
         for b in b_candidates:
             # Generar A y T con movimiento mínimo
-            a_options = _nearby_pitches(prev.alto, pcs, a_lo, min(s - 1, a_hi), n=3)
+            if alto_hint is not None:
+                a_options = [alto_hint]
+            else:
+                a_options = _nearby_pitches(prev.alto, pcs, a_lo, min(s - 1, a_hi), n=3)
             for a in a_options:
-                t_options = _nearby_pitches(prev.tenor, pcs, t_lo, min(a - 1, t_hi), n=3)
+                if alto_hint is not None and a - 1 < t_lo:
+                    # A dada por debajo del rango de T: T y B se bajan de octava
+                    t_options = [_below(pc_, a - 1, t_lo, t_hi) for pc_ in pcs][:3]
+                else:
+                    t_options = _nearby_pitches(prev.tenor, pcs, t_lo, min(a - 1, t_hi), n=3)
                 for t in t_options:
                     if b < t:  # B debe ser la voz más grave
                         candidates.append((s, a, t, b))
+                    elif alto_hint is not None:
+                        candidates.append((s, a, t, _below(root_pc, t, b_lo, b_hi)))
 
     # Fallback si no hay candidatos válidos
     if not candidates:
         s = soprano_hint or _closest_pitch_in_range(root_pc, s_lo, s_hi)
-        a = _closest_pitch_in_range(pcs[1] if len(pcs) > 1 else pcs[0], a_lo, a_hi)
+        a = alto_hint if alto_hint is not None else \
+            _closest_pitch_in_range(pcs[1] if len(pcs) > 1 else pcs[0], a_lo, a_hi)
         t = _closest_pitch_in_range(pcs[2] if len(pcs) > 2 else pcs[0], t_lo, t_hi)
         b = b_root
+        if alto_hint is not None:
+            s = max(s, a) if soprano_hint is None else s
+            t = _below(pcs[2] if len(pcs) > 2 else pcs[0], a - 1, t_lo, t_hi)
+            b = _below(root_pc, t, b_lo, b_hi)
         candidates = [(s, a, t, b)]
 
     return candidates
@@ -650,6 +721,7 @@ def voice_lead_progression(
     soprano_hints: Optional[List[Optional[int]]] = None,
     seed: int = 42,
     verbose: bool = False,
+    alto_hints: Optional[List[Optional[int]]] = None,
 ) -> Tuple[List[ChordBlock], VLReport]:
     """
     Genera voice leading SATB para una progresión de acordes.
@@ -659,6 +731,7 @@ def voice_lead_progression(
         key:            Tonalidad "C major", "Am", "Bb", etc.
         style:          "chorale" | "open" | "close" | "jazz" | "keyboard"
         soprano_hints:  Lista opcional de MIDI pitches para fijar la voz S
+        alto_hints:     Ídem para la voz A (T y B se generan alrededor de ambas)
         seed:           Semilla aleatoria
         verbose:        Imprimir decisiones
 
@@ -676,6 +749,12 @@ def voice_lead_progression(
         soprano_hints = [None] * len(chords)
     while len(soprano_hints) < len(chords):
         soprano_hints.append(None)
+    alto_hints = list(alto_hints) if alto_hints is not None else []
+    while len(alto_hints) < len(chords):
+        alto_hints.append(None)
+
+    def _fixed(i):
+        return frozenset(v for v, h in ((0, soprano_hints[i]), (1, alto_hints[i])) if h is not None)
 
     result: List[ChordBlock] = []
     report = VLReport()
@@ -683,7 +762,7 @@ def voice_lead_progression(
     # ── Primer acorde: voicing inicial ───────────────────────────────────────
     first_name, first_dur = chords[0]
     root_pc, quality = parse_chord_name(first_name)
-    s0, a0, t0, b0 = _initial_voicing(root_pc, quality, style, soprano_hints[0])
+    s0, a0, t0, b0 = _initial_voicing(root_pc, quality, style, soprano_hints[0], alto_hints[0])
 
     first_block = ChordBlock(
         soprano=s0, alto=a0, tenor=t0, bass=b0,
@@ -702,7 +781,7 @@ def voice_lead_progression(
         prev = result[-1]
 
         candidates = _generate_candidates(
-            root_pc, quality, style, prev, soprano_hints[idx]
+            root_pc, quality, style, prev, soprano_hints[idx], alto_hints[idx]
         )
 
         best_cand = None
@@ -711,7 +790,7 @@ def voice_lead_progression(
 
         for cand in candidates:
             sc, viols = _evaluate_voicing(
-                prev, cand, root_pc, quality, key_pc, is_major, style
+                prev, cand, root_pc, quality, key_pc, is_major, style, _fixed(idx)
             )
             if sc > best_score:
                 best_score = sc
@@ -1092,6 +1171,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--soprano", type=str, metavar="FILE",
                    help="MIDI de melodía para fijar la voz Soprano")
+    p.add_argument("--alto", type=str, metavar="FILE",
+                   help="MIDI de línea para fijar la voz Alto (p. ej. viola en unísono "
+                        "con el violín de --soprano)")
     p.add_argument("--key", type=str, default="C major",
                    help='Tonalidad (default: "C major")')
     p.add_argument("--style", type=str, default="chorale",
@@ -1151,10 +1233,11 @@ def main():
 
     # ── Obtener progresión ────────────────────────────────────────────────────
     soprano_hints = None
+    alto_hints = None
     midi_bpb, midi_bpm = None, None      # compás y tempo declarados en los MIDI de entrada
 
     # Compás/tempo heredados del MIDI de entrada si no se pasan por línea de comandos
-    for _src in (args.chords_midi, args.soprano):
+    for _src in (args.chords_midi, args.soprano, args.alto):
         if _src and (midi_bpb is None or midi_bpm is None):
             try:
                 _n, _b, _t = _midi_notes_beats(mido.MidiFile(_src))
@@ -1174,6 +1257,23 @@ def main():
         if args.soprano:
             print(f"[INFO] Leyendo melodía soprano desde: {args.soprano}")
             soprano_hints = soprano_hints_for_segments(args.soprano, segments)
+        if args.alto:
+            print(f"[INFO] Leyendo línea alto desde: {args.alto}")
+            alto_hints = soprano_hints_for_segments(args.alto, segments)
+    elif args.chords and args.alto:
+        # Con --alto los hints se calculan por SEGMENTO de acorde (no por compás),
+        # para que S y A queden alineadas con la progresión aunque haya acordes de
+        # duración distinta del compás.
+        chords = parse_chord_string(args.chords, args.beats)
+        segments, _t = [], 0.0
+        for _n, _d in chords:
+            segments.append((_t, _t + _d))
+            _t += _d
+        if args.soprano:
+            print(f"[INFO] Leyendo melodía soprano desde: {args.soprano}")
+            soprano_hints = soprano_hints_for_segments(args.soprano, segments)
+        print(f"[INFO] Leyendo línea alto desde: {args.alto}")
+        alto_hints = soprano_hints_for_segments(args.alto, segments)
     elif args.soprano:
         print(f"[INFO] Leyendo melodía soprano desde: {args.soprano}")
         soprano_hints, chords = load_soprano_hints_from_midi(args.soprano, args.beats)
@@ -1189,6 +1289,11 @@ def main():
         chords = parse_chord_string(args.chords, args.beats)
     else:
         parser.error("Especifica --chords, --chords-midi o --soprano")
+    if args.alto and alto_hints is None:
+        # --soprano (+ --alto) sin acordes: hints por compás, como el soprano
+        print(f"[INFO] Leyendo línea alto desde: {args.alto}")
+        alto_hints = load_soprano_hints_from_midi(args.alto, args.beats)[0]
+        alto_hints = alto_hints[:len(chords)]
 
     styles = ["chorale", "open", "close", "jazz", "keyboard"] if args.all_styles \
              else [args.style]
@@ -1206,6 +1311,7 @@ def main():
             key=args.key,
             style=style,
             soprano_hints=soprano_hints,
+            alto_hints=alto_hints,
             seed=args.seed,
             verbose=args.verbose,
         )

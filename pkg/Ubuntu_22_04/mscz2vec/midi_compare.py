@@ -54,6 +54,16 @@ from collections import Counter, defaultdict
 import mido
 import numpy as np
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    if isinstance(path, (str, bytes, os.PathLike)):
+        d = os.path.dirname(os.path.abspath(os.fsdecode(path)))
+        if d:
+            os.makedirs(d, exist_ok=True)
+    return path
+
+
 VERSION = "1.0"
 NOTE_PC = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 PCS = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
@@ -480,7 +490,7 @@ def _dump(a, d):
         if a.json == "-":
             print(txt)
         else:
-            open(a.json, "w", encoding="utf-8").write(txt)
+            open(_ensure_parent(a.json), "w", encoding="utf-8").write(txt)
 
 
 def _write(path, notes_by_track, tempo=500000):
@@ -501,7 +511,7 @@ def _write(path, notes_by_track, tempo=500000):
             t.append(mido.Message("note_on", note=p, velocity=80 if on else 0, time=tt - last))
             last = tt
         mid.tracks.append(t)
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 def cmd_selftest(a):

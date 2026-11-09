@@ -57,6 +57,16 @@ from pathlib import Path
 
 import mido
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    if isinstance(path, (str, bytes, os.PathLike)):
+        d = os.path.dirname(os.path.abspath(os.fsdecode(path)))
+        if d:
+            os.makedirs(d, exist_ok=True)
+    return path
+
+
 VERSION = "1.0"
 HERE = Path(__file__).resolve().parent
 GLYPHS = " ·░▒▓█"
@@ -272,7 +282,7 @@ def cmd_suggest(a):
                     "current": cur, "max_poly": poly,
                     "suggestions": [{"instrument": k, "score": round(s, 3)} for s, k, *_ in best]})
     if a.json:
-        json.dump(out, open(a.json, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        json.dump(out, open(_ensure_parent(a.json), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print()
     return 0
 
@@ -326,7 +336,7 @@ def cmd_stats(a):
     if silent:
         print(f"\n  {G}compases sin ninguna nota: {silent[:20]}{' …' if len(silent) > 20 else ''}{R}")
     if a.json:
-        json.dump(out, open(a.json, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        json.dump(out, open(_ensure_parent(a.json), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print()
     return 0
 
@@ -361,7 +371,7 @@ def _synthetic_midi(path, bad_cello=False):
     mk("Violoncello", 42, 1, [(b * B, B, cello_base + b % 3) for b in range(8)])
     mk("Cuerdas", 48, 2, [(b * B, B, p) for b in range(8) for p in (55, 59, 64)])
     mk("Vacia", 71, 3, [])
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 def cmd_selftest(a):

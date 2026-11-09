@@ -59,6 +59,16 @@ import tempfile
 
 import mido
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    if isinstance(path, (str, bytes, os.PathLike)):
+        d = os.path.dirname(os.path.abspath(os.fsdecode(path)))
+        if d:
+            os.makedirs(d, exist_ok=True)
+    return path
+
+
 VERSION = "1.0"
 SPARK = "▁▂▃▄▅▆▇█"
 
@@ -161,7 +171,7 @@ def write_with_tempos(sc, tempos, path):
             last = tk
         out.append(mido.MetaMessage("end_of_track", time=max(0, end_t - last)))
         mid.tracks.append(out)
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 def _dedupe(tempos):
@@ -373,17 +383,17 @@ def cmd_export(a):
     if a.json:
         json.dump({"file": os.path.basename(a.midi), "tpb": sc.tpb, "bars": rows,
                    "events": [{"tick": t, "bpm": round(60_000_000 / u, 3)} for t, u in sc.tempos]},
-                  open(a.json, "w", encoding="utf-8"), indent=1)
+                  open(_ensure_parent(a.json), "w", encoding="utf-8"), indent=1)
         print(f"  → {a.json}")
     if a.csv:
-        with open(a.csv, "w", newline="", encoding="utf-8") as fh:
+        with open(_ensure_parent(a.csv), "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(["bar", "bpm", "min", "max", "changes"])
             for r in rows:
                 w.writerow([r["bar"], r["bpm"], r["min"], r["max"], r["changes"]])
         print(f"  → {a.csv}")
     if a.yaml:
-        with open(a.yaml, "w", encoding="utf-8") as fh:
+        with open(_ensure_parent(a.yaml), "w", encoding="utf-8") as fh:
             fh.write("# compás: BPM al inicio del compás\ntempo_por_compas:\n")
             for r in rows:
                 fh.write(f"  {r['bar']}: {r['bpm']}\n")
