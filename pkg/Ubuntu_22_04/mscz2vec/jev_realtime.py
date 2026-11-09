@@ -2601,12 +2601,6 @@ class Engine:
                 opts.append(note_option(self.tonic, self.mode, chord, self.mem.last_midi, ref_target))
             q = self.query('nota', self.cur_bar, opts, chord, t - self.bar_start, dur)
             probs = self.jev.ask(q)
-            w = self.drift_weights(opts, self.mem.last_midi if self.mem.last_midi is not None
-                                   else self.eff_center())
-            if w is not None:
-                probs = [p * x for p, x in zip(probs, w)]
-                tot = sum(probs)
-                probs = [p / tot for p in probs] if tot > 1e-30 else [1.0 / len(probs)] * len(probs)
             if self.multi and mtargets:
                 items = [(self.ref_note_dist(opts, bi_, t - self.bar_start, tg_, r_), w_)
                          for r_, bi_, w_, tg_ in mtargets]
@@ -2614,6 +2608,13 @@ class Engine:
             elif s_n > 0:
                 pr = self.ref_note_dist(opts, b, t - self.bar_start, ref_target)
                 probs = combine(probs, pr, s_n)
+            # drift al final: gaussiana de pitch sobre la distribución ya mezclada (Jev + refs)
+            w = self.drift_weights(opts, self.mem.last_midi if self.mem.last_midi is not None
+                                   else self.eff_center())
+            if w is not None:
+                probs = [p * x for p, x in zip(probs, w)]
+                tot = sum(probs)
+                probs = [p / tot for p in probs] if tot > 1e-30 else [1.0 / len(probs)] * len(probs)
             midi = opts[sample(probs, self.sample_T(s_n), self.rng)]['midi']
             if self.drift_name and self.mem.last_midi is not None:
                 self.drift_hist.append(midi - self.mem.last_midi)
