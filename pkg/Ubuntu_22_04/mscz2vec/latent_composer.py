@@ -1859,9 +1859,12 @@ class Trainer:
 
     def save_checkpoint(self, epoch: int, val_loss: float, is_best: bool):
         import torch
+        # Desenvolver DataParallel: guardar claves sin prefijo 'module.' para que
+        # compose/encode (modelo sin envolver) puedan cargar el checkpoint
+        raw_m = self.model.module if hasattr(self.model, 'module') else self.model
         state = {
             'epoch':              epoch,
-            'model_state':        self.model.state_dict(),
+            'model_state':        raw_m.state_dict(),
             'optimizer_state':    self.optimizer.state_dict(),
             'best_val_loss':      self.best_val_loss,
             'best_val_recon':     self.best_val_recon,
@@ -1887,7 +1890,8 @@ class Trainer:
             print("[train] No se encontró checkpoint — entrenando desde cero.")
             return
         state = torch.load(path, map_location='cpu')
-        self.model.load_state_dict(state['model_state'])
+        raw_m = self.model.module if hasattr(self.model, 'module') else self.model
+        raw_m.load_state_dict(state['model_state'])
         self.optimizer.load_state_dict(state['optimizer_state'])
         self.best_val_loss      = state['best_val_loss']
         self.best_val_recon     = state.get('best_val_recon', float('inf'))
@@ -1944,6 +1948,11 @@ class Trainer:
                                              lambda_spatial=self.lambda_spatial,
                                              free_bits=self.free_bits,
                                              z_global_dim=z_global_dim)
+                if not torch.isfinite(loss):
+                    # Loss NaN/Inf: omitir el batch para no corromper los pesos
+                    if training:
+                        self.optimizer.zero_grad()
+                    continue
                 if training:
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -1975,7 +1984,10 @@ class Trainer:
         # Limpiar la línea de progreso al terminar la fase
         print(' ' * 100, end='\r')
 
-        n = max(n_batches, 1)
+        if n_batches == 0:   # ningún batch válido: NaN (nunca cuenta como «mejor»)
+            nan = float('nan')
+            return nan, nan, nan
+        n = n_batches
         return total_loss / n, recon_sum / n, kl_sum / n
 
     def train(self, train_loader, val_loader, epochs: int):

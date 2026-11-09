@@ -474,7 +474,9 @@ def _chord_to_notewise(chords, sample_freq):
 
 def _encoding_dir(base, kind, note_range, sample_freq, chamber, composer):
     ensemble = "chamber" if chamber else "piano_solo"
-    d = (base / kind / ensemble
+    # base ya es data/composers/<kind> (ver _paths): no repetir `kind`, o encode
+    # escribía en notewise/notewise/... y split/train no lo encontraban.
+    d = (base / ensemble
          / f"note_range{note_range}" / f"sample_freq{sample_freq}" / composer)
     d.mkdir(parents=True, exist_ok=True)
     return d
@@ -718,7 +720,7 @@ def _train_and_save(learner, lr, epochs, fpath):
     print(f"\n  Entrenando → {fpath.name}  (lr={lr})")
     learner.fit_one_cycle(epochs, lr, wd=1e-6)
     import torch
-    torch.save(_ensure_parent(learner.model.state_dict()), fpath)
+    torch.save(learner.model.state_dict(), _ensure_parent(fpath))
     print(f"  Guardado → {fpath}")
 
 
@@ -760,16 +762,30 @@ def cmd_train(args):
         print(f"[train] Cargando hiperparámetros de '{args.load}'")
 
     print(f"[train] Construyendo vocabulario desde {P['data']}...")
-    dls = TextDataLoaders.from_folder(
-        P["data"],
-        train=args.train_folder,
-        valid=args.test_folder,
-        tok_func=_music_tokenizer,
-        bs=bs,
-        seq_len=bptt,
-        min_freq=args.min_freq,
-        is_lm=True,
+    # Los .txt están directamente en data/<train|test>/ (sin subcarpeta de clase), así que
+    # el GrandparentSplitter de TextDataLoaders.from_folder dejaba el split de train vacío
+    # (IndexError); además tok_func/min_freq se ignoraban y se tokenizaba con el tokenizador
+    # de lenguaje natural de fastai. Se construye el DataBlock a mano con el tokenizador
+    # musical (el mismo que usa generate: split por espacios) y sin reglas de texto.
+    from fastai.text.all import (DataBlock, TextBlock, get_text_files,
+                                 FuncSplitter)
+
+    class _MusicTok:
+        """Protocolo de tokenizador de fastai: items (textos) -> listas de tokens."""
+        def __init__(self, **kw): pass
+        def __call__(self, items):
+            return (_music_tokenizer(t) for t in items)
+
+    tok = Tokenizer(_MusicTok(), rules=[])
+    data_abs = P["data"].resolve()   # ruta absoluta: fastai relee data_tok/ desde otro cwd/proceso
+    dblock = DataBlock(
+        blocks=TextBlock.from_folder(data_abs, is_lm=True, seq_len=bptt,
+                                     min_freq=args.min_freq, tok=tok),
+        get_items=lambda path: get_text_files(
+            path, folders=[args.train_folder, args.test_folder]),
+        splitter=FuncSplitter(lambda o: Path(o).parent.name == args.test_folder),
     )
+    dls = dblock.dataloaders(data_abs, path=data_abs, bs=bs, seq_len=bptt)
     print(f"[train] Tamaño de vocabulario: {len(dls.vocab)}")
 
     # Guardar params/TEXT para uso posterior en generate / critic / composer
@@ -779,9 +795,12 @@ def cmd_train(args):
         pad_idx = dls.vocab.index("<pad>") if "<pad>" in dls.vocab else 1
     _save_params(P, dls.vocab, _FakeMD(), bs, bptt, em_sz, nh, nl, args.prefix)
 
+    # fastai v2: emb_sz/n_hid/n_layers van en `config`, no como kwargs del learner
+    from fastai.text.all import awd_lstm_lm_config
+    lm_config = dict(awd_lstm_lm_config, emb_sz=em_sz, n_hid=nh, n_layers=nl)
     learn = language_model_learner(
         dls, AWD_LSTM,
-        emb_sz=em_sz, n_hid=nh, n_layers=nl,
+        config=lm_config,
         drop_mult=dm,
         pretrained=False,
     )
@@ -824,7 +843,9 @@ def _load_lm(P, model_name, level, bs):
     from fastai.text.all import AWD_LSTM, get_language_model
     from fastai.text.models.awdlstm import AWD_LSTM as AWDLSTM
     # Reconstruir modelo con parámetros guardados
+    from fastai.text.all import awd_lstm_lm_config
     config = dict(
+        awd_lstm_lm_config,
         emb_sz=params["em_sz"],
         n_hid=params["nh"],
         n_layers=params["nl"],
@@ -891,8 +912,11 @@ def _generate_batch(model, vocab, params, prompts_text, num_words,
     with torch.no_grad():
         model.reset()
         # Feed prompt
-        for step in range(t.shape[1]):
-            res, *_ = model(t[:, step].unsqueeze(0))
+        # fastai v2: el modelo es batch-first (bs, seq) y devuelve logits (bs, seq, n_tok);
+        # el código v1 pasaba (1, bs) y esperaba (bs, n_tok)
+        dev = next(model.parameters()).device
+        t = t.to(dev)
+        res = model(t)[0][:, -1]
 
         # Generar
         print("[generate] Generando...")
@@ -908,7 +932,7 @@ def _generate_batch(model, vocab, params, prompts_text, num_words,
                         w[j] = n[j, idx]
             for j in range(bs):
                 results[j] += idx2tok(w[j].item()) + " "
-            res, *_ = model(w.unsqueeze(0))
+            res = model(w.unsqueeze(1))[0][:, -1]
 
     return prompts_text, results
 

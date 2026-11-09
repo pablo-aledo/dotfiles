@@ -94,6 +94,7 @@ Opciones
     --seed SEED                 (defecto 0)
     --resume RESUME             continuar el entrenamiento de un checkpoint
     --save-every SAVE_EVERY     guardar cada N epocas (ademas del final)
+    --device DEVICE             auto | cpu | cuda | cuda:N (defecto auto)
     --quiet
 
   clone
@@ -162,6 +163,7 @@ dataset      str   required
 --seed       int   default=0
 --resume     str    # continuar el entrenamiento de un checkpoint
 --save-every int    # guardar cada N epocas (ademas del final)
+--device     str   default=auto  # auto | cpu | cuda | cuda:N
 --quiet      bool  default=false
 [clone]
 target_wav   file  io=in required
@@ -173,6 +175,7 @@ target_wav   file  io=in required
 --batch-size int   default=8 min=0
 --hop-s      float default=1.0
 --seed       int   default=0
+--device     str   default=auto  # auto | cpu | cuda | cuda:N
 --quiet      bool  default=false
 [synthesize]
 --checkpoint     file  io=in ext=pt,pth required
@@ -610,7 +613,7 @@ def prepare_dataset(input_dir: str, out_path: str, sample_rate: int = DEFAULTS["
             loudness_db=torch.tensor(np.stack([r["loudness_db"] for r in rows])),
             instrument_idx=torch.tensor(np.array(splits_idx[split], dtype=np.int64)),
         )
-    torch.save(_ensure_parent(out), out_path)
+    torch.save(out, _ensure_parent(out_path))
     n_train = 0 if out["train"] is None else len(out["train"]["instrument_idx"])
     n_val = 0 if out["val"] is None else len(out["val"]["instrument_idx"])
     n_test = 0 if out["test"] is None else len(out["test"]["instrument_idx"])
@@ -928,7 +931,7 @@ def save_checkpoint(path: str, model: "SynthModel", instrument_names: List[str],
         final_train_loss=final_train_loss,
         final_val_loss=final_val_loss,
     )
-    torch.save(_ensure_parent(out), path)
+    torch.save(out, _ensure_parent(path))
 
 
 def _load_raw(path: str) -> Dict[str, Any]:
@@ -963,7 +966,7 @@ def save_voice(path: str, name: str, checkpoint_fingerprint: Dict[str, Any],
         steps_trained=steps_trained, final_loss=final_loss,
         source_wav=source_wav, source_duration_s=source_duration_s,
     )
-    torch.save(_ensure_parent(out), path)
+    torch.save(out, _ensure_parent(path))
 
 
 def load_voice(path: str) -> Dict[str, Any]:
@@ -997,6 +1000,13 @@ def _iterate_batches(split: Dict[str, "torch.Tensor"], batch_size: int, shuffle:
         yield {k: v[idx] for k, v in split.items()}
 
 
+def _resolve_device(torch, device: Optional[str]) -> str:
+    """'auto'/None -> cuda si hay GPU, si no cpu; cualquier otro valor (cpu, cuda, cuda:1...) tal cual."""
+    if device in (None, "auto"):
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    return device
+
+
 def _run_epoch(model: "SynthModel", split, batch_size, device, rng, optimizer=None):
     torch = model.torch
     total_loss, n_batches = 0.0, 0
@@ -1022,11 +1032,14 @@ def _run_epoch(model: "SynthModel", split, batch_size, device, rng, optimizer=No
 
 def train(dataset_path: str, out_path: str, epochs: int = 60, batch_size: int = 16,
           lr: float = 3e-4, seed: int = 0, resume: Optional[str] = None,
-          save_every: Optional[int] = None, verbose: bool = True) -> None:
+          save_every: Optional[int] = None, verbose: bool = True,
+          device: Optional[str] = "auto") -> None:
     torch, nn, F = _import_torch()
     torch.manual_seed(seed)
     rng = np.random.RandomState(seed)
-    device = "cpu"
+    device = _resolve_device(torch, device)  # antes fijo a "cpu": nunca usaba la GPU
+    if verbose:
+        print(f"  dispositivo: {device}")
 
     data = _load_raw(dataset_path)
     if data.get("format") != FORMAT_DATASET:
@@ -1113,10 +1126,11 @@ def _windows_from_wav(path: str, hparams: Dict[str, Any], hop_s: float,
 
 def clone(target_wav: str, checkpoint_path: str, out_path: str, name: Optional[str] = None,
           steps: int = 1500, lr: float = 5e-3, batch_size: int = 8, hop_s: float = 1.0,
-          seed: int = 0, verbose: bool = True) -> None:
+          seed: int = 0, verbose: bool = True, device: Optional[str] = "auto") -> None:
     torch, nn, F = _import_torch()
     torch.manual_seed(seed)
     rng = np.random.RandomState(seed)
+    device = _resolve_device(torch, device)
 
     shared_model, ckpt = load_checkpoint(checkpoint_path)
     hp = shared_model.hparams
@@ -1126,6 +1140,7 @@ def clone(target_wav: str, checkpoint_path: str, out_path: str, name: Optional[s
 
     voice_model = SynthModel(hp, n_instruments=1)
     voice_model.module.decoder.load_state_dict(shared_model.module.decoder.state_dict())
+    voice_model.to(device)
     voice_model.set_shared_trainable(False)
     voice_model.train()
     optimizer = torch.optim.Adam(voice_model.bank_parameters(), lr=lr)
@@ -1137,11 +1152,11 @@ def clone(target_wav: str, checkpoint_path: str, out_path: str, name: Optional[s
     t0 = time.time()
     for step in range(1, steps + 1):
         idx_sel = rng.randint(0, n, size=bs)
-        f0 = batch["f0_hz"][idx_sel]
-        loud = batch["loudness_db"][idx_sel]
-        conf = batch["f0_confidence"][idx_sel]
-        target = batch["audio"][idx_sel]
-        inst_idx = torch.zeros(bs, dtype=torch.long)
+        f0 = batch["f0_hz"][idx_sel].to(device)
+        loud = batch["loudness_db"][idx_sel].to(device)
+        conf = batch["f0_confidence"][idx_sel].to(device)
+        target = batch["audio"][idx_sel].to(device)
+        inst_idx = torch.zeros(bs, dtype=torch.long, device=device)
         pred = voice_model.forward(f0, loud, inst_idx, conf)
         loss = multiscale_spectral_loss(pred, target)
         optimizer.zero_grad()
@@ -1268,13 +1283,13 @@ def cmd_prepare_data(args):
 def cmd_train(args):
     train(args.dataset, args.out, epochs=args.epochs, batch_size=args.batch_size,
           lr=args.lr, seed=args.seed, resume=args.resume, save_every=args.save_every,
-          verbose=not args.quiet)
+          verbose=not args.quiet, device=args.device)
 
 
 def cmd_clone(args):
     clone(args.target_wav, args.checkpoint, args.out, name=args.name, steps=args.steps,
           lr=args.lr, batch_size=args.batch_size, hop_s=args.hop_s, seed=args.seed,
-          verbose=not args.quiet)
+          verbose=not args.quiet, device=args.device)
 
 
 def cmd_synthesize(args):
@@ -1363,6 +1378,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--resume", default=None, help="continuar el entrenamiento de un checkpoint")
     p.add_argument("--save-every", type=int, default=None, help="guardar cada N epocas (ademas del final)")
+    p.add_argument("--device", default="auto", help="auto | cpu | cuda | cuda:N (defecto auto)")
     p.add_argument("--quiet", action="store_true")
     p.set_defaults(func=cmd_train)
 
@@ -1376,6 +1392,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--hop-s", type=float, default=1.0)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--device", default="auto", help="auto | cpu | cuda | cuda:N (defecto auto)")
     p.add_argument("--quiet", action="store_true")
     p.set_defaults(func=cmd_clone)
 

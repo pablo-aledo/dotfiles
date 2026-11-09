@@ -511,7 +511,9 @@ def _build_modules():
                 layers.append(x)
             if not return_all_layers:
                 return x
-            return x, torch.stack(layers[:-1])
+            # depth=1 -> layers[:-1] vacío y torch.stack fallaría
+            return x, (torch.stack(layers[:-1]) if len(layers) > 1
+                       else x.new_zeros((0,) + tuple(x.shape)))
 
     # ── Pérdidas contrastivas ─────────────────────────────────────────────────
 
@@ -1100,7 +1102,7 @@ def _save_checkpoint(path: str, model_state: dict, meta: dict):
     torch = _require("torch")
     pkg = {'state_dict': model_state, 'meta': meta,
            'version': VERSION, 'saved': datetime.now().isoformat()}
-    torch.save(_ensure_parent(pkg), path)
+    torch.save(pkg, _ensure_parent(path))
 
 def _load_checkpoint(path: str, verbose: bool = False):
     torch = _require("torch")
@@ -1262,6 +1264,12 @@ def cmd_train_mulan(args):
             for w in wavs
         ])
         return wavs_padded, list(texts)
+
+    if train_size < args.batch_size:
+        # Con drop_last=True no habría ni un batch y _cycle() giraría en vacío para siempre
+        print(f"  [error] Train ({train_size} muestras) < --batch-size ({args.batch_size}): "
+              "reduce --batch-size o añade datos.")
+        sys.exit(1)
 
     train_dl = DataLoader(train_ds, batch_size=args.batch_size,
                           shuffle=True, drop_last=True, collate_fn=_collate)

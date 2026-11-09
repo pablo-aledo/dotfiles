@@ -645,7 +645,7 @@ class NoamScheduler:
         self.opt.step()
 
     def _rate(self, step=None) -> float:
-        s = step or self._step
+        s = step or self._step or 1   # evita 0 ** -0.5 si aún no hubo pasos
         return self.dim ** (-0.5) * min(s ** (-0.5), s * self.warmup_steps ** (-1.5))
 
     @property
@@ -901,6 +901,11 @@ def cmd_train(args):
                     _save_checkpoint(args.model_dir, model, scheduler,
                                      epoch, best_loss, cfg)
 
+        if global_step == scheduler._step and epoch_loss == 0.0 and epoch_acc == 0.0 \
+                and scheduler._step == 0:
+            print("ERROR: ningún batch utilizable (¿secuencias más cortas que "
+                  "--max-seq+1 o split train vacío?). Reduce --max-seq o añade datos.")
+            sys.exit(1)
         elapsed   = time.time() - t0
         avg_loss  = epoch_loss / max(n_batches, 1)
         avg_acc   = epoch_acc  / max(n_batches, 1)

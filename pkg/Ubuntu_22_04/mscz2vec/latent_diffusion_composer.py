@@ -1410,7 +1410,7 @@ class Trainer:
                 # Saltar batch si el loss es NaN (puede ocurrir con dropout alto
                 # y BatchNorm en las primeras iteraciones)
                 import math
-                if math.isnan(loss.item()):
+                if not math.isfinite(loss.item()):
                     if training:
                         self.optimizer.zero_grad()
                     batch_times.append(time.time() - t0)
@@ -1462,7 +1462,10 @@ class Trainer:
         # Limpiar la línea de progreso al terminar la fase
         print(' ' * 120, end='\r')
 
-        n = max(n_batches, 1)
+        if n_batches == 0:   # ningún batch válido: NaN (nunca cuenta como «mejor»)
+            nan = float('nan')
+            return nan, nan, nan
+        n = n_batches
         return total_loss / n, diff_sum / n, recon_sum / n
 
     def train(self, train_loader, val_loader, n_epochs: int):
@@ -1484,6 +1487,9 @@ class Trainer:
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer, T_max=n_epochs, eta_min=1e-6)
+        # Al reanudar, avanzar el scheduler hasta la época de reinicio (si no, el lr vuelve al inicial)
+        for _ in range(self.start_epoch):
+            scheduler.step()
 
         epoch_times = []
         train_start = time.time()

@@ -937,7 +937,10 @@ def _load_corpus_pairs(corpus_dir: Path,
             pairs.append((s, r))
 
         # Augmentación: transponer ±2 semitonos en el piano roll
-        if augment:
+        # DESACTIVADA: solo se desplazaba el roll y no el espectrograma (bins STFT
+        # lineales, no se pueden transponer por semitonos), así que producía etiquetas
+        # incorrectas en 4 de cada 5 segmentos.
+        if False and augment:
             for shift in [-2, -1, 1, 2]:
                 r_shift = np.zeros_like(roll[:n, MIDI_MIN:MIDI_MAX + 1])
                 src_lo = max(0, -shift)
@@ -1485,6 +1488,8 @@ def cmd_train(args):
     n_val   = max(1, len(pairs) // 10)
     val_p   = pairs[:n_val]
     train_p = pairs[n_val:]
+    if not train_p:      # corpus de 1 segmento: sin esto train_loss = mean([]) = NaN
+        train_p = list(pairs)
 
     def make_batch(subset, batch_size):
         random.shuffle(subset)

@@ -1937,7 +1937,7 @@ def cmd_train_coder(args):
           f"lat_max∈[{lat_max.min():.3f},{lat_max.max():.3f}]")
 
     out_path = args.output or "coder.pt"
-    torch.save(_ensure_parent({
+    torch.save({
         "kind":          "latent_lab_coder",
         "sr":            sr,
         "latent_dim":    args.latent_dim,
@@ -1948,7 +1948,7 @@ def cmd_train_coder(args):
         "lat_max":       [float(v) for v in lat_max],
         "encoder":       enc.state_dict(),
         "decoder":       dec.state_dict(),
-    }), out_path)
+    }, _ensure_parent(out_path))
     print(f"  ✓  Coder → {out_path}")
 
 
@@ -2014,7 +2014,7 @@ def cmd_train_vocoder(args):
 
     voc.eval()
     out_path = args.output or "vocoder.pt"
-    torch.save(_ensure_parent({
+    torch.save({
         "kind":            "latent_lab_vocoder",
         "sr":              sr,
         "window":          window,
@@ -2025,7 +2025,7 @@ def cmd_train_vocoder(args):
         "upsample_rates":  rates,
         "db_floor":        args.db_floor,
         "state_dict":      voc.state_dict(),
-    }), out_path)
+    }, _ensure_parent(out_path))
     print(f"  ✓  Vocoder → {out_path}")
     print(f"     Úsalo con: --vocoder {out_path} en latent-to-spectrogram --wav")
 
@@ -2429,7 +2429,7 @@ def _train_step2_retrieval(args, manifest, pairs, n_bins, D):
     zoo   = _torch_zoo()
     torch = zoo["torch"]
     out_path = args.output or "mapper.pt"
-    torch.save(_ensure_parent({
+    torch.save({
         "kind":       "latent_lab_mapper_retrieval",
         "sr":         manifest["sr"],
         "window":     manifest["window"],
@@ -2444,7 +2444,7 @@ def _train_step2_retrieval(args, manifest, pairs, n_bins, D):
         "Z_bank":     Z_bank,
         "track_id":   track_id,
         "frame_idx":  frame_idx,
-    }), out_path)
+    }, _ensure_parent(out_path))
     print(f"  [step2] retrieval: banco de {S_bank.shape[0]} frames  "
           f"({len(pairs)} pistas)  bins={n_bins}  D={D}")
     print(f"  ✓  Mapper (retrieval, greedy+viterbi comparten este banco) → {out_path}")
@@ -2552,7 +2552,7 @@ def _train_step2_causal(args, manifest, pairs, n_bins: int, D: int):
             print(f"  [step2] step {step:>6}/{total_steps}  L1={loss.item():.4f}")
 
     out_path = args.output or "mapper.pt"
-    torch.save(_ensure_parent({
+    torch.save({
         "kind":        "latent_lab_mapper_causal",
         "sr":          manifest["sr"],
         "window":      manifest["window"],
@@ -2567,7 +2567,7 @@ def _train_step2_causal(args, manifest, pairs, n_bins: int, D: int):
         "context":     args.context,
         "adversarial": False,
         "gen":         gen.state_dict(),
-    }), out_path)
+    }, _ensure_parent(out_path))
     print(f"  ✓  Mapper (causal, L1 + teacher forcing fijo) → {out_path}")
 
 def _train_step2_causal_adv(args, manifest, pairs, n_bins: int, D: int):
@@ -2665,7 +2665,7 @@ def _train_step2_causal_adv(args, manifest, pairs, n_bins: int, D: int):
                   f"L1={loss_l1.item():.4f}")
 
     out_path = args.output or "mapper.pt"
-    torch.save(_ensure_parent({
+    torch.save({
         "kind":        "latent_lab_mapper_causal",
         "sr":          manifest["sr"],
         "window":      manifest["window"],
@@ -2682,7 +2682,7 @@ def _train_step2_causal_adv(args, manifest, pairs, n_bins: int, D: int):
         "adversarial": True,
         "gen":         gen.state_dict(),
         "disc":        disc.state_dict(),
-    }), out_path)
+    }, _ensure_parent(out_path))
     print(f"  ✓  Mapper (causal-adv: scheduled sampling + adversarial) → {out_path}")
 
 def _sample_canvas_tiles(pairs_canvas, n: int, tile: int, canvas_h: int, rng):
@@ -2777,7 +2777,7 @@ def _train_step2_flow(args, manifest, pairs, n_bins: int, D: int):
                   f"L1_s2l={loss_s2l.item():.4f}  L1_l2s={loss_l2s.item():.4f}")
 
     out_path = args.output or "mapper.pt"
-    torch.save(_ensure_parent({
+    torch.save({
         "kind":           "latent_lab_mapper_flow",
         "sr":             manifest["sr"],
         "window":         manifest["window"],
@@ -2795,7 +2795,7 @@ def _train_step2_flow(args, manifest, pairs, n_bins: int, D: int):
         "tile":           args.tile,
         "flow_direction": args.flow_direction,
         "flow":           flow.state_dict(),
-    }), out_path)
+    }, _ensure_parent(out_path))
     print(f"  ✓  Mapper (flow, biyección invertible espec↔latente) → {out_path}")
 
 
@@ -2920,7 +2920,7 @@ def cmd_spec_latent_train_step2(args):
                   f"lat→spec[D={d2:.3f} G={g2:.3f} L1={l1_2:.4f}]")
 
     out_path = args.output or "mapper.pt"
-    torch.save(_ensure_parent({
+    torch.save({
         "kind":        "latent_lab_mapper_pix2pix",
         "sr":          manifest["sr"],
         "window":      manifest["window"],
@@ -2939,7 +2939,7 @@ def cmd_spec_latent_train_step2(args):
         "gen_l2s":     gen_l2s.state_dict(),
         "disc_s2l":    disc_s2l.state_dict(),
         "disc_l2s":    disc_l2s.state_dict(),
-    }), out_path)
+    }, _ensure_parent(out_path))
     print(f"  ✓  Mapper (pix2pix) → {out_path}")
 
 

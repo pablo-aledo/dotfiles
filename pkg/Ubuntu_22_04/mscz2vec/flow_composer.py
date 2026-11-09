@@ -1252,6 +1252,7 @@ class Trainer:
                    if hasattr(loader, 'dataset') and hasattr(loader, 'batch_size') else None)
 
         batch_times = []
+        n_skipped = 0
         ctx = torch.enable_grad() if training else torch.no_grad()
         with ctx:
             for batch in loader:
@@ -1263,7 +1264,8 @@ class Trainer:
 
                 loss, metrics = self.model(x, context, tension)
 
-                if math.isnan(loss.item()):
+                if not math.isfinite(loss.item()):
+                    n_skipped += 1
                     if training:
                         self.optimizer.zero_grad()
                     batch_times.append(time.time() - t0)
@@ -1304,8 +1306,13 @@ class Trainer:
                       end='', flush=True)
 
         print(' ' * 120, end='\r')
-        n = max(n_batches, 1)
-        return total_loss / n, bpd_sum / n
+        if n_batches == 0:
+            raise RuntimeError(
+                f"[{phase.strip()}] Ningún batch válido en esta época "
+                f"({n_skipped} con loss no finita; split de "
+                f"{len(loader.dataset) if hasattr(loader, 'dataset') else '?'} muestras). "
+                f"Baja --batch-size / --lr o añade más datos a 'prepare'.")
+        return total_loss / n_batches, bpd_sum / n_batches
 
     def train(self, train_loader, val_loader, n_epochs: int):
         import torch, time
@@ -1326,6 +1333,9 @@ class Trainer:
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer, T_max=n_epochs, eta_min=1e-6)
+        # Al reanudar, avanzar el scheduler hasta la época de reinicio (si no, el lr vuelve al inicial)
+        for _ in range(self.start_epoch):
+            scheduler.step()
 
         epoch_times = []
         train_start = time.time()
@@ -1406,6 +1416,11 @@ def cmd_train(args):
 
     n_val   = max(1, int(len(dataset) * 0.1))
     n_train = len(dataset) - n_val
+    if n_train < args.batch_size:
+        print(f"[train] --batch-size ({args.batch_size}) es mayor que las muestras de "
+              f"entrenamiento tras el split 90/10 ({n_train} de {len(dataset)}) — no "
+              f"quedaría ningún batch (drop_last). Baja --batch-size a ≤ {n_train}.")
+        sys.exit(1)
     train_set, val_set = torch.utils.data.random_split(dataset, [n_train, n_val])
 
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,

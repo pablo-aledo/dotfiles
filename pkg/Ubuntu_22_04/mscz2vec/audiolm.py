@@ -496,18 +496,11 @@ def cmd_train_codec(args):
 
     trainer.train()
 
-    # Exportar checkpoint final con nombre indicado por el usuario
-    # El trainer guarda como soundstream.{paso}.pt — buscar el más reciente
-    import shutil
-    results = Path(args.results_dir)
-    candidates = sorted(results.glob("soundstream.*.pt"),
-                        key=lambda p: int(p.stem.split(".")[-1]))
-    if candidates:
-        ckpt_src = candidates[-1]
-        shutil.copy(ckpt_src, _ensure_parent(args.checkpoint))
-        print(f"\n[train-codec] Checkpoint guardado en: {args.checkpoint}  (desde {ckpt_src.name})")
-    else:
-        print(f"\n[train-codec] Entrenamiento completado. Checkpoints en: {args.results_dir}/")
+    # Exportar checkpoint final con el nombre indicado por el usuario.
+    # El trainer solo guarda cuando paso % save_every == 0, así que el último
+    # paso casi nunca queda guardado: guardamos el estado final explícitamente.
+    trainer.save(_ensure_parent(args.checkpoint))
+    print(f"\n[train-codec] Checkpoint final guardado en: {args.checkpoint}")
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  SUBCOMANDO: train-semantic
@@ -579,7 +572,8 @@ def cmd_train_semantic(args):
         batch_size           = args.batch_size,
         grad_accum_every     = args.grad_accum,
         lr                   = args.lr,
-        data_max_length_seconds = args.seconds,
+        # int(): audiolm-pytorch 2.4 pasa seconds*hz (float) a SoundDataset, que exige int
+        data_max_length    = int(args.seconds * wav2vec.target_sample_hz),
         results_folder       = args.results_dir,
         save_results_every   = args.sample_every,
         save_model_every     = args.save_every,
@@ -589,8 +583,11 @@ def cmd_train_semantic(args):
     )
 
     trainer.train()
-    print(f"\n[train-semantic] Entrenamiento completado. "
-          f"Checkpoints en: {args.results_dir}/")
+    # El trainer solo guarda cada save_every pasos: guardar el estado final
+    # en --checkpoint (antes este argumento se ignoraba).
+    trainer.save(_ensure_parent(args.checkpoint))
+    print(f"\n[train-semantic] Entrenamiento completado. Checkpoint final: "
+          f"{args.checkpoint}  (periódicos en: {args.results_dir}/)")
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  SUBCOMANDO: train-coarse
@@ -672,7 +669,8 @@ def cmd_train_coarse(args):
         batch_size           = args.batch_size,
         grad_accum_every     = args.grad_accum,
         lr                   = args.lr,
-        data_max_length_seconds = args.seconds,
+        # int(): audiolm-pytorch 2.4 pasa seconds*hz (float) a SoundDataset, que exige int
+        data_max_length    = int(args.seconds * max(wav2vec.target_sample_hz, soundstream.target_sample_hz)),
         results_folder       = args.results_dir,
         save_results_every   = args.sample_every,
         save_model_every     = args.save_every,
@@ -682,8 +680,11 @@ def cmd_train_coarse(args):
     )
 
     trainer.train()
-    print(f"\n[train-coarse] Entrenamiento completado. "
-          f"Checkpoints en: {args.results_dir}/")
+    # El trainer solo guarda cada save_every pasos: guardar el estado final
+    # en --checkpoint (antes este argumento se ignoraba).
+    trainer.save(_ensure_parent(args.checkpoint))
+    print(f"\n[train-coarse] Entrenamiento completado. Checkpoint final: "
+          f"{args.checkpoint}  (periódicos en: {args.results_dir}/)")
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  SUBCOMANDO: train-fine
@@ -761,7 +762,8 @@ def cmd_train_fine(args):
         batch_size           = args.batch_size,
         grad_accum_every     = args.grad_accum,
         lr                   = args.lr,
-        data_max_length_seconds = args.seconds,
+        # int(): audiolm-pytorch 2.4 pasa seconds*hz (float) a SoundDataset, que exige int
+        data_max_length    = int(args.seconds * soundstream.target_sample_hz),
         results_folder       = args.results_dir,
         save_results_every   = args.sample_every,
         save_model_every     = args.save_every,
@@ -771,8 +773,11 @@ def cmd_train_fine(args):
     )
 
     trainer.train()
-    print(f"\n[train-fine] Entrenamiento completado. "
-          f"Checkpoints en: {args.results_dir}/")
+    # El trainer solo guarda cada save_every pasos: guardar el estado final
+    # en --checkpoint (antes este argumento se ignoraba).
+    trainer.save(_ensure_parent(args.checkpoint))
+    print(f"\n[train-fine] Entrenamiento completado. Checkpoint final: "
+          f"{args.checkpoint}  (periódicos en: {args.results_dir}/)")
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  SUBCOMANDO: generate
@@ -989,9 +994,8 @@ def cmd_info(args):
                 print(f"    ... y {len(state) - 30} más")
 
     # Config serializada (SoundStream la guarda en _configs)
-    if "config" in pkg or "_configs" in pkg:
-        config_key = "config" if "config" in pkg else "_configs"
-    if config_key in pkg:
+    config_key = "config" if "config" in pkg else ("_configs" if "_configs" in pkg else None)
+    if config_key is not None:
         import pickle
         try:
             config = pickle.loads(pkg[config_key])

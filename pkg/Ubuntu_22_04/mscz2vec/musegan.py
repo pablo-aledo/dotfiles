@@ -700,11 +700,11 @@ def gan_losses(dis_real, dis_fake, kind="wasserstein"):
             F.binary_cross_entropy_with_logits(dis_fake, torch.zeros_like(dis_fake))
         )
     elif kind == "classic":
-        gen_loss = -dis_loss
         dis_loss = (
             F.binary_cross_entropy_with_logits(dis_real, torch.ones_like(dis_real)) +
             F.binary_cross_entropy_with_logits(dis_fake, torch.zeros_like(dis_fake))
         )
+        gen_loss = -dis_loss
     else:
         raise ValueError(f"GAN loss desconocida: {kind!r}")
     return gen_loss, dis_loss
@@ -725,7 +725,7 @@ def gradient_penalty(dis, real, fake, device):
         create_graph=True,
         retain_graph=True,
     )[0]
-    grads = grads.view(N, -1)
+    grads = grads.reshape(N, -1)
     gp = ((grads.norm(2, dim=1) - 1) ** 2).mean()
     return gp
 
@@ -935,7 +935,10 @@ def load_checkpoint(model_dir, gen, dis, g_opt=None, d_opt=None, device="cpu"):
 
 def load_npz(path):
     """Carga el formato sparse de MuseGAN (nonzero + shape)."""
-    with np.load(path) as f:
+    f = np.load(path)
+    if isinstance(f, np.ndarray):        # .npy (prepare sin extensión .npz)
+        return f.astype(np.bool_)
+    with f:
         if "nonzero" in f and "shape" in f:
             data = np.zeros(f["shape"], dtype=np.bool_)
             data[tuple(f["nonzero"])] = True
@@ -965,7 +968,7 @@ def save_pianoroll_image(path, pianoroll, colormap=None):
 
     if colormap is not None:
         cm = np.array(colormap, dtype=np.float32)    # (n_tracks, 3)
-        rgb = np.einsum("ntpc,tc->nthc", flat, cm)   # heurística: max por canal
+        rgb = np.einsum("ntpc,ck->ntpck", flat, cm[:n_tracks])   # color por pista
         img_data = rgb.max(axis=3)                    # (N, bars*ts, pitches, 3)
     else:
         img_data = flat.mean(axis=3, keepdims=True)   # (N, bars*ts, pitches, 1)
@@ -979,7 +982,7 @@ def save_pianoroll_image(path, pianoroll, colormap=None):
     for idx in range(N):
         row, col = divmod(idx, side)
         r0, c0 = row * (H + 1), col * (W + 1)
-        canvas[r0:r0 + H, c0:c0 + W] = img_data[idx]
+        canvas[r0:r0 + H, c0:c0 + W] = img_data[idx].transpose(1, 0, 2)   # (pitch, tiempo, c)
 
     canvas = (canvas * 255).clip(0, 255).astype(np.uint8)
     if canvas.shape[-1] == 1:
@@ -1095,9 +1098,11 @@ def cmd_prepare(args):
                     break
 
         ticks_per_step = tpb / resolution
-        step_total = int(sum(
-            msg.time for track in mid.tracks for msg in track
-            if not msg.is_meta
+        # Duración = pista más larga (sumar todas las pistas inflaba el rollo
+        # con compases vacíos y producía segmentos en silencio).
+        step_total = int(max(
+            (sum(msg.time for msg in track) for track in mid.tracks),
+            default=0
         ) / tpb * resolution) + 1
 
         # Inicializar rolls por familia
@@ -1191,8 +1196,12 @@ def cmd_train(args):
         print(f"  ⚠  Shape inesperado: esperado (*,{N_BARS},{N_TIMESTEPS},"
               f"{N_PITCHES},*), recibido {raw.shape}")
 
-    # Convertir bool → float32 en [-1, 1]
-    data_f = raw.astype(np.float32) * 2. - 1.
+    # Se mantiene bool (1 byte/celda); la conversión a float32 en [-1, 1]
+    # se hace por batch para no multiplicar ×4 la RAM en corpus grandes.
+    data_f = raw
+    if len(data_f) == 0:
+        print("  ERROR: el fichero de datos no contiene muestras.")
+        sys.exit(1)
 
     # ── Modelo ─────────────────────────────────────────────────────────────────
     gen = Generator(n_tracks=n_tracks, latent_dim=args.latent_dim)
@@ -1255,8 +1264,9 @@ def cmd_train(args):
         gen.eval()
         dis.train()
         for _ in range(args.n_dis):
-            idx  = np.random.choice(N, args.batch_size, replace=False)
-            real = torch.tensor(data_f[idx], dtype=torch.float32, device=device)
+            idx  = np.random.choice(N, args.batch_size, replace=(N < args.batch_size))
+            real = torch.tensor(data_f[idx].astype(np.float32) * 2. - 1.,
+                                dtype=torch.float32, device=device)
             z    = torch.randn(args.batch_size, args.latent_dim, device=device)
 
             with torch.no_grad():

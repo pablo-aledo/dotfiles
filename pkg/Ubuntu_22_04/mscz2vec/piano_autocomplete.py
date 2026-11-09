@@ -1444,7 +1444,15 @@ def cmd_make_pairs(args):
 #  COMANDO: dpo
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _sequence_batch_for_dpo(prompt_notes_fields, cont_notes_fields, device):
+def _sequence_batch_for_dpo(prompt_notes_fields, cont_notes_fields, device, max_len=None):
+    keys = ('pitch', 'delta', 'duration', 'velocity')
+    if max_len is not None:
+        # El embedding posicional tiene max_len posiciones (BOS/EOS incluidos): recortar
+        # la continuación al final y el prompt por el principio para no desbordarlo.
+        limit = max(max_len - 2, 2)
+        cont_notes_fields = {k: cont_notes_fields[k][:limit - 1] for k in keys}
+        keep = max(limit - len(cont_notes_fields['pitch']), 1)
+        prompt_notes_fields = {k: prompt_notes_fields[k][-keep:] for k in keys}
     full = {k: np.concatenate([prompt_notes_fields[k], cont_notes_fields[k]])
             for k in ('pitch', 'delta', 'duration', 'velocity')}
     item = {k: full[k] for k in full}
@@ -1481,8 +1489,8 @@ def cmd_dpo(args):
             chosen_fields, _, _ = _load_fields_from_midi(pair['chosen'])
             rejected_fields, _, _ = _load_fields_from_midi(pair['rejected'])
 
-            batch_c, start_c = _sequence_batch_for_dpo(prompt_fields, chosen_fields, device)
-            batch_r, start_r = _sequence_batch_for_dpo(prompt_fields, rejected_fields, device)
+            batch_c, start_c = _sequence_batch_for_dpo(prompt_fields, chosen_fields, device, policy.pe.shape[0])
+            batch_r, start_r = _sequence_batch_for_dpo(prompt_fields, rejected_fields, device, policy.pe.shape[0])
 
             policy.train()
             logp_c_pol = policy.sequence_logprob(batch_c, start_c)

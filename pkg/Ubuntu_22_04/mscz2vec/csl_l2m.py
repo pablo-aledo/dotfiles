@@ -1791,9 +1791,11 @@ def cmd_train_vqvae(args):
 
     dset     = DSClass(args.events_dir, args.vocab, args.vocab,
                        attr_dir=None, pieces=tr_pieces,
+                       dec_seqlen=args.dec_seqlen, max_seqs=args.max_seqs,
                        pad_to_same=True, use_controls=False)
     dset_val = DSClass(args.events_dir, args.vocab, args.vocab,
                        attr_dir=None, pieces=val_pieces,
+                       dec_seqlen=args.dec_seqlen, max_seqs=args.max_seqs,
                        pad_to_same=True, use_controls=False)
 
     print(f'[train-vqvae] Train={len(dset)}  Val={len(dset_val)}')
@@ -2056,7 +2058,14 @@ def cmd_train(args):
                 print(f'[train] VQ-VAE d_latent={d_learned}  ({candidate})')
                 break
         else:
-            print(f'[train] ⚠  No se encontró vqvae_config.json — asumiendo d_learned={d_learned}')
+            # Sin vqvae_config.json: inferir d_learned de las features reales
+            # (la dimensión de las features es la verdad; un default erróneo rompe seg_proj)
+            _fp = sorted(Path(args.feats_dir).glob('*.pkl'))
+            if _fp:
+                d_learned = int(_pkl_load(_fp[0]).shape[-1])
+                print(f'[train] d_learned={d_learned} inferido de {_fp[0].name}')
+            else:
+                print(f'[train] ⚠  No se encontró vqvae_config.json ni features — asumiendo d_learned={d_learned}')
 
     model = CSLL2M(
         args.enc_layers, args.enc_heads, args.enc_dim, args.enc_dim * 4,
@@ -2874,6 +2883,10 @@ def main():
     p.add_argument('--d-embed',     type=int,   default=128)
     p.add_argument('--n-codes',     type=int,   default=512)
     p.add_argument('--n-groups',    type=int,   default=16)
+    p.add_argument('--dec-seqlen',  type=int,   default=2048,
+                   help='Longitud máx. de la secuencia del decoder (default: 2048)')
+    p.add_argument('--max-seqs',    type=int,   default=64,
+                   help='Máx. frases por canción (default: 64)')
     p.add_argument('--device',      default='cpu')
     p.set_defaults(func=cmd_train_vqvae)
 

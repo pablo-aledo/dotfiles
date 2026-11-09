@@ -960,7 +960,7 @@ def cmd_train(args):
                     n_noise_bands=args.n_noise_bands, z_dim=args.z_dim,
                     hidden=args.hidden, n_mels=40, segment_samples=segment_samples,
                     frame_size=DEFAULT_FRAME_SIZE, hop=DEFAULT_FRAME_HOP)
-    torch.save(_ensure_parent({"state_dict": model.state_dict(), "hparams": hparams}), args.out)
+    torch.save({"state_dict": model.state_dict(), "hparams": hparams}, _ensure_parent(args.out))
     with open(_ensure_parent(str(args.out) + ".json"), "w") as f:
         json.dump({"hparams": hparams, "loss_curve": losses}, f, indent=2)
     print(f"train: wrote checkpoint {args.out} (final loss={losses[-1]:.4f})")

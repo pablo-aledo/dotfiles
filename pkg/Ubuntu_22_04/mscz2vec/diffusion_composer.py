@@ -1870,6 +1870,9 @@ class Trainer:
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer, T_max=n_epochs, eta_min=1e-6)
+        # Al reanudar, avanzar el scheduler hasta la época de reinicio (si no, el lr vuelve al inicial)
+        for _ in range(self.start_epoch):
+            scheduler.step()
 
         epoch_times = []
         train_start = time.time()

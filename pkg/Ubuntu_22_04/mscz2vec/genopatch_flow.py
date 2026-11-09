@@ -487,7 +487,7 @@ def train_from_dataset(gp, torch, nn, engine_name: str, thetas: np.ndarray, feat
         "final_val_nll": best_val_nll,
         "model_state": model.state_dict(),
     }
-    torch.save(_ensure_parent(checkpoint), out_path)
+    torch.save(checkpoint, _ensure_parent(out_path))
     if verbose:
         print(f"  OK checkpoint -> {out_path}")
     return {"history": history, "checkpoint_path": out_path}

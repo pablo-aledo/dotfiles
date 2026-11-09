@@ -695,6 +695,9 @@ class _MidiNetDataset:
 
     def get_loader(self, batch_size, shuffle=True):
         from torch.utils.data import DataLoader
+        # Con menos muestras que batch_size, drop_last=True dejaba 0 batches
+        # (entrenamiento vacío en silencio): se reduce el batch al tamaño del corpus.
+        batch_size = max(1, min(batch_size, len(self.dataset)))
         return DataLoader(self.dataset, batch_size=batch_size,
                           shuffle=shuffle, num_workers=2, pin_memory=True,
                           drop_last=True)
