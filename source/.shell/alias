@@ -312,3 +312,4 @@ cargo_build_meld () {
     fi
 }
 
+alias Read='read -k1 "Enter to continue" </dev/tty'
