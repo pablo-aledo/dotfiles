@@ -104,7 +104,13 @@ consola siguen funcionando en vivo; los movimientos en el último compás de una
 tienen «compás siguiente» dentro del fichero y se descartan.
 
   --curve-bars N            activa el modo; compases por vuelta (≥ 2)
-  --curve-in FILE           curva inicial (sin ella: todos los sliders en su valor por defecto)
+  --curve-in FILE [FILE…]   curva inicial (sin ella: todos los sliders en su valor por defecto).
+                            Con VARIOS ficheros se reproduce la sesión: cada uno suena en su vuelta, en
+                            el orden dado (inicial, curva_0001, curva_0002…; recuerda que _0001 suena en la
+                            vuelta 2), la última curva se repite y NO se graba ni guarda nada. Lo mismo con
+                            --chord-curve-in. Con --curve-lap-reset, cada vuelta suena exactamente igual que
+                            en la sesión original.
+  --curve-no-rec            no grabar ni guardar (reproducción incluso con un solo fichero)
   --curve-out NOMBRE        base de los ficheros de salida (default: curva → curva_0001.txt);
                             si contiene '%' se usa como plantilla (p. ej. «tmp/take_%04d.txt»)
   --curve-interp MODO       lineal (default) | escalonada | suave
@@ -2031,19 +2037,29 @@ class LapStore:
     """Curvas por vuelta de una pista. `curves[lap]` es la que SUENA en la vuelta `lap`;
     `rec` es la que se GRABA durante la vuelta `rec_lap` (reloj) y sonará en la siguiente."""
 
-    def __init__(self, nbars, base, out, saver, label):
+    def __init__(self, nbars, base, out, saver, label, replay=None):
         self.n, self.saver, self.label = nbars, saver, label
+        self.replay = replay                       # lista de curvas, una por vuelta (la última se repite)
+        self.recording = replay is None            # reproducción = no se graba ni se guarda nada
+        self.counter, self.last_saved, self.rec_lap = 1, None, 0
+        if replay is not None:
+            self.curves, self.rec, self.tpl = {}, None, None
+            return
         if '%' in out:
             self.tpl = out
         else:
             p = Path(out)
             self.tpl = str(p.with_name(f"{p.stem}_%04d{p.suffix or '.txt'}"))
-        self.counter, self.last_saved = 1, None
         self.curves = {0: base}
         self.rec = _cp(base)
-        self.rec_lap = 0
+
+    def playing(self, lap):
+        """Nº (desde 1) del fichero que suena en la vuelta `lap` (solo reproducción)."""
+        return min(lap, len(self.replay) - 1) + 1
 
     def curve_for(self, lap):
+        if self.replay is not None:
+            return self.replay[min(lap, len(self.replay) - 1)]
         c = self.curves.get(lap)
         if c is None:
             if lap == self.rec_lap + 1:            # el generador se adelanta al reloj: congelar ya
@@ -2054,6 +2070,8 @@ class LapStore:
 
     def finish(self, lap):
         """Fin de la vuelta `lap` (reloj): la grabación pasa a ser la curva de la siguiente."""
+        if not self.recording:
+            return
         cur = _cp(self.rec)
         self.curves[lap + 1] = cur
         while Path(self.tpl % self.counter).exists():
@@ -2076,11 +2094,12 @@ class SliderTrack:
     """Los 8 sliders leídos de la curva. Un fader movido durante el compás k del reloj fija el
     compás k+1 de la curva nueva (el valor que tenga al acabar k); sin mover, se conserva."""
 
-    def __init__(self, panel, nbars, interp, out, init=None):
+    def __init__(self, panel, nbars, interp, out, init=None, replay=None):
         self.panel, self.n, self.interp = panel, nbars, interp
         self.col = {s: i for i, s in enumerate(SLIDERS)}
         base = init or [[SLIDER_DEFAULTS[s] for s in SLIDERS] for _ in range(nbars)]
-        self.store = LapStore(nbars, base, out, lambda p, c: save_curve(p, c, interp), 'Curva de sliders')
+        self.store = LapStore(nbars, base, out, lambda p, c: save_curve(p, c, interp), 'Curva de sliders',
+                              replay=replay)
 
     def value(self, name, pos):
         """Valor del slider en la posición `pos` (compases desde el inicio, fraccionario)."""
@@ -2106,12 +2125,16 @@ class SliderTrack:
 
     def leave_bar(self, pb):
         moved = self.panel.take_moved()
+        if not self.store.recording:               # reproducción: los faders no cuentan
+            return
         k = pb % self.n
         if k + 1 < self.n:                         # en el último compás no hay «siguiente» en el fichero
             for nm in moved:
                 self.store.rec[k + 1][self.col[nm]] = round(self.panel.phys(nm), 4)
 
-    def indicator(self):
+    def indicator(self, lap):
+        if not self.store.recording:
+            return f"▶{self.store.playing(lap)}/{len(self.store.replay)} {self.interp}"
         marks = ''.join(str(self.col[s] + 1) for s in sorted(self.panel.peek_moved(), key=self.col.get))
         return self.interp + (f" ✎{marks}" if marks else '')
 
@@ -2122,9 +2145,10 @@ class ChordTrack:
     2ª para el siguiente. Si no se pulsa nada se conserva el de la curva; las entradas «-» (o sin
     curva) las genera Jev y se registran como valor del fichero."""
 
-    def __init__(self, nbars, beats, out, init=None):
+    def __init__(self, nbars, beats, out, init=None, replay=None):
         self.n, self.beats, self.last = nbars, beats, None
-        self.store = LapStore(nbars, init or [None] * nbars, out, save_chord_curve, 'Curva de acordes')
+        self.store = LapStore(nbars, init or [None] * nbars, out, save_chord_curve, 'Curva de acordes',
+                              replay=replay)
 
     def chord_at(self, bar):
         lap, k = divmod(bar, self.n)
@@ -2132,6 +2156,8 @@ class ChordTrack:
 
     def press(self, t, rq):
         """Pulsación en el pulso `t` del reloj → entrada de la curva en grabación."""
+        if not self.store.recording:
+            return
         x = max(t, 0.0) / self.beats
         g = int(x)
         target = g if x - g < 0.5 else g + 1
@@ -2140,6 +2166,8 @@ class ChordTrack:
         self.last = (k + 1, chord_text(rq))
 
     def fill(self, bar, rq):
+        if not self.store.recording:
+            return
         k = bar % self.n
         if self.store.rec[k] is None:
             self.store.rec[k] = rq
@@ -2147,7 +2175,9 @@ class ChordTrack:
     def leave_bar(self, pb):
         pass
 
-    def indicator(self):
+    def indicator(self, lap):
+        if not self.store.recording:
+            return f"♪▶{self.store.playing(lap)}/{len(self.store.replay)}"
         return f"♪{self.last[1]}→c.{self.last[0]}" if self.last else ''
 
 
@@ -2183,7 +2213,8 @@ class CurveSession:
         return f"↻{cb // self.n + 1} c.{cb % self.n + 1}/{self.n}"
 
     def indicator(self):
-        return ' '.join(p for p in (t.indicator() for t in self.tracks) if p)
+        lap = (self.cb or 0) // self.n
+        return ' '.join(p for p in (t.indicator(lap) for t in self.tracks) if p)
 
 
 class ChordKeyboard:
@@ -3176,6 +3207,8 @@ def build(args, out, clock, live_kb=False):
         fail("--chord-source curve necesita --curve-bars")
     if getattr(args, 'curve_lap_reset', False) and not cbars:
         fail("--curve-lap-reset necesita --curve-bars")
+    if getattr(args, 'curve_no_rec', False) and not cbars:
+        fail("--curve-no-rec necesita --curve-bars")
     if getattr(args, 'curve_in', None) and not sl_on:
         fail("--curve-in necesita --curve-bars (y sliders en modo curva)")
     if getattr(args, 'chord_curve_in', None) and not csrc:
@@ -3202,12 +3235,22 @@ def build(args, out, clock, live_kb=False):
         sl = ch = None
         print(f"  modo curvas: vuelta de {cbars} compases"
               + (", reinicio de estado en cada vuelta" if args.curve_lap_reset else ""))
+        norec = getattr(args, 'curve_no_rec', False)
         if sl_on:
-            init = load_curve(args.curve_in, cbars) if args.curve_in else None
-            sl = SliderTrack(panel, cbars, CURVE_INTERP[args.curve_interp], args.curve_out, init)
+            files = args.curve_in or []
+            interp = CURVE_INTERP[args.curve_interp]
+            if len(files) > 1 or norec:             # reproducción: una curva por vuelta, sin grabar
+                curves = [load_curve(f, cbars) for f in files] or \
+                         [[[SLIDER_DEFAULTS[x] for x in SLIDERS] for _ in range(cbars)]]
+                sl = SliderTrack(panel, cbars, interp, None, replay=curves)
+                print(f"    sliders: {interp}, reproducción de {len(curves)} curva(s), una por vuelta "
+                      f"(la última se repite), sin grabar: {' '.join(files) or '(valores por defecto)'}")
+            else:
+                init = load_curve(files[0], cbars) if files else None
+                sl = SliderTrack(panel, cbars, interp, args.curve_out, init)
+                print(f"    sliders: {interp}, entrada {files[0] if files else '(valores por defecto)'}, "
+                      f"salida {sl.store.tpl}")
             panel.override = eng.curve_value
-            print(f"    sliders: {sl.interp}, entrada {args.curve_in or '(valores por defecto)'}, "
-                  f"salida {sl.store.tpl}")
         if csrc:
             if args.kb_chords:
                 kb = ScriptChords(args.kb_chords, args.beats)
@@ -3215,10 +3258,17 @@ def build(args, out, clock, live_kb=False):
                 kb = ChordKeyboard(args.kb_port if live_kb else None)
                 kb.record_events = True
             eng.chord_kb = kb
-            init = load_chord_curve(args.chord_curve_in, cbars) if args.chord_curve_in else None
-            ch = ChordTrack(cbars, args.beats, args.chord_curve_out, init)
-            print(f"    acordes: entrada {args.chord_curve_in or '(los genera Jev)'}, "
-                  f"salida {ch.store.tpl}")
+            cfiles = args.chord_curve_in or []
+            if len(cfiles) > 1 or norec:
+                curves = [load_chord_curve(f, cbars) for f in cfiles] or [[None] * cbars]
+                ch = ChordTrack(cbars, args.beats, None, replay=curves)
+                print(f"    acordes: reproducción de {len(curves)} curva(s), una por vuelta "
+                      f"(la última se repite), sin grabar: {' '.join(cfiles) or '(los genera Jev)'}")
+            else:
+                init = load_chord_curve(cfiles[0], cbars) if cfiles else None
+                ch = ChordTrack(cbars, args.beats, args.chord_curve_out, init)
+                print(f"    acordes: entrada {cfiles[0] if cfiles else '(los genera Jev)'}, "
+                      f"salida {ch.store.tpl}")
         eng.curve = CurveSession(cbars, args.beats, sl, ch)
     return eng
 
@@ -3514,8 +3564,10 @@ def build_parser():
     eng.add_argument('--curve-bars', type=int, default=0, dest='curve_bars',
                      help='Modo curvas: los sliders se leen de un fichero por compás y se graba una curva '
                           'nueva cada N compases (una vuelta). 0 = desactivado (default)')
-    eng.add_argument('--curve-in', default=None, dest='curve_in', metavar='FILE',
-                     help='Curva inicial «compás: v1 … v8» (sin ella: sliders en su valor por defecto)')
+    eng.add_argument('--curve-in', nargs='+', default=None, dest='curve_in', metavar='FILE',
+                     help='Curva inicial «compás: v1 … v8» (sin ella: sliders en su valor por defecto). '
+                          'Con 2 o más ficheros se REPRODUCE la sesión sin grabar: uno por vuelta, en orden '
+                          '(inicial, curva_0001, curva_0002…); la última se repite')
     eng.add_argument('--curve-out', default='curva', dest='curve_out', metavar='NOMBRE',
                      help='Base de los ficheros grabados: NOMBRE_%%04d.txt (o plantilla con %%) (default: curva)')
     eng.add_argument('--curve-interp', choices=list(CURVE_INTERP), default='lineal', dest='curve_interp',
@@ -3524,10 +3576,13 @@ def build_parser():
                      help='Con --curve-bars: cada vuelta reinicia semilla, histórico de compases, drift, voces '
                           'y modo, así que su música depende solo de su curva (reproducible); sin él se '
                           'mantiene la continuidad musical entre vueltas')
+    eng.add_argument('--curve-no-rec', action='store_true', dest='curve_no_rec',
+                     help='Con --curve-bars: no grabar ni guardar nada (reproducción también con un solo fichero)')
     eng.add_argument('--no-curve-sliders', dest='curve_sliders', action='store_false', default=True,
                      help='Con --curve-bars: dejar los faders en vivo (solo curva de acordes)')
-    eng.add_argument('--chord-curve-in', default=None, dest='chord_curve_in', metavar='FILE',
-                     help='Curva de acordes inicial «compás: acorde» (sin ella los genera Jev en la 1ª vuelta)')
+    eng.add_argument('--chord-curve-in', nargs='+', default=None, dest='chord_curve_in', metavar='FILE',
+                     help='Curva de acordes inicial «compás: acorde» (sin ella los genera Jev en la 1ª vuelta). '
+                          'Con 2 o más ficheros se reproduce la sesión sin grabar, uno por vuelta')
     eng.add_argument('--chord-curve-out', default='acordes', dest='chord_curve_out', metavar='NOMBRE',
                      help='Base de los ficheros de acordes grabados: NOMBRE_%%04d.txt (default: acordes)')
     eng.add_argument('--rng', type=int, default=0)
