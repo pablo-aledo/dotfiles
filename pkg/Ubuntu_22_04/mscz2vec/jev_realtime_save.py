@@ -109,6 +109,14 @@ tienen «compás siguiente» dentro del fichero y se descartan.
                             si contiene '%' se usa como plantilla (p. ej. «tmp/take_%04d.txt»)
   --curve-interp MODO       lineal (default) | escalonada | suave
   --no-curve-sliders        dejar los faders en vivo (útil si solo quieres la curva de acordes)
+  --curve-lap-reset         al empezar cada vuelta se reinicia el estado del motor (semilla --rng,
+                            histórico de compases, drift, voces de acordes y modo de --valence-mode):
+                            cada vuelta pasa a ser función de su fichero, --rng y el resto de opciones,
+                            y se puede reproducir rejugándolo solo. Contrapartida: se pierde la continuidad
+                            musical con la vuelta anterior, y una misma curva suena igual en cada vuelta.
+                            Jev y el ritmo ven el compás dentro de la vuelta (no el absoluto).
+                            No reinicia lo que no está en los ficheros: knobs, tonalidad, octava, capas
+                            ni la posición en un MIDI de referencia.
 
 Acordes en modo curvas (--chord-source curve, requiere --curve-bars): el acorde de cada compás
 se lee de un fichero «compás: acorde» (Am, G7, F#m7, Bdim, Bhdim7…; «-» = lo genera Jev) y el
@@ -2169,10 +2177,13 @@ class CurveSession:
                     self.chords.last = None
             self.cb += 1
 
-    def indicator(self):
+    def position(self):
+        """«↻vuelta c.compás/total» según el reloj (lo que se oye)."""
         cb = self.cb or 0
-        parts = [f"↻{cb // self.n + 1} c.{cb % self.n + 1}/{self.n}"] + [t.indicator() for t in self.tracks]
-        return ' '.join(p for p in parts if p)
+        return f"↻{cb // self.n + 1} c.{cb % self.n + 1}/{self.n}"
+
+    def indicator(self):
+        return ' '.join(p for p in (t.indicator() for t in self.tracks) if p)
 
 
 class ChordKeyboard:
@@ -2413,6 +2424,8 @@ class Engine:
         self.vc_center = 60.0
         self.script, self.script_i = [], 0
         self.ladder_i = LADDER.index(self.mode) if self.mode in LADDER else 4
+        self.init_mode, self.init_ladder = self.mode, self.ladder_i     # para --curve-lap-reset
+        self.bar0 = 0                               # compás con el que arranca la vuelta (--curve-lap-reset)
         self.bpm = clock.bpm
         self.progs = [int(x) for x in args.programs.split(',')]
         self.drift_name = args.drift_slider
@@ -2636,7 +2649,7 @@ class Engine:
         return dict(self.P, half_width=max(4, int(self.P['half_width'] * (0.5 + self.panel.get('amplitud')))))
 
     def query(self, kind, bar, opts, chord=None, beat=0.0, dur=0.0):
-        return Query(kind, self.desc, self.tonic, self.mode, self.beats, bar, self.levels,
+        return Query(kind, self.desc, self.tonic, self.mode, self.beats, bar - self.bar0, self.levels,
                      self.P['levels'], list(self.mem.window()), opts, beat=beat, dur=dur,
                      cur=chord, center=self.eff_center())
 
@@ -2858,7 +2871,21 @@ class Engine:
             p = combine_multi(p, 1.0 - self.top(), items)
         return opts[sample(p, self.sample_T(sum(w for _, _, w in infos)), self.rng)]['chord']
 
+    def lap_reset(self, bar):
+        """--curve-lap-reset: cada vuelta parte del mismo estado que la primera (semilla, histórico,
+        drift, voces, modo), de modo que su música depende solo de su curva y de los parámetros."""
+        self.rng.seed(self.args.rng)
+        self.mem.entries.clear()
+        self.mem.last_midi = None
+        self.drift_off, self.last_rest, self.vc_center = 0, False, 60.0
+        self.drift_hist.clear()
+        self.ladder_i, self.mode = self.init_ladder, self.init_mode
+        self.bar0 = bar                             # Jev y el ritmo ven el compás DENTRO de la vuelta
+
     def begin_bar(self, bar):
+        if (self.curve is not None and getattr(self.args, 'curve_lap_reset', False)
+                and bar > 0 and bar % self.curve.n == 0):
+            self.lap_reset(bar)
         t0 = bar * self.beats
         b = self.ref_bar(bar)
         self.cur_ref, self.ref_extra_until = b, 0.0
@@ -2888,7 +2915,7 @@ class Engine:
         else:
             chord = self.decide_chord(bar)
         self.cur_chord = chord
-        self.cur_entry = self.mem.add(chord, bar)
+        self.cur_entry = self.mem.add(chord, bar - self.bar0)
         if (self.args.ref_accomp and self.lead_ref is not None and self.lead_idx is not None
                 and self.lead_ref.bars[self.lead_idx]['harm']):
             self.play_ref_accomp(self.lead_idx, t0, self.beats, self.lead_ref)
@@ -2947,7 +2974,7 @@ class Engine:
                     if raw:
                         prior = [x ** s_r for x in raw]
             dur, rest = self.rhythm.sample(self.rng, t, bar_end - t, self.sv('densidad'),
-                                           self.sv('groove'), self.beats, self.cur_bar,
+                                           self.sv('groove'), self.beats, self.cur_bar - self.bar0,
                                            self.last_rest, prior=prior)
             if dur <= EPS:
                 dur = bar_end - t
@@ -3107,10 +3134,13 @@ class Engine:
         lay = "".join(l[0].upper() if self.layers[l] else "·" for l in LAYERS)
         src = ('KB' if self.source is not None else
                'CV' if self.curve is not None and self.curve.chords is not None else 'JV')
+        pos = f"{self.curve.position():<12}" if self.curve is not None else f"c.{i['bar']:<4}"
+        where = f"[{meters}] {pos}" if self.curve is not None else f"{pos} [{meters}]"
         return (f"\r{PITCH_NAMES[self.tonic]:>2} {self.mode[:9]:<9} {i['chord']:<10} {i['tempo']:5.1f}bpm "
-                f"c.{i['bar']:<4} [{meters}] {lay} {src}" + ('  ⏸' if not self.playing else '')
+                f"{where} {lay} {src}" + ('  ⏸' if not self.playing else '')
                 + (f" 🔒{locks}" if locks else "") + self.drift_indicator() + self.mix_indicator()
-                + (f"  {self.curve.indicator()}" if self.curve is not None else "") + "  ")
+                + (f"  {self.curve.indicator()}" if self.curve is not None and self.curve.indicator() else "")
+                + "  ")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3144,6 +3174,8 @@ def build(args, out, clock, live_kb=False):
             fail("--no-curve-sliders sin --chord-source curve no deja nada que leer de fichero")
     elif csrc:
         fail("--chord-source curve necesita --curve-bars")
+    if getattr(args, 'curve_lap_reset', False) and not cbars:
+        fail("--curve-lap-reset necesita --curve-bars")
     if getattr(args, 'curve_in', None) and not sl_on:
         fail("--curve-in necesita --curve-bars (y sliders en modo curva)")
     if getattr(args, 'chord_curve_in', None) and not csrc:
@@ -3168,7 +3200,8 @@ def build(args, out, clock, live_kb=False):
             warn("--lookahead mayor que el compás: la curva de la vuelta siguiente puede congelarse "
                  "antes de registrar el penúltimo compás")
         sl = ch = None
-        print(f"  modo curvas: vuelta de {cbars} compases")
+        print(f"  modo curvas: vuelta de {cbars} compases"
+              + (", reinicio de estado en cada vuelta" if args.curve_lap_reset else ""))
         if sl_on:
             init = load_curve(args.curve_in, cbars) if args.curve_in else None
             sl = SliderTrack(panel, cbars, CURVE_INTERP[args.curve_interp], args.curve_out, init)
@@ -3487,6 +3520,10 @@ def build_parser():
                      help='Base de los ficheros grabados: NOMBRE_%%04d.txt (o plantilla con %%) (default: curva)')
     eng.add_argument('--curve-interp', choices=list(CURVE_INTERP), default='lineal', dest='curve_interp',
                      help='Interpolación entre compases: lineal | escalonada | suave (default: lineal)')
+    eng.add_argument('--curve-lap-reset', action='store_true', dest='curve_lap_reset',
+                     help='Con --curve-bars: cada vuelta reinicia semilla, histórico de compases, drift, voces '
+                          'y modo, así que su música depende solo de su curva (reproducible); sin él se '
+                          'mantiene la continuidad musical entre vueltas')
     eng.add_argument('--no-curve-sliders', dest='curve_sliders', action='store_false', default=True,
                      help='Con --curve-bars: dejar los faders en vivo (solo curva de acordes)')
     eng.add_argument('--chord-curve-in', default=None, dest='chord_curve_in', metavar='FILE',
