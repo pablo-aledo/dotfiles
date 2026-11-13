@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jev Realtime — laboratorio interactivo</title>
+<style>
+:root{--bg:#f6f5f1;--sf:#fff;--tx:#1d1d1b;--mu:#6b6a64;--bd:#dcdad2;--ac:#c2410c;--g:#15803d;--b:#1d4ed8;--p:#a21caf;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15151a;--sf:#1f1f27;--tx:#ecebe6;--mu:#9a99a6;--bd:#34343f;--ac:#fb923c;--g:#4ade80;--b:#60a5fa;--p:#e879f9;color-scheme:dark}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1000px;margin:auto;padding:14px}
+h1{font-size:1.5rem;margin:.2em 0}h2{font-size:1.15rem;margin:.2em 0 .5em}p{margin:.4em 0}.mu{color:var(--mu);font-size:.9rem}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:6px 0;z-index:5}
+nav button,.btn{font:inherit;border:1px solid var(--bd);background:var(--sf);color:var(--tx);border-radius:999px;padding:6px 14px;cursor:pointer}
+nav button.on,.btn.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:14px;margin:10px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.sl{display:grid;grid-template-columns:92px 1fr 36px;gap:6px;align-items:center;font-size:.9rem}
+.sl input{width:100%;accent-color:var(--ac)}canvas{width:100%;display:block;border-radius:8px}
+.step{border:2px solid var(--bd);border-radius:12px;padding:8px 10px;cursor:pointer;flex:1 1 130px;background:var(--sf);transition:.3s}
+.step.on{border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 25%,transparent);transform:translateY(-3px)}
+.flow{display:flex;gap:8px;flex-wrap:wrap}.chip{display:inline-block;margin:2px;padding:1px 7px;border-radius:6px;font:12px monospace;background:color-mix(in srgb,var(--b) 15%,transparent)}
+.chip.t{background:color-mix(in srgb,var(--ac) 20%,transparent)}.log{font-size:.88rem;height:150px;overflow:auto;border-left:3px solid var(--ac);padding-left:10px}
+.log div{margin:3px 0}code{background:color-mix(in srgb,var(--mu) 18%,transparent);padding:0 4px;border-radius:4px}
+.hide{display:none}table{border-collapse:collapse;font-size:.85rem;width:100%}td{border-top:1px solid var(--bd);padding:3px 6px}
+</style></head><body><main>
+<h1>🎹 Jev Realtime: cómo compone un programa en tiempo real</h1>
+<p class="mu">Réplica interactiva de <code>jev_realtime.py</code>: la lógica de compases, candidatos, muestreo y ritmo es una traducción fiel; el modelo de dos torres se muestra en un laboratorio aparte, porque el real necesita entrenarse con MIDIs. Todo lo que ves se calcula en directo.</p>
+<nav id="nav"></nav>
+
+<section id="t0"><div class="card"><h2>La idea en una frase</h2>
+<p><b>Jev decide QUÉ suena; la capa rítmica decide CUÁNDO.</b> Por cada compás se pregunta a un modelo «¿qué acorde?»; después, por cada nota, «¿qué nota?». El modelo devuelve probabilidades y el programa <b>sortea</b> (no elige el máximo), por eso cada ejecución es distinta pero coherente. Pulsa un paso:</p>
+<div class="flow" id="flow"></div><div class="card" id="detail" style="margin-top:12px"></div></div>
+<div class="card"><h2>Los 8 sliders: qué significan</h2><table id="semt"></table></div></section>
+
+<section id="t1" class="hide"><div class="card">
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn pri" id="play">▶ Tocar</button>
+<label class="mu">Modo <select id="mode"></select></label>
+<label class="mu"><input type="checkbox" id="vm"> valence-mode (valencia cambia el modo)</label>
+<span id="stat" class="mu"></span></div>
+<div class="grid" style="margin-top:10px" id="sliders"></div></div>
+<div class="card"><h2>Partitura en vivo (rollo de piano)</h2><canvas id="roll" height="300"></canvas>
+<p class="mu">Verde = nota del acorde · azul = nota de paso de la escala · rosa = cromática · naranja = bajo · gris = acordes. Línea vertical = «ahora».</p></div>
+<div class="grid"><div class="card"><h2>① Decisión de acorde (por compás)</h2><canvas id="cc" height="190"></canvas></div>
+<div class="card"><h2>② Candidatos de la última nota</h2><canvas id="nc" height="190"></canvas><p class="mu">Eje X = altura MIDI. Rectángulo = ventana de registro. Barra marcada = la sorteada.</p></div></div>
+<div class="card"><h2>🗣 Narración de las decisiones</h2><div class="log" id="log"></div></div></section>
+
+<section id="t2" class="hide"><div class="card"><h2>Muestreo con temperatura</h2>
+<p>El código hace <code>log(p)/T</code>, resta el máximo, exponencia y sortea: equivale a <b>pᵏ con k = 1/T</b>. T bajo → casi siempre el favorito (determinista); T alto → más variedad y más «errores creativos». El knob 7 y <code>--temperature</code> controlan T.</p>
+<div class="sl"><span>T</span><input type="range" id="T" min="5" max="300" value="100"><b id="Tv"></b></div>
+<canvas id="smp" height="220"></canvas>
+<button class="btn pri" id="draw">🎲 Sortear 400 veces</button> <span class="mu" id="ent"></span></div></section>
+
+<section id="t3" class="hide"><div class="card"><h2>Capa rítmica: <code>Rhythm.sample</code></h2>
+<p>Cada duración de la rejilla (0,25 … 4 pulsos) recibe un peso gaussiano (en log₂) centrado en la duración que pide <b>densidad</b>: <code>ataques/pulso = 0,25·16^densidad</code>. Se penalizan finales fuera de pulso/contratiempo y el <b>groove</b> premia las duraciones con puntillo (0,75 · 1,5 · 3). Probabilidad de silencio: <code>0,28·(1−densidad)²</code>.</p>
+<div class="sl"><span>densidad</span><input type="range" id="rd" min="0" max="100" value="50"><b id="rdv"></b></div>
+<div class="sl"><span>groove</span><input type="range" id="rg" min="0" max="100" value="20"><b id="rgv"></b></div>
+<canvas id="rw" height="200"></canvas><p class="mu" id="rinfo"></p>
+<button class="btn pri" id="bar">🥁 Generar 2 compases</button><canvas id="strip" height="70" style="margin-top:8px"></canvas></div></section>
+
+<section id="t4" class="hide"><div class="card"><h2>Rasgos hasheados y modelo de dos torres (juguete)</h2>
+<p>La consulta se convierte en <b>tokens</b> (palabras, bigramas, modo, nivel de cada slider en forma de «termómetro», acordes previos). Cada token cae en una de 2<sup>16</sup> filas por hash. Torre Q = suma de embeddings de la consulta; torre O = suma de embeddings de cada opción. <b>Puntuación sᵢ = aᵢ + ⟨e_Q, e_Oᵢ⟩</b>, y softmax da probabilidades. Aquí empieza sin entrenar (≈ uniforme): entrena y verás cómo se aprende.</p>
+<input id="desc" value="nana melancólica" style="width:100%;font:inherit;padding:6px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)">
+<div class="sl"><span>tensión</span><input type="range" id="ht" min="0" max="4" value="1"><b id="htv"></b></div>
+<div id="toks"></div><p class="mu">Embedding de la consulta e_Q (16 dim, rojo +, azul −):</p><canvas id="eq" height="22"></canvas>
+<canvas id="hs" height="190"></canvas>
+<p>Respuesta «correcta» a enseñar: <select id="tg"></select> <button class="btn pri" id="tr">Entrenar 1 paso</button> <button class="btn" id="tr10">×20</button> <button class="btn" id="rs">Reiniciar</button></p>
+<p class="mu">El entrenamiento real (<code>cmd_train</code>) hace lo mismo con Adagrad sobre filas dispersas: baja el gradiente de la entropía cruzada (g = p − 1<sub>correcta</sub>) solo en las filas tocadas por los tokens.</p></div></section>
+</main>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const SL=['valencia','energia','densidad','tension','registro','complejidad','sorpresa','groove'];
+const V={valencia:.6,energia:.5,densidad:.5,tension:.25,registro:.5,complejidad:.3,sorpresa:.35,groove:.2};
+const SEM={valencia:'brillo del modo + calidad del acorde (mayor/menor/dim)',energia:'tempo (62–140 bpm), velocidad y textura del acompañamiento',densidad:'ataques de melodía por pulso',tension:'acordes dominantes/sensibles, 7ª/dim, notas ajenas al acorde',registro:'altura media de la melodía (centro de la ventana)',complejidad:'acordes con 7ª, más clases de altura distintas',sorpresa:'transiciones de acorde raras y saltos grandes',groove:'síncopa, puntillos y articulación'};
+const MI={major:[0,2,4,5,7,9,11],minor:[0,2,3,5,7,8,10],dorian:[0,2,3,5,7,9,10],mixolydian:[0,2,4,5,7,9,10],lydian:[0,2,4,6,7,9,11],phrygian:[0,1,3,5,7,8,10]};
+const LAD=['phrygian','minor','dorian','mixolydian','major','lydian'];
+const NN='C C# D D# E F F# G G# A A# B'.split(' '),FNC='T P P T T S P D T T D D'.split(' ');
+const QN={'0,4,7':'','0,3,7':'m','0,3,6':'dim','0,4,8':'aug','0,4,7,11':'M7','0,4,7,10':'7','0,3,7,10':'m7','0,3,6,10':'ø7','0,3,6,9':'°7'};
+const SEV=new Set(['M7','7','m7','ø7','°7']),TR={T:{T:.3,S:1,P:.7,D:.6},S:{T:.8,S:.2,P:.4,D:1.1},P:{T:.3,S:.1,P:.1,D:1.5},D:{T:1.8,S:.2,P:.1,D:.2}};
+const GRID=[.25,.5,.75,1,1.5,2,3,4],BEATS=4;
+let mode='major',rnd=Math.random;
+const sm=a=>{const m=Math.max(...a),e=a.map(x=>Math.exp(x-m)),s=e.reduce((x,y)=>x+y);return e.map(x=>x/s)};
+function sample(p,T){T=Math.max(T,.05);const lg=p.map(x=>Math.log(Math.max(x,1e-9))/T),m=Math.max(...lg),w=lg.map(x=>Math.exp(x-m));let r=rnd()*w.reduce((a,b)=>a+b),a=0;for(let i=0;i<w.length;i++){a+=w[i];if(r<=a)return i}return w.length-1}
+function chords(){const sc=MI[mode],o=[];const add=(root,ivs)=>{const q=QN[ivs.join(',')];if(q===undefined)return;const n=NN[root]+q;if(!o.some(c=>c.name==n))o.push({name:n,root,q,pcs:ivs.map(i=>(root+i)%12),cl:FNC[root]})};
+for(let i=0;i<7;i++){const t=[0,2,4,6].map(k=>(sc[(i+k)%7]+12*Math.floor((i+k)/7)-sc[i]));add(sc[i],t.slice(0,3).map(x=>x%12));add(sc[i],t.map(x=>x%12))}
+add(7,[0,4,7,10]);return o}
+function lv(v){const f=v*5-.5;if(f<=0)return 0;if(f>=4)return 4;const l=Math.floor(f);return rnd()<f-l?l+1:l}
+function chordProbs(opts,prev,L){const t=L.tension/4-.5,c=L.complejidad/4-.5;const pc=prev?prev.cl:'T';
+return sm(opts.map(ch=>{let w=Math.log(TR[pc][ch.cl]+.05);if(prev&&prev.name==ch.name)w-=1.5;w+=2*t*(ch.cl=='D'?1:ch.cl=='T'?-.8:0);w+=SEV.has(ch.q)?1.5*c:-.8*c;if(['dim','ø7','°7'].includes(ch.q))w+=t-.3;return w}))}
+function noteOpts(ch,prev,center,hw,leap=9){const sc=new Set(MI[mode]),al=new Set([...sc,...ch.pcs]);const pv=prev??center,r=[];
+for(let m=Math.max(center-hw,pv-leap);m<=Math.min(center+hw,pv+leap);m++)if(al.has(m%12))r.push({m,role:ch.pcs.includes(m%12)?'ct':sc.has(m%12)?'pass':'chrom',d:m-pv,tn:m%12==0});
+return r.length?r:[{m:pv,role:'ct',d:0,tn:0}]}
+function noteProbs(o,center,L){const t=L.tension/4-.5;return sm(o.map(x=>{let w={ct:1.1,pass:.2,chrom:-1.5}[x.role]+(x.role=='ct'?-t:t);const d=Math.abs(x.d);w-=d==0?.5:.28*Math.max(0,d-2)+(d<=2?0:.2);return w+.3*x.tn-.5*((x.m-center)/10.5)**2}))}
+function rhythmW(den,gr,t,maxd,prior){const tg=Math.log2(1/(.25*Math.pow(16,den)));return GRID.map(d=>{if(d>maxd+1e-6)return 0;let w=Math.exp(-((Math.log2(d)-tg)**2)/(2*.55**2));const e=(t+d)%1;if(Math.min(e,1-e)>.01&&Math.abs(e-.5)>.01)w*=.35;if(Math.abs((t+d)%.5)>.01)w*=.3;if([.75,1.5,3].includes(d))w*=.5+1.2*gr;return w})}
+function rhythm(t,maxd,den,gr,bar,lastRest){const ws=rhythmW(den,gr,t,maxd);let d;const s=ws.reduce((a,b)=>a+b);if(s<=0)d=Math.min(maxd,.25);else{let r=rnd()*s,a=0;d=GRID[0];for(let i=0;i<8;i++){a+=ws[i];d=GRID[i];if(r<=a)break}}d=Math.min(d,maxd);let rp=.28*(1-den)**2;if(bar%4==3&&(t%BEATS)>=BEATS-1-1e-6)rp+=.35;return[d,!lastRest&&rnd()<rp]}
+
+// ---------- UI base ----------
+const TABS=['1 · Visión general','2 · Tocar en vivo','3 · Temperatura','4 · Ritmo','5 · Modelo de dos torres'];
+$('#nav').innerHTML=TABS.map((t,i)=>`<button data-i="${i}">${t}</button>`).join('');
+function tab(i){$$('section').forEach((s,j)=>s.classList.toggle('hide',i!=j));$$('#nav button').forEach((b,j)=>b.classList.toggle('on',i==j));if(i==3)drawR();if(i==2)drawS();if(i==4)drawH();size()}
+$$('#nav button').forEach(b=>b.onclick=()=>tab(+b.dataset.i));
+$('#semt').innerHTML=SL.map(s=>`<tr><td><b>${s}</b></td><td>${SEM[s]}</td></tr>`).join('');
+const STEPS=[['① Sliders','8 valores en 0..1 que mueves en vivo. Se <b>cuantizan a 5 niveles</b> (<code>levels_now</code>) con redondeo estocástico: 0,55 puede ser nivel 2 o 3, lo que añade variación natural.'],
+['② Consulta','Se construye una <code>Query</code>: descripción, tonalidad, modo, compás, niveles de sliders, <b>últimos 4 compases de acordes y notas</b> (clase <code>Memory</code>) y fase del compás (ph4, ph8).'],
+['③ Rasgos hash','<code>query_tokens</code> y <code>option_tokens</code> producen cadenas («tension&gt;=2», «c-1:V»…) que se hashean a 2¹⁶ filas. Sin diccionario ni servidor: solo numpy.'],
+['④ Dos torres','<code>TwoTower.forward</code>: s = a + ⟨e_Q, e_O⟩ para cada candidato; <code>softmax(s/τ)</code> con τ calibrado tras el entrenamiento. Es una distribución sobre <b>acordes diatónicos + V7</b> o sobre <b>notas legales</b>.'],
+['⑤ Sampleo','<code>sample(probs,T)</code>: p<sup>1/T</sup> y sorteo. La T efectiva es <code>temperatura·(0,5+knob)</code>. Las referencias MIDI se mezclan geométricamente: Jev<sup>1−s</sup>·Ref<sup>s</sup>.'],
+['⑥ Ritmo','Para cada nota, <code>Rhythm.sample</code> elige duración y si hay silencio. Jev no decide el ritmo: lo hacen densidad y groove (pestaña 4).'],
+['⑦ Salida','Se programan note_on/off en un <code>Scheduler</code> con antelación (<code>--lookahead</code> 1,5 pulsos) hacia FluidSynth o puerto MIDI virtual; acompañamiento y bajo dependen de energía y complejidad.']];
+$('#flow').innerHTML=STEPS.map((s,i)=>`<div class="step" data-i="${i}"><b>${s[0]}</b></div>`).join('');
+let cur=0,auto=true;function step(i){cur=i;$$('.step').forEach((e,j)=>e.classList.toggle('on',i==j));$('#detail').innerHTML=STEPS[i][1]}
+$$('.step').forEach(e=>e.onclick=()=>{auto=false;step(+e.dataset.i)});setInterval(()=>auto&&step((cur+1)%7),3200);step(0);
+
+// ---------- Motor en vivo ----------
+$('#mode').innerHTML=Object.keys(MI).map(m=>`<option>${m}</option>`).join('');$('#mode').onchange=e=>mode=e.target.value;
+$('#sliders').innerHTML=SL.map(s=>`<div class="sl" title="${SEM[s]}"><span>${s}</span><input type="range" id="s_${s}" min="0" max="100" value="${V[s]*100}"><b id="v_${s}">${V[s].toFixed(2)}</b></div>`).join('');
+SL.forEach(s=>$('#s_'+s).oninput=e=>{V[s]=e.target.value/100;$('#v_'+s).textContent=V[s].toFixed(2)});
+const E={on:false,T:0,bar:-1,melT:0,bpm:90,notes:[],chord:null,prevChord:null,L:{},center:60,prev:null,lastRest:false,ctx:null,cp:null,np:null,vc:62,log:[]};
+const nm=m=>NN[m%12]+(Math.floor(m/12)-1);
+function say(h){E.log.unshift(h);E.log.length=14;$('#log').innerHTML=E.log.map(x=>`<div>${x}</div>`).join('')}
+function tone(m,dur,vel,type,t0){if(!E.ctx)return;const c=E.ctx,o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.value=440*2**((m-69)/12);const a=c.currentTime+Math.max(0,t0),d=dur*60/E.bpm,v=vel/127*.18;g.gain.setValueAtTime(0,a);g.gain.linearRampToValueAtTime(v,a+.01);g.gain.exponentialRampToValueAtTime(.001,a+d);o.connect(g).connect(E.ctx.destination);o.start(a);o.stop(a+d+.05)}
+function emit(t,d,ch,m,v,role){E.notes.push({t,d,ch,m,role});tone(m,d*.95,v,['triangle','sine','sawtooth'][ch]===undefined?'sine':['triangle','sine','sawtooth'][ch],(t-E.T)*60/E.bpm)}
+function voice(pcs){const o=[...new Set(pcs.map(pc=>{let b=50;for(let m=50;m<74;m++)if(m%12==pc&&Math.abs(m-E.vc)<Math.abs(b-E.vc)||b%12!=pc&&m%12==pc)b=m;return b}))].sort((a,b)=>a-b);E.vc=(E.vc+o.reduce((a,b)=>a+b)/o.length)/2;return o}
+function beginBar(bar){const m=V;E.bar=bar;E.L={};SL.forEach(s=>E.L[s]=lv(V[s]));
+if($('#vm').checked){mode=LAD[Math.round(V.valencia*5)];$('#mode').value=mode}
+E.center=Math.round(48+V.registro*36);const opts=chords(),p=chordProbs(opts,E.chord,E.L),T=.5+.5+0;const i=sample(p,1.0);
+E.cp={opts,p,i};E.prevChord=E.chord;const ch=opts[i];const pv=E.chord;E.chord=ch;const t0=bar*BEATS,e=V.energia,c=V.complejidad;
+let pcs=[...ch.pcs];if(c>.7&&pcs.length<5)pcs.push((pcs[0]+2)%12);const ns=voice(pcs),vc=30+50*e;
+if(e<.35)ns.forEach(n=>emit(t0,BEATS,1,n,vc,'c'));else{const st=e<.6?1:.5,seq=e<.8?ns:ns.concat(ns.slice(1,-1).reverse());let x=0,k=0;while(x<BEATS-1e-6){emit(t0+x,Math.min(st,BEATS-x),1,seq[k%seq.length],vc*(x?.8:1),'c');x+=st;k++}}
+const root=36+(ch.root-36+120)%12,vb=55+45*e;if(e<.35)emit(t0,BEATS,2,root,vb,'b');else if(e<.7){emit(t0,2,2,root,vb,'b');emit(t0+2,2,2,root+7,vb*.85,'b')}else for(let x=0;x<BEATS;x++)emit(t0+x,1,2,x%2?root+12:root,vb,'b');
+say(`<b>Compás ${bar+1}</b> · venía de «${pv?pv.name+' ('+pv.cl+')':'—'}» → Jev da ${(p[i]*100).toFixed(0)}% a <b>${ch.name}</b> (función ${ch.cl}); tensión nivel ${E.L.tension}/4 ${E.L.tension>=3?'empuja hacia la dominante':E.L.tension<=1?'favorece reposar en tónica':''}. Sorteado.`)}
+function genNote(){const t=E.melT,end=(E.bar+1)*BEATS,[d0,rest]=rhythm(t-E.bar*BEATS,end-t,V.densidad,V.groove,E.bar,E.lastRest);const d=d0<=1e-6?end-t:d0;E.lastRest=rest;
+if(!rest){const ch=E.chord,o=noteOpts(ch,E.prev,E.center,Math.max(4,14),9),p=noteProbs(o,E.center,E.L),j=sample(p,1.0),x=o[j];E.np={o,p,j,c:E.center};
+emit(t,d,0,x.m,42+62*V.energia+(t%1<1e-6?10:0),x.role);E.prev=x.m;
+say(`nota <b>${nm(x.m)}</b> (${{ct:'del acorde',pass:'de paso',chrom:'cromática'}[x.role]}, ${x.d>0?'+':''}${x.d} st) · P=${(p[j]*100).toFixed(0)}% entre ${o.length} candidatas · dura ${d} pulsos`)}
+else say(`silencio de ${d} pulsos (prob. de respiro ${(28*(1-V.densidad)**2).toFixed(0)}%)`);E.melT=Math.round((t+d)*1e6)/1e6}
+let last=0;function frame(ts){const dt=Math.min(.1,(ts-last)/1000);last=ts;if(E.on){E.bpm+=((62+78*V.energia)-E.bpm)*(1-Math.exp(-dt));E.T+=dt*E.bpm/60;
+while(E.T>=(E.bar+1)*BEATS)beginBar(E.bar+1);while(E.melT<=E.T+.3&&E.melT<(E.bar+1)*BEATS)genNote();
+$('#stat').textContent=`compás ${E.bar+1} · ${E.chord?E.chord.name:''} · ${E.bpm.toFixed(0)} bpm`;E.notes=E.notes.filter(n=>n.t+n.d>E.T-12)}
+if(!$('#t1').classList.contains('hide'))drawLive();requestAnimationFrame(frame)}
+$('#play').onclick=()=>{if(!E.ctx)E.ctx=new (window.AudioContext||window.webkitAudioContext)();E.on=!E.on;$('#play').textContent=E.on?'⏸ Pausa':'▶ Tocar';if(E.on&&E.bar<0){E.T=0;E.melT=0;E.bar=-1;beginBar(0)}};
+function size(){$$('canvas').forEach(c=>{const w=c.clientWidth;if(w&&c.width!=w*devicePixelRatio){c.width=w*devicePixelRatio;c.height=(+c.getAttribute('height'))*devicePixelRatio}})}
+function cx(c){const x=c.getContext('2d');x.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);x.clearRect(0,0,c.width,c.height);return x}
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const ROLE={ct:'--g',pass:'--b',chrom:'--p'};
+function drawLive(){size();const c=$('#roll'),x=cx(c),W=c.clientWidth,H=300,pxb=W/16,nowX=W*.7,lo=30,hi=90,y=m=>H-18-(m-lo)/(hi-lo)*(H-40);
+x.fillStyle=css('--bd');for(let b=Math.floor(E.T-12);b<E.T+5;b++){const X=nowX+(b-E.T)*pxb;x.globalAlpha=b%BEATS?.25:.7;x.fillRect(X,0,1,H)}x.globalAlpha=1;
+E.notes.forEach(n=>{const X=nowX+(n.t-E.T)*pxb,w=Math.max(3,n.d*pxb-1),Y=y(n.m);x.globalAlpha=n.ch==0?1:.55;x.fillStyle=n.ch==0?css(ROLE[n.role]):n.ch==2?css('--ac'):css('--mu');x.fillRect(X,Y-4,w,n.ch==1?4:8);x.globalAlpha=1});
+x.fillStyle=css('--tx');x.fillRect(nowX,0,2,H);x.font='12px system-ui';
+for(let b=Math.max(0,E.bar-3);b<=E.bar;b++){const ch=E.log&&E.chordHist&&E.chordHist[b];if(ch)x.fillText(ch,nowX+(b*BEATS-E.T)*pxb+4,12)}
+drawBars();drawCand()}
+E.chordHist={};const _bb=beginBar;beginBar=function(b){_bb(b);E.chordHist[b]=E.chord.name+' ('+E.chord.cl+')'};
+function drawBars(){const c=$('#cc'),x=cx(c),W=c.clientWidth;if(!E.cp)return;const{opts,p,i}=E.cp,n=opts.length,bw=(W-10)/n;const mx=Math.max(...p);x.font='11px system-ui';
+opts.forEach((o,k)=>{const h=p[k]/mx*130,X=5+k*bw;x.fillStyle=k==i?css('--ac'):css('--b');x.globalAlpha=k==i?1:.55;x.fillRect(X+2,160-h,bw-4,h);x.globalAlpha=1;x.fillStyle=css('--tx');x.save();x.translate(X+bw/2+3,168);x.rotate(.7);x.fillText(o.name,0,6);x.restore();if(p[k]>.06)x.fillText((p[k]*100|0)+'%',X+2,154-h)})}
+function drawCand(){const c=$('#nc'),x=cx(c),W=c.clientWidth;if(!E.np)return;const{o,p,j,c:ce}=E.np,lo=ce-16,sp=(W-10)/33,mx=Math.max(...p);
+x.fillStyle=css('--bd');x.globalAlpha=.4;x.fillRect(5+2*sp,10,28*sp,150);x.globalAlpha=1;
+o.forEach((e,k)=>{const h=p[k]/mx*130,X=5+(e.m-lo)*sp;x.fillStyle=css(ROLE[e.role]);x.fillRect(X+1,160-h,sp-2,h);if(k==j){x.strokeStyle=css('--tx');x.lineWidth=2;x.strokeRect(X,160-h-2,sp,h+2)}});
+x.fillStyle=css('--tx');x.font='11px system-ui';x.fillText(nm(lo),5,182);x.fillText(nm(ce+16),W-30,182);x.fillText('centro '+nm(ce),W/2-30,182)}
+
+// ---------- Temperatura ----------
+const BASE=[.5,.25,.12,.08,.05],NM=['I','IV','V7','vi','ii'];
+function drawS(hist){const T=$('#T').value/100;$('#Tv').textContent=T.toFixed(2);size();const c=$('#smp'),x=cx(c),W=c.clientWidth;
+const q=sm(BASE.map(p=>Math.log(p)/T)),H=-q.reduce((a,p)=>a+p*Math.log2(p+1e-12),0);$('#ent').textContent=`entropía ${H.toFixed(2)} bits (máx. 2,32)`;
+const bw=(W-20)/5;x.font='13px system-ui';q.forEach((p,k)=>{const X=10+k*bw;x.fillStyle=css('--bd');x.fillRect(X+8,10+(1-BASE[k])*150,bw/2-6,BASE[k]*150);x.fillStyle=css('--ac');x.fillRect(X+bw/2+2,10+(1-p)*150,bw/2-10,p*150);
+if(hist){x.fillStyle=css('--g');x.fillRect(X+bw/2+2,10+(1-hist[k])*150,4,hist[k]*150)}x.fillStyle=css('--tx');x.fillText(NM[k]+' '+(p*100|0)+'%',X+8,185)});
+x.fillText('gris = p original · naranja = tras temperatura · verde = frecuencia observada',10,205)}
+$('#T').oninput=()=>drawS();$('#draw').onclick=()=>{const T=$('#T').value/100,h=[0,0,0,0,0];let n=0;const id=setInterval(()=>{for(let i=0;i<20;i++){h[sample(BASE,T)]++;n++}drawS(h.map(v=>v/n));if(n>=400)clearInterval(id)},40)};
+
+// ---------- Ritmo ----------
+function drawR(){size();const den=$('#rd').value/100,gr=$('#rg').value/100;$('#rdv').textContent=den.toFixed(2);$('#rgv').textContent=gr.toFixed(2);
+const w=rhythmW(den,gr,0,4),s=w.reduce((a,b)=>a+b),c=$('#rw'),x=cx(c),W=c.clientWidth,bw=(W-10)/8;
+w.forEach((v,k)=>{const h=v/s*150*(1/Math.max(...w.map(a=>a/s)));x.fillStyle=[.75,1.5,3].includes(GRID[k])?css('--p'):css('--ac');x.fillRect(5+k*bw+4,165-h,bw-8,h);x.fillStyle=css('--tx');x.font='12px system-ui';x.fillText(GRID[k]+'p · '+(v/s*100).toFixed(0)+'%',5+k*bw+4,185)});
+$('#rinfo').textContent=`≈ ${(.25*Math.pow(16,den)).toFixed(2)} ataques/pulso · prob. de silencio ${(28*(1-den)**2).toFixed(0)}% · púrpura = puntillos (potenciados por groove)`}
+$('#rd').oninput=$('#rg').oninput=()=>drawR();
+$('#bar').onclick=()=>{size();const den=$('#rd').value/100,gr=$('#rg').value/100,c=$('#strip'),x=cx(c),W=c.clientWidth;let t=0,lr=false,ev=[];while(t<8-1e-6){const b=Math.floor(t/4),[d,r]=rhythm(t%4,(b+1)*4-t,den,gr,b,lr);lr=r;ev.push([t,d,r]);t+=d}
+let k=0;x.clearRect(0,0,W,70);const id=setInterval(()=>{if(k>=ev.length)return clearInterval(id);const[a,d,r]=ev[k++];x.fillStyle=r?css('--mu'):css('--ac');x.globalAlpha=r?.3:1;x.fillRect(a/8*W+1,15,d/8*W-2,40);x.globalAlpha=1},180);}
+
+// ---------- Hash + dos torres ----------
+const DIM=16,EQ=new Map(),EO=new Map(),WB=new Map();
+function h32(s){let h=2166136261;for(const ch of s){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return (h>>>0)&0xFFFF}
+function emb(M,b){if(!M.has(b)){let a=b*7919+1;M.set(b,Float32Array.from({length:DIM},()=>{a=Math.imul(a^a>>>15,2246822507)+1013904223|0;return((a>>>0)/4294967296-.5)*.2}))}return M.get(b)}
+const HO=()=>{const ch=chords();return ['C','F','G7','Am','Dm'].map(n=>ch.find(c=>c.name==n)||ch[0]).filter((c,i,a)=>a.indexOf(c)==i)};
+function qtoks(){const d=$('#desc').value.toLowerCase().match(/[a-záéíóúñü]+/g)||[],T=d.map(w=>'w:'+w);d.slice(1).forEach((w,i)=>T.push('b:'+d[i]+'_'+w));T.push('mode='+mode,'meter=4');const l=+$('#ht').value;T.push('tension='+l);for(let k=1;k<=l;k++)T.push('tension>='+k);T.push('c-1:V');return T}
+function otoks(c){return['o:'+c.name,'q:'+c.q,'fn:'+c.cl,'rel:'+c.root]}
+function drawStrip(c,v){size();const x=cx(c),W=c.clientWidth,cw=W/DIM;v.forEach((a,i)=>{const m=Math.min(1,Math.abs(a)*4);x.fillStyle=a>0?css('--ac'):css('--b');x.globalAlpha=.15+.85*m;x.fillRect(i*cw+1,1,cw-2,20)});x.globalAlpha=1}
+function fw(){const qt=qtoks(),eQ=new Float32Array(DIM),cq=1/Math.sqrt(qt.length);qt.forEach(t=>emb(EQ,h32(t)).forEach((v,i)=>eQ[i]+=v*cq));
+const os=HO().map(c=>{const tk=otoks(c),sq=Math.sqrt(tk.length),eO=new Float32Array(DIM);let a=0;tk.forEach(t=>{const b=h32(t);emb(EO,b).forEach((v,i)=>eO[i]+=v/sq);a+=(WB.get(b)||0)/sq});return{c,tk,eO,s:a+eO.reduce((s,v,i)=>s+v*eQ[i],0),sq}});return{qt,eQ,cq,os,p:sm(os.map(o=>o.s))}}
+function drawH(){const f=fw();$('#htv').textContent=$('#ht').value;
+$('#toks').innerHTML='<p class="mu">Tokens de la consulta → fila hash (de 65 536):</p>'+f.qt.map(t=>`<span class="chip">${t}<small> #${h32(t)}</small></span>`).join('');
+const tg=$('#tg');if(tg.options.length!=f.os.length)tg.innerHTML=f.os.map((o,i)=>`<option value="${i}">${o.c.name}</option>`).join('');
+drawStrip($('#eq'),f.eQ);const c=$('#hs'),x=cx(c),W=c.clientWidth,bw=(W-10)/f.os.length;x.font='12px system-ui';
+f.os.forEach((o,k)=>{const h=f.p[k]*150;x.fillStyle=css('--ac');x.fillRect(5+k*bw+8,165-h,bw-16,h);x.fillStyle=css('--tx');x.fillText(o.c.name+' '+(f.p[k]*100).toFixed(0)+'%',5+k*bw+8,184);x.fillText('s='+o.s.toFixed(2),5+k*bw+8,198)})}
+function train(){const f=fw(),t=+$('#tg').value,lr=2,gq=new Float32Array(DIM);f.os.forEach((o,i)=>{const g=f.p[i]-(i==t?1:0);o.eO.forEach((v,j)=>gq[j]+=g*v*f.cq);o.tk.forEach(tk=>{const b=h32(tk),e=emb(EO,b);f.eQ.forEach((v,j)=>e[j]-=lr*g/o.sq*v);WB.set(b,(WB.get(b)||0)-lr*g/o.sq)})});
+f.qt.forEach(tk=>{const e=emb(EQ,h32(tk));gq.forEach((v,j)=>e[j]-=lr*v)})}
+$('#tr').onclick=()=>{train();drawH()};$('#tr10').onclick=()=>{for(let i=0;i<20;i++)train();drawH()};$('#rs').onclick=()=>{EQ.clear();EO.clear();WB.clear();drawH()};
+$('#desc').oninput=$('#ht').oninput=drawH;
+addEventListener('resize',()=>{size()});tab(0);requestAnimationFrame(frame);
+</script></body></html>

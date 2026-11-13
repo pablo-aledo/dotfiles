@@ -162,7 +162,30 @@ Controles (nanoKONTROL2): faders 1-8 = sliders; knobs 1-3 volúmenes, 5 tempo ±
 6 humanización, 7 temperatura, 8 amplitud de registro; S1-3 mute melodía/acordes/bajo;
 M1-8 bloquea el fader; R1 cadencia (V7→I); R2 modular +5ª; Play pausa; Stop parada;
 Rew/FF octava; Rec grabar; Track ◄ ► tonalidad ∓1 semitono.
-Consola: «valencia 0.8», «cadence», «key 1», «octave -1», «chord Am», «driftreset», «q».
+Consola: «valencia 0.8», «cadence», «key 1», «octave -1», «chord Am», «driftreset», «q»,
+         «pattern +1» / «pattern -1» / «pattern alberti» (patrón de acompañamiento).
+
+────────────────────────────────────────────────────────────────────────────
+Patrones de acompañamiento de acordes (integrado de chord_pattern_voicer.py)
+────────────────────────────────────────────────────────────────────────────
+Los botones MARKER ◄ / ► del nanoKONTROL2 (CC 61 / 62) recorren en ciclo la lista de
+patrones con que se «toca» cada acorde (las mismas notas, repartidas en el tiempo):
+    plantilla        la textura original por energía (bloque / arpegio, según el fader)
+    block            todas las notas a la vez
+    bombo-caja       nota grave, luego el resto del acorde junto
+    alberti          bajo, agudo, medio, agudo
+    arpeggio-up / arpeggio-down / arpeggio-updown
+    custom…          uno por cada --chord-custom, p.ej. "[0,1],1,2,0" o "vals=bajo,resto,resto"
+El cambio se aplica en el compás siguiente. MARKER SET (CC 60) vuelve a «plantilla».
+  --chord-patterns LISTA   patrones del ciclo, separados por comas (default: todos)
+  --chord-pattern NOMBRE   patrón inicial (default: plantilla)
+  --chord-custom [NOM=]ROLES  patrón propio; REPETIBLE: cada uno entra en el ciclo
+                           (sin nombre: custom, o custom1, custom2… si hay varios)
+  --chord-reps N           repeticiones por compás (0 = según la energía; default 0)
+  --chord-gate F           fracción sonante de cada paso, 0-1 (default 0.85)
+  --chord-accent F         multiplicador de velocity del primer golpe (default 1.0)
+  --chord-octave N         transporta las notas del acorde N octavas (default 0)
+No actúa con --chord-source keyboard (los acordes los tocas tú) ni con --ref-accomp.
 
 DEPENDENCIAS: numpy; mido + python-rtmidi (MIDI en vivo y train); pyfluidsynth + .sf2
 (sonido). render, bench y el modelo no necesitan hardware.
@@ -2449,6 +2472,98 @@ class Rhythm:
 # MOTOR EN TIEMPO REAL
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PATRONES DE ACOMPAÑAMIENTO (de chord_pattern_voicer.py)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+TEMPLATE_PATTERN = 'plantilla'
+PATTERN_STEPS = {'block': ['todas'], 'bombo-caja': ['bajo', 'resto'],
+                 'alberti': ['bajo', 'agudo', 'medio', 'agudo']}
+DYNAMIC_PATTERNS = ['arpeggio-up', 'arpeggio-down', 'arpeggio-updown']
+ALL_PATTERNS = [TEMPLATE_PATTERN, 'block', 'bombo-caja', 'alberti'] + DYNAMIC_PATTERNS + ['custom']
+ROLE_ALIASES = {
+    'bajo': 'bass', 'root': 'bass', 'raiz': 'bass', 'bass': 'bass',
+    'agudo': 'top', 'alto': 'top', 'top': 'top',
+    'medio': 'mid', 'mid': 'mid', 'middle': 'mid',
+    'resto': 'rest', 'caja': 'rest', 'rest': 'rest',
+    'todas': 'all', 'all': 'all', 'block': 'all',
+}
+
+
+def split_custom_pattern(text):
+    """Separa por comas respetando corchetes: «[0,1],1,2,0» → ['[0,1]', '1', '2', '0']."""
+    toks, cur, depth = [], '', 0
+    for ch in text:
+        if ch == '[':
+            depth += 1
+        elif ch == ']':
+            depth = max(0, depth - 1)
+        if ch == ',' and depth == 0:
+            toks.append(cur)
+            cur = ''
+        else:
+            cur += ch
+    toks.append(cur)
+    return [t.strip() for t in toks if t.strip()]
+
+
+def resolve_role(token, notes):
+    """Token de rol o índice → sublista de `notes` (ordenadas de grave a agudo)."""
+    token = token.strip()
+    if token.startswith('[') and token.endswith(']'):
+        out = []
+        for sub in token[1:-1].split(','):
+            for n in (resolve_role(sub, notes) if sub.strip() else []):
+                if n not in out:
+                    out.append(n)
+        return out or [notes[0]]
+    n = len(notes)
+    t = ROLE_ALIASES.get(token.lower(), token.lower())
+    if t == 'bass':
+        return [notes[0]]
+    if t == 'top':
+        return [notes[-1]]
+    if t == 'mid':
+        return [notes[n // 2]] if n >= 3 else [notes[-1]]
+    if t == 'rest':
+        return notes[1:] if n > 1 else [notes[0]]
+    if t == 'all':
+        return list(notes)
+    try:
+        return [notes[int(t) % n]]
+    except ValueError:
+        return [notes[0]]
+
+
+def pattern_tokens(name, custom, n):
+    if name == 'custom':
+        return split_custom_pattern(custom or '')
+    if name == 'arpeggio-up':
+        return [str(i) for i in range(n)]
+    if name == 'arpeggio-down':
+        return [str(i) for i in range(n - 1, -1, -1)]
+    if name == 'arpeggio-updown':
+        return [str(i) for i in list(range(n)) + (list(range(n - 2, 0, -1)) if n > 2 else [])]
+    return list(PATTERN_STEPS[name])
+
+
+def pattern_events(notes, name, custom, t, d, reps, gate, accent):
+    """[(inicio, duración, nota, factor_velocity)] en pulsos para un acorde que dura `d` desde `t`."""
+    toks = pattern_tokens(name, custom, len(notes))
+    if not toks or not notes:
+        return []
+    cyc = d / reps
+    step = cyc / len(toks)
+    ev = []
+    for r in range(reps):
+        for k, tok in enumerate(toks):
+            for m in resolve_role(tok, notes):
+                ev.append((t + r * cyc + k * step, max(0.05, step * gate),
+                           m, accent if k == 0 else 1.0))
+    return ev
+
+
 COMMANDS = ['cadence', 'modulate', 'play', 'stop', 'driftreset']
 
 
@@ -2484,6 +2599,9 @@ class Engine:
         self.bpm = clock.bpm
         self.progs = [int(x) for x in args.programs.split(',')]
         self.drift_name = args.drift_slider
+        self.pat_list = self.build_pattern_list(args)
+        self.pat_i = self.pat_list.index(args.chord_pattern) if args.chord_pattern in self.pat_list else 0
+        self.pat_active = self.pat_list[self.pat_i]          # el que suena (cambia al inicio de compás)
         self.drift_hist = deque(maxlen=8)           # últimos intervalos melódicos reales (semitonos)
         self.drift_off = 0                          # desplazamiento acumulado de la ventana (semitonos, múltiplos de 12)
         self.curve, self.cpos = None, 0.0           # modo curvas (CurveSession) y posición de lectura en compases
@@ -2772,6 +2890,9 @@ class Engine:
             pcs.append((pcs[0] + 2) % 12)
         notes = self.voice(pcs)
         vc = clamp((30 + 50 * e) * self.gain('vol_acordes'), 1, 127)
+        if self.pat_active != TEMPLATE_PATTERN:
+            self.play_pattern(chord, notes, vc, t, d)
+            return
         if e < 0.35:
             for n in notes:
                 self.emit(t, d, 1, n, vc)
@@ -2783,6 +2904,66 @@ class Engine:
                 self.emit(t + x, min(step, d - x), 1, seq[i % len(seq)], vc * (0.8 if x else 1.0))
                 x += step
                 i += 1
+        self.play_bass(chord, t, d)
+
+    # ── patrones de acompañamiento (marker ◄ ►) ─────────────────────────────
+    def build_pattern_list(self, args):
+        """Lista del ciclo. Cada --chord-custom [NOMBRE=]ROLES añade un patrón propio
+        (sin nombre: custom, o custom1, custom2… si hay varios)."""
+        raw = args.chord_custom or []
+        self.custom_map = {}
+        for i, spec in enumerate(raw, 1):
+            name, roles = (spec.split('=', 1) if '=' in spec.split('[')[0].split(',')[0] else (None, spec))
+            name = (name or '').strip() or ('custom' if len(raw) == 1 else f"custom{i}")
+            if name in ALL_PATTERNS and name != 'custom':
+                fail(f"--chord-custom: el nombre '{name}' ya es un patrón predefinido")
+            if not split_custom_pattern(roles):
+                fail(f"--chord-custom vacío: '{spec}'")
+            if name in self.custom_map:
+                fail(f"--chord-custom: nombre repetido '{name}'")
+            self.custom_map[name] = roles.strip()
+        names = [x.strip() for x in args.chord_patterns.split(',') if x.strip()] \
+            if args.chord_patterns else [x for x in ALL_PATTERNS if x != 'custom']
+        for x in names:
+            if x not in ALL_PATTERNS and x not in self.custom_map:
+                fail(f"--chord-patterns: patrón desconocido '{x}' "
+                     f"(opciones: {', '.join(ALL_PATTERNS + list(self.custom_map))})")
+            if x == 'custom' and 'custom' not in self.custom_map:
+                fail("el patrón 'custom' necesita --chord-custom")
+        names += [n for n in self.custom_map if n not in names]
+        cp = args.chord_pattern
+        if cp and cp not in names:
+            if cp not in ALL_PATTERNS:
+                fail(f"--chord-pattern: patrón desconocido '{cp}'")
+            names.insert(0, cp)
+        return names or [TEMPLATE_PATTERN]
+
+    def set_pattern(self, delta=None, name=None):
+        if name is not None:
+            if name not in self.pat_list:
+                return
+            self.pat_i = self.pat_list.index(name)
+        elif delta is not None:
+            self.pat_i = (self.pat_i + delta) % len(self.pat_list)
+
+    def pattern_reps(self):
+        r = self.args.chord_reps
+        if r > 0:
+            return r
+        e = self.sv('energia')
+        return 1 if e < 0.35 else 2 if e < 0.7 else 4
+
+    def play_pattern(self, chord, notes, vc, t, d):
+        a = self.args
+        notes = sorted(clamp(n + 12 * a.chord_octave, 0, 127) for n in notes)
+        notes = [int(n) for n in notes]
+        name = self.pat_active
+        roles = self.custom_map.get(name)
+        if roles is not None:
+            name = 'custom'
+        for st, du, m, f in pattern_events(notes, name, roles, t, d,
+                                           self.pattern_reps(), a.chord_gate, a.chord_accent):
+            self.emit(st, du, 1, m, vc * f)
         self.play_bass(chord, t, d)
 
     # ── referencia: prior de acordes, notas, ritmo y acompañamiento ───────────
@@ -2968,6 +3149,7 @@ class Engine:
                 self.ladder_i = int(round(f))
             self.mode = LADDER[self.ladder_i]
         self.cur_bar, self.bar_start = bar, t0
+        self.pat_active = self.pat_list[self.pat_i]
         self.levels = self.levels_now()
         self.cur_center = self.center()
         self.drift_relax()
@@ -3116,6 +3298,9 @@ class Engine:
             elif k == 'key':
                 base = self.tonic if self.pending_key is None else self.pending_key
                 self.pending_key = (base + c[1]) % 12
+            elif k == 'pattern':
+                self.set_pattern(delta=c[1] if isinstance(c[1], int) else None,
+                                 name=c[1] if isinstance(c[1], str) else None)
             elif k == 'driftreset':
                 self.drift_off = 0
             elif k == 'octave':
@@ -3204,7 +3389,7 @@ class Engine:
         where = f"[{meters}] {pos}" if self.curve is not None else f"{pos} [{meters}]"
         return (f"\r{PITCH_NAMES[self.tonic]:>2} {self.mode[:9]:<9} {i['chord']:<10} {i['tempo']:5.1f}bpm "
                 f"{where} {lay} {src}" + ('  ⏸' if not self.playing else '')
-                + (f" 🔒{locks}" if locks else "") + self.drift_indicator() + self.mix_indicator()
+                + (f" 🔒{locks}" if locks else "") + f" ♫{self.pat_list[self.pat_i]}" + self.drift_indicator() + self.mix_indicator()
                 + (f"  {self.curve.indicator()}" if self.curve is not None and self.curve.indicator() else "")
                 + "  ")
 
@@ -3324,6 +3509,9 @@ def bind_controls(korg, eng, out, args):
     cb[tr['ff']] = lambda: eng.post('octave', 1)
     cb[nav['track_prev']] = lambda: eng.post('key', -1)
     cb[nav['track_next']] = lambda: eng.post('key', 1)
+    cb[nav['marker_prev']] = lambda: eng.post('pattern', -1)
+    cb[nav['marker_next']] = lambda: eng.post('pattern', 1)
+    cb[nav['marker_set']] = lambda: eng.post('pattern', TEMPLATE_PATTERN)
 
     def rec():
         if out.record and out.log:
@@ -3350,6 +3538,11 @@ def stdin_thread(eng, stop):
                     eng.post(p[0], int(p[1]))
                 except ValueError:
                     pass
+            elif p[0] == 'pattern' and len(p) == 2:
+                if p[1] in ('+1', '-1'):
+                    eng.post('pattern', int(p[1]))
+                else:
+                    eng.post('pattern', p[1])
             elif p[0] == 'chord' and len(p) == 2:
                 rq = parse_chord_name(p[1])
                 if rq:
@@ -3591,6 +3784,24 @@ def build_parser():
     eng.add_argument('--drift-return', type=float, default=0.0, dest='drift_return',
                      help='Con el drift en reposo (≈0.5), semitonos por compás con que la ventana vuelve '
                           'a la octava base (0 = se queda donde está; «driftreset» la devuelve; default 0)')
+    eng.add_argument('--chord-patterns', default=None, dest='chord_patterns', metavar='LISTA',
+                     help='Patrones del ciclo de MARKER ◄ ►, separados por comas (default: plantilla, block, '
+                          'bombo-caja, alberti, arpeggio-up, arpeggio-down, arpeggio-updown)')
+    eng.add_argument('--chord-pattern', default=TEMPLATE_PATTERN, dest='chord_pattern',
+                     help='Patrón de acompañamiento inicial (default: plantilla = textura por energía)')
+    eng.add_argument('--chord-custom', action='append', default=None, dest='chord_custom',
+                     metavar='[NOMBRE=]ROLES',
+                     help='Patrón propio de roles, p.ej. "bajo,agudo,resto,medio" o "[0,1],1,2,0"; con '
+                          'NOMBRE= se le da nombre ("vals=bajo,resto,resto"). Repetible: cada uno se añade '
+                          'al ciclo (sin nombre: custom, o custom1, custom2… si hay varios)')
+    eng.add_argument('--chord-reps', type=int, default=0, dest='chord_reps',
+                     help='Repeticiones del patrón por compás (0 = según la energía; default 0)')
+    eng.add_argument('--chord-gate', type=float, default=0.85, dest='chord_gate',
+                     help='Fracción sonante de cada paso, 0-1 (default 0.85)')
+    eng.add_argument('--chord-accent', type=float, default=1.0, dest='chord_accent',
+                     help='Multiplicador de velocity del primer golpe de cada repetición (default 1.0)')
+    eng.add_argument('--chord-octave', type=int, default=0, dest='chord_octave',
+                     help='Transporta las notas del acorde N octavas (default 0)')
     eng.add_argument('--chord-source', choices=['model', 'keyboard', 'curve'], default='model',
                      dest='chord_source',
                      help='Acorde del compás: generado por Jev (model), leído de un teclado (keyboard) o '
