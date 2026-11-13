@@ -79,29 +79,32 @@ Sin `--reference`, `--desc/--tonic/--mode/--beats` conservan sus valores por def
 («obra instrumental», C, major, 4).
 
 ────────────────────────────────────────────────────────────────────────────
-Modo curvas (--curve-bars N): sliders leídos de fichero + flujo iterativo por vueltas
+Modo curvas (--curve-bars N): faders, knobs y acordes leídos de fichero + flujo iterativo por vueltas
 ────────────────────────────────────────────────────────────────────────────
-Con `--curve-bars N` los 8 sliders que modulan la música NO se leen del controlador sino
-de una «curva» por compás (fichero de texto). Jev sigue generando en tiempo real; lo único
-que cambia es de dónde salen los valores de los sliders. Una VUELTA = N compases.
+Con `--curve-bars N` los 8 faders y los 8 knobs NO se leen del controlador sino de una
+«curva» por compás (fichero de texto). Jev sigue generando en tiempo real; lo único que
+cambia es de dónde salen los valores de los controles. Una VUELTA = N compases.
 
-Formato del fichero (una línea por compás, compás desde 1, '#' comenta):
-    compás: valencia energia densidad tension registro complejidad sorpresa groove
-    1: 0.60 0.50 0.50 0.25 0.50 0.30 0.35 0.20
+Formato del fichero (una línea por compás, compás desde 1, '#' comenta; 8 faders + 8 knobs):
+    compás: valencia energia densidad tension registro complejidad sorpresa groove vol_melodia
+            vol_acordes vol_bajo reverb tempo humanizar temperatura amplitud
+    1: 0.60 0.50 0.50 0.25 0.50 0.30 0.35 0.20  0.50 0.50 0.50 0.50 0.50 0.50 0.50 0.50
+Un fichero con solo los 8 valores de los faders (formato anterior) también vale: los knobs
+quedan en 0.5. (El knob «reverb» está en el fichero por completitud, pero el motor no lo usa.)
 Cada valor se aplica en el INICIO de su compás. Los compases que falten repiten el valor
 de la línea anterior; los que sobren (> N) se ignoran. Interpolación (--curve-interp):
     lineal      recta entre el valor de un compás y el del siguiente
     escalonada  el valor del compás se mantiene durante todo el compás
     suave       cúbica monótona (Hermite/PCHIP): C1, pasa por los puntos, sin rebasarlos
 
-Mientras suena la vuelta, los faders físicos NO afectan al sonido: se graban en una curva
-nueva. Regla de grabación: si un fader se mueve durante el compás k, su valor (el que tenga
+Mientras suena la vuelta, los faders y knobs físicos NO afectan al sonido: se graban en una
+curva nueva. Regla de grabación: si un control se mueve durante el compás k, su valor (el que tenga
 al acabar ese compás) se guarda como valor del compás k+1; si no se mueve, se conserva el
 valor del fichero que está sonando. Al completar N compases la curva se guarda como
 NOMBRE_%04d.txt (el contador no pisa ficheros existentes) y ESA curva suena en la vuelta
-siguiente. El bloqueo M1-8 de un fader equivale a «no moverlo». Los knobs, botones y la
-consola siguen funcionando en vivo; los movimientos en el último compás de una vuelta no
-tienen «compás siguiente» dentro del fichero y se descartan.
+siguiente. El bloqueo M1-8 de un fader equivale a «no moverlo». Los botones y la consola
+siguen funcionando en vivo (la consola cuenta como mover el control); los movimientos en el
+último compás de una vuelta no tienen «compás siguiente» dentro del fichero y se descartan.
 
   --curve-bars N            activa el modo; compases por vuelta (≥ 2)
   --curve-in FILE [FILE…]   curva inicial (sin ella: todos los sliders en su valor por defecto).
@@ -114,7 +117,8 @@ tienen «compás siguiente» dentro del fichero y se descartan.
   --curve-out NOMBRE        base de los ficheros de salida (default: curva → curva_0001.txt);
                             si contiene '%' se usa como plantilla (p. ej. «tmp/take_%04d.txt»)
   --curve-interp MODO       lineal (default) | escalonada | suave
-  --no-curve-sliders        dejar los faders en vivo (útil si solo quieres la curva de acordes)
+  --no-curve-sliders        dejar los 8 faders en vivo (no siguen la curva ni se graban)
+  --no-curve-knobs          dejar los 8 knobs en vivo (no siguen la curva ni se graban)
   --curve-lap-reset         al empezar cada vuelta se reinicia el estado del motor (semilla --rng,
                             histórico de compases, drift, voces de acordes y modo de --valence-mode):
                             cada vuelta pasa a ser función de su fichero, --rng y el resto de opciones,
@@ -1842,7 +1846,10 @@ class Panel:
                         self.moved.add(nm)
                     self.target[nm] = x
             elif cc in self.kcc:
-                self.knob[self.kcc[cc]] = x
+                nm = self.kcc[cc]
+                if x != self.knob[nm]:
+                    self.moved.add(nm)
+                self.knob[nm] = x
             elif cc in self.mcc:
                 if raw >= 64:
                     k = self.mcc[cc]
@@ -1853,7 +1860,7 @@ class Panel:
                     fn()
 
     def get(self, name):
-        if self.override is not None and name in SLIDERS:
+        if self.override is not None and (name in SLIDERS or name in KNOBS):
             v = self.override(name)
             if v is not None:
                 return v
@@ -1861,12 +1868,12 @@ class Panel:
             return self.value[name] if name in self.value else self.knob[name]
 
     def phys(self, name):
-        """Posición física (sin suavizar ni sustituir) de un fader."""
+        """Posición física (sin suavizar ni sustituir) de un fader o un knob."""
         with self.lock:
-            return self.target[name]
+            return self.target[name] if name in self.target else self.knob[name]
 
     def take_moved(self):
-        """Faders movidos desde la última llamada (y los olvida)."""
+        """Faders y knobs movidos desde la última llamada (y los olvida)."""
         with self.lock:
             m, self.moved = self.moved, set()
             return m
@@ -1884,6 +1891,8 @@ class Panel:
                         self.moved.add(name)
                     self.target[name] = v
             elif name in KNOBS:
+                if v != self.knob[name]:
+                    self.moved.add(name)
                 self.knob[name] = v
 
     def tick(self, dt):
@@ -1961,9 +1970,14 @@ def _fill_holes(rows, nbars, path):
     return out
 
 
+CURVE_COLS = SLIDERS + KNOBS                    # columnas del fichero: 8 faders + 8 knobs
+CURVE_DEFAULTS = dict(SLIDER_DEFAULTS, **{k: 0.5 for k in KNOBS})
+
+
 def load_curve(path, nbars):
-    """Lee «compás: v1 … v8» (compás desde 1; '#' comenta). Devuelve nbars filas de 8 valores.
-    Los compases ausentes repiten la línea anterior (los previos a la primera, la primera)."""
+    """Lee «compás: v1 … v16» (8 faders + 8 knobs; compás desde 1; '#' comenta). Con solo 8 valores
+    (ficheros anteriores) los knobs quedan en 0.5. Los compases ausentes repiten la línea anterior
+    (los previos a la primera, la primera). Devuelve nbars filas de 16 valores."""
     rows = {}
     with _open_curve(path) as f:
         for n, line in enumerate(f, 1):
@@ -1972,15 +1986,17 @@ def load_curve(path, nbars):
                 continue
             m = re.match(r'^(\d+)\s*:\s*(.*)$', line)
             if not m:
-                fail(f"{path}:{n}: línea no válida (se espera «compás: " + ' '.join(['v'] * len(SLIDERS)) + "»)")
+                fail(f"{path}:{n}: línea no válida (se espera «compás: " + ' '.join(['v'] * len(CURVE_COLS)) + "»)")
             try:
                 vals = [float(x) for x in m.group(2).replace(',', ' ').split()]
             except ValueError:
                 fail(f"{path}:{n}: valor no numérico")
-            if len(vals) != len(SLIDERS):
-                fail(f"{path}:{n}: {len(vals)} valores; se esperan {len(SLIDERS)} ({' '.join(SLIDERS)})")
+            if len(vals) not in (len(SLIDERS), len(CURVE_COLS)):
+                fail(f"{path}:{n}: {len(vals)} valores; se esperan {len(CURVE_COLS)} ({' '.join(CURVE_COLS)}) "
+                     f"o solo los {len(SLIDERS)} faders")
             if int(m.group(1)) < 1:
                 fail(f"{path}:{n}: los compases empiezan en 1")
+            vals += [CURVE_DEFAULTS[k] for k in CURVE_COLS[len(vals):]]
             rows[int(m.group(1))] = [clamp(v) for v in vals]
     if not rows:
         fail(f"la curva '{path}' no tiene ninguna línea")
@@ -1990,7 +2006,7 @@ def load_curve(path, nbars):
 def save_curve(path, curve, interp):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(f"# jev_realtime curva — {len(curve)} compases, interpolación {interp}\n")
-        f.write("# compás: " + ' '.join(SLIDERS) + "\n")
+        f.write("# compás: " + ' '.join(CURVE_COLS) + "\n")
         for i, row in enumerate(curve, 1):
             f.write(f"{i}: " + ' '.join(f"{v:.4f}" for v in row) + "\n")
 
@@ -2090,19 +2106,24 @@ class LapStore:
             del self.curves[old]
 
 
-class SliderTrack:
-    """Los 8 sliders leídos de la curva. Un fader movido durante el compás k del reloj fija el
-    compás k+1 de la curva nueva (el valor que tenga al acabar k); sin mover, se conserva."""
+class ControlTrack:
+    """Faders y knobs leídos de la curva. Un control movido durante el compás k del reloj fija el
+    compás k+1 de la curva nueva (el valor que tenga al acabar k); sin mover, se conserva.
+    `active` son los controles que obedecen a la curva; el resto siguen en vivo."""
 
-    def __init__(self, panel, nbars, interp, out, init=None, replay=None):
+    def __init__(self, panel, nbars, interp, out, init=None, replay=None, active=CURVE_COLS):
         self.panel, self.n, self.interp = panel, nbars, interp
-        self.col = {s: i for i, s in enumerate(SLIDERS)}
-        base = init or [[SLIDER_DEFAULTS[s] for s in SLIDERS] for _ in range(nbars)]
-        self.store = LapStore(nbars, base, out, lambda p, c: save_curve(p, c, interp), 'Curva de sliders',
+        self.active = set(active)
+        self.col = {s: i for i, s in enumerate(CURVE_COLS)}
+        base = init or [[CURVE_DEFAULTS[s] for s in CURVE_COLS] for _ in range(nbars)]
+        self.store = LapStore(nbars, base, out, lambda p, c: save_curve(p, c, interp), 'Curva de controles',
                               replay=replay)
 
     def value(self, name, pos):
-        """Valor del slider en la posición `pos` (compases desde el inicio, fraccionario)."""
+        """Valor del control en la posición `pos` (compases desde el inicio, fraccionario);
+        None si ese control no sigue la curva."""
+        if name not in self.active:
+            return None
         lap, x = divmod(max(pos, 0.0) + EPS, self.n)
         cur, j = self.store.curve_for(int(lap)), self.col[name]
         i = min(int(x), self.n - 1)
@@ -2125,18 +2146,21 @@ class SliderTrack:
 
     def leave_bar(self, pb):
         moved = self.panel.take_moved()
-        if not self.store.recording:               # reproducción: los faders no cuentan
+        if not self.store.recording:               # reproducción: los controles físicos no cuentan
             return
         k = pb % self.n
         if k + 1 < self.n:                         # en el último compás no hay «siguiente» en el fichero
-            for nm in moved:
+            for nm in moved & self.active:
                 self.store.rec[k + 1][self.col[nm]] = round(self.panel.phys(nm), 4)
 
     def indicator(self, lap):
         if not self.store.recording:
             return f"▶{self.store.playing(lap)}/{len(self.store.replay)} {self.interp}"
-        marks = ''.join(str(self.col[s] + 1) for s in sorted(self.panel.peek_moved(), key=self.col.get))
-        return self.interp + (f" ✎{marks}" if marks else '')
+        mv = self.panel.peek_moved() & self.active
+        f = ''.join(str(i + 1) for i, nm in enumerate(SLIDERS) if nm in mv)
+        k = ''.join(str(i + 1) for i, nm in enumerate(KNOBS) if nm in mv)
+        marks = ' '.join(p for p in ((f"✎{f}" if f else ''), (f"k{k}" if k else '')) if p)
+        return self.interp + (f" {marks}" if marks else '')
 
 
 class ChordTrack:
@@ -2182,19 +2206,19 @@ class ChordTrack:
 
 
 class CurveSession:
-    """Coordina las pistas (sliders y/o acordes) con el RELOJ: vueltas de N compases."""
+    """Coordina las pistas (controles y/o acordes) con el RELOJ: vueltas de N compases."""
 
-    def __init__(self, nbars, beats, sliders=None, chords=None):
-        self.n, self.beats, self.sliders, self.chords = nbars, beats, sliders, chords
-        self.tracks = [t for t in (sliders, chords) if t is not None]
+    def __init__(self, nbars, beats, controls=None, chords=None):
+        self.n, self.beats, self.controls, self.chords = nbars, beats, controls, chords
+        self.tracks = [t for t in (controls, chords) if t is not None]
         self.cb = None
 
     def tick(self, now):
         cb = int(now // self.beats + EPS)
         if self.cb is None:
             self.cb = cb
-            if self.sliders is not None:
-                self.sliders.panel.take_moved()
+            if self.controls is not None:
+                self.controls.panel.take_moved()
             return
         while self.cb < cb:
             pb = self.cb
@@ -2470,7 +2494,7 @@ class Engine:
         self.cmds.append(c)
 
     def curve_value(self, name):
-        return self.curve.sliders.value(name, self.cpos)
+        return self.curve.controls.value(name, self.cpos)
 
     def poll_chord_kb(self, now):
         """Pulsaciones nuevas del teclado de grabación → [(pulso del reloj, (raíz, calidad))]."""
@@ -3195,14 +3219,15 @@ def build(args, out, clock, live_kb=False):
         warn("con --chord-source keyboard el acorde del teclado manda: --ref-chords se ignora")
     cbars = getattr(args, 'curve_bars', 0) or 0
     csrc = args.chord_source == 'curve'
-    sl_on = bool(cbars) and getattr(args, 'curve_sliders', True)
+    use_sl, use_kn = getattr(args, 'curve_sliders', True), getattr(args, 'curve_knobs', True)
+    sl_on = bool(cbars) and (use_sl or use_kn)      # hay pista de controles (faders y/o knobs)
     if cbars:
         if cbars < 2:
             fail("--curve-bars necesita al menos 2 compases")
-        if ref is not None and args.ref_sliders and sl_on:
+        if ref is not None and args.ref_sliders and use_sl:
             fail("--curve-bars y --ref-sliders son incompatibles (ambos deciden los sliders)")
         if not sl_on and not csrc:
-            fail("--no-curve-sliders sin --chord-source curve no deja nada que leer de fichero")
+            fail("--no-curve-sliders y --no-curve-knobs sin --chord-source curve no dejan nada que leer de fichero")
     elif csrc:
         fail("--chord-source curve necesita --curve-bars")
     if getattr(args, 'curve_lap_reset', False) and not cbars:
@@ -3210,7 +3235,7 @@ def build(args, out, clock, live_kb=False):
     if getattr(args, 'curve_no_rec', False) and not cbars:
         fail("--curve-no-rec necesita --curve-bars")
     if getattr(args, 'curve_in', None) and not sl_on:
-        fail("--curve-in necesita --curve-bars (y sliders en modo curva)")
+        fail("--curve-in necesita --curve-bars (y faders o knobs en modo curva)")
     if getattr(args, 'chord_curve_in', None) and not csrc:
         fail("--chord-curve-in necesita --chord-source curve")
     est = load_estimator(args)
@@ -3239,16 +3264,18 @@ def build(args, out, clock, live_kb=False):
         if sl_on:
             files = args.curve_in or []
             interp = CURVE_INTERP[args.curve_interp]
+            active = (SLIDERS if use_sl else []) + (KNOBS if use_kn else [])
+            what = 'faders y knobs' if use_sl and use_kn else 'faders' if use_sl else 'knobs'
             if len(files) > 1 or norec:             # reproducción: una curva por vuelta, sin grabar
                 curves = [load_curve(f, cbars) for f in files] or \
-                         [[[SLIDER_DEFAULTS[x] for x in SLIDERS] for _ in range(cbars)]]
-                sl = SliderTrack(panel, cbars, interp, None, replay=curves)
-                print(f"    sliders: {interp}, reproducción de {len(curves)} curva(s), una por vuelta "
+                         [[[CURVE_DEFAULTS[x] for x in CURVE_COLS] for _ in range(cbars)]]
+                sl = ControlTrack(panel, cbars, interp, None, replay=curves, active=active)
+                print(f"    controles ({what}): {interp}, reproducción de {len(curves)} curva(s), una por vuelta "
                       f"(la última se repite), sin grabar: {' '.join(files) or '(valores por defecto)'}")
             else:
                 init = load_curve(files[0], cbars) if files else None
-                sl = SliderTrack(panel, cbars, interp, args.curve_out, init)
-                print(f"    sliders: {interp}, entrada {files[0] if files else '(valores por defecto)'}, "
+                sl = ControlTrack(panel, cbars, interp, args.curve_out, init, active=active)
+                print(f"    controles ({what}): {interp}, entrada {files[0] if files else '(valores por defecto)'}, "
                       f"salida {sl.store.tpl}")
             panel.override = eng.curve_value
         if csrc:
@@ -3565,7 +3592,8 @@ def build_parser():
                      help='Modo curvas: los sliders se leen de un fichero por compás y se graba una curva '
                           'nueva cada N compases (una vuelta). 0 = desactivado (default)')
     eng.add_argument('--curve-in', nargs='+', default=None, dest='curve_in', metavar='FILE',
-                     help='Curva inicial «compás: v1 … v8» (sin ella: sliders en su valor por defecto). '
+                     help='Curva inicial «compás: v1 … v16» (8 faders + 8 knobs; con solo 8 valores los knobs quedan '
+                          'en 0.5). Sin ella: todo en su valor por defecto. '
                           'Con 2 o más ficheros se REPRODUCE la sesión sin grabar: uno por vuelta, en orden '
                           '(inicial, curva_0001, curva_0002…); la última se repite')
     eng.add_argument('--curve-out', default='curva', dest='curve_out', metavar='NOMBRE',
@@ -3579,7 +3607,9 @@ def build_parser():
     eng.add_argument('--curve-no-rec', action='store_true', dest='curve_no_rec',
                      help='Con --curve-bars: no grabar ni guardar nada (reproducción también con un solo fichero)')
     eng.add_argument('--no-curve-sliders', dest='curve_sliders', action='store_false', default=True,
-                     help='Con --curve-bars: dejar los faders en vivo (solo curva de acordes)')
+                     help='Con --curve-bars: dejar los 8 faders en vivo (no siguen la curva ni se graban)')
+    eng.add_argument('--no-curve-knobs', dest='curve_knobs', action='store_false', default=True,
+                     help='Con --curve-bars: dejar los 8 knobs en vivo (no siguen la curva ni se graban)')
     eng.add_argument('--chord-curve-in', nargs='+', default=None, dest='chord_curve_in', metavar='FILE',
                      help='Curva de acordes inicial «compás: acorde» (sin ella los genera Jev en la 1ª vuelta). '
                           'Con 2 o más ficheros se reproduce la sesión sin grabar, uno por vuelta')
