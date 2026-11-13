@@ -2584,10 +2584,21 @@ class Engine:
         self.lead_ref, self.lead_idx = rr, bi
 
     def mix_indicator(self):
+        """Texto compacto para la línea de estado con --references: posición del fader de mezcla
+        (B a la izquierda = 0, A a la derecha = 1; ┊ = centro, ● = valor), s en %, pesos efectivos
+        Jev/A/B y la referencia que manda en este compás (ritmo follow / acompañamiento fiel)."""
         if not self.multi:
             return ''
         w0, wa, wb = self.ref_weights()
-        return f" mix J{100 * w0:.0f} A{100 * wa:.0f} B{100 * wb:.0f}"
+        s = clamp(self.panel.get(self.args.ref_fader))
+        n = 11
+        pos = max(0, min(n - 1, int(round(s * (n - 1)))))
+        cells = ['·'] * n
+        cells[(n - 1) // 2] = '┊'
+        cells[pos] = '●'
+        lead = '-' if self.lead_ref is None else ('A' if self.lead_ref is self.ref else 'B')
+        return (f" mix:{self.args.ref_fader[:4]} B[{''.join(cells)}]A {100 * s:3.0f}% "
+                f"J{100 * w0:.0f} A{100 * wa:.0f} B{100 * wb:.0f} ►{lead}")
 
     def ref_strength(self, dims):
         """Fuerza de la referencia para una decisión, relajada por los sliders que la gobiernan
