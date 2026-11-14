@@ -493,8 +493,33 @@ def knn_dense(E, k, floor, use_faiss):
     return np.concatenate(oi), np.concatenate(oj), np.concatenate(os_)
 
 
+def knn_lexical_numpy(keys_sub, k, floor, dim=4096):
+    """Respaldo sin scikit-learn/scipy: TF-IDF de n-gramas de caracteres (3-4) con hashing a
+    `dim` dimensiones, y kNN denso con numpy. Se usa si sklearn no se puede importar."""
+    n = len(keys_sub)
+    X = np.zeros((n, dim), dtype=np.float32)
+    for r, key in enumerate(keys_sub):
+        for tok in key.split():
+            t = ' ' + tok + ' '
+            for L in (3, 4):
+                for q in range(len(t) - L + 1):
+                    X[r, zlib.crc32(t[q:q + L].encode('utf-8')) % dim] += 1.0
+    np.log1p(X, out=X)
+    dfv = (X > 0).sum(axis=0).astype(np.float32)
+    X *= (np.log((1.0 + n) / (1.0 + dfv)) + 1.0).astype(np.float32)
+    nrm = np.linalg.norm(X, axis=1, keepdims=True)
+    nrm[nrm == 0] = 1.0
+    X /= nrm
+    return knn_dense(np.ascontiguousarray(X), k, floor, False)
+
+
 def knn_lexical(keys_sub, k, floor):
-    from sklearn.feature_extraction.text import TfidfVectorizer
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+    except Exception as e:   # ImportError, o AttributeError por scipy/numpy incompatibles
+        log('AVISO: scikit-learn no se puede importar (%s: %s); uso el respaldo con numpy' %
+            (type(e).__name__, str(e).splitlines()[0] if str(e) else ''))
+        return knn_lexical_numpy(keys_sub, k, floor)
     X = TfidfVectorizer(analyzer='char_wb', ngram_range=(3, 4), sublinear_tf=True,
                         dtype=np.float32).fit_transform(keys_sub).tocsr()
     XT = X.T.tocsr()
