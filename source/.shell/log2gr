@@ -1468,6 +1468,8 @@ ctags_highlight_review(){
 	rm -fr /tmp/ctags_highlight_2
 	Git branch_diff_files | while read line
 	do
+        tagline="$(mgrep tags $line)"
+        fileline="$(echo $tagline | awk '{print $2}')"
 		ctags_highlight $line
 		cat /tmp/ctags_highlight | sed "s/#0000FF/$(string_to_color $line)/g" >> /tmp/ctags_highlight_2
 	done
