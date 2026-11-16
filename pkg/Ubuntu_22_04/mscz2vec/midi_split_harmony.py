@@ -155,6 +155,30 @@ from typing import List, Tuple, Dict, Optional, Any
 import numpy as np
 import mido
 
+
+def _open_midi(path):
+    """Abre un MIDI de forma tolerante.
+
+    1) Lectura estricta. 2) Si falla por datos fuera de rango (MIDI ligeramente
+    corrupto), reintenta con clip=True y avisa por stderr. 3) Si tampoco así se
+    puede leer, lanza ValueError con un mensaje que apunta a midi_doctor.
+    """
+    try:
+        return mido.MidiFile(path)
+    except FileNotFoundError:
+        raise
+    except (OSError, ValueError, EOFError, IndexError, KeyError) as e1:
+        try:
+            mid = mido.MidiFile(path, clip=True)
+        except Exception as e2:
+            raise ValueError(
+                f"MIDI ilegible ({e1!r}; con clip=True: {e2!r}). "
+                f"Pruebe: python midi_doctor.py fix {path}") from e2
+        print(f"[AVISO] {path}: MIDI con datos fuera de rango ({e1}); "
+              f"leído con clip=True. Repárelo con: python midi_doctor.py fix {path}",
+              file=sys.stderr)
+        return mid
+
 # ── music21 opcional ──────────────────────────────────────────────────────────
 try:
     from music21 import converter as m21conv, key as m21key
@@ -324,7 +348,7 @@ class MidiInfo:
 
 def load_midi(path: str) -> MidiInfo:
     """Carga un fichero MIDI y extrae todas las notas con sus offsets en beats."""
-    mid = mido.MidiFile(path)
+    mid = _open_midi(path)
     info = MidiInfo()
     info.tpb = mid.ticks_per_beat
     info.n_tracks = len(mid.tracks)

@@ -613,6 +613,25 @@ def extract_notes(trk: MidiTrackData) -> List[Note]:
     return notes
 
 
+def _split_keyswitches(notes: List[Note], tpb: int) -> Tuple[List[Note], List[Note]]:
+    """Separa los keyswitches de las notas tocables.
+
+    Las librerías de samples (p. ej. las que emite piano_to_orchestra.py:
+    'nucleus'/'metropolis') cambian de articulación con notas MIDI de duración
+    mínima (≈2 ticks) por debajo de la tesitura de cualquier instrumento. No son
+    notas que nadie toque: auditarlas como notas produce falsos «fuera de rango»
+    y frases continuas inexistentes, y --fix las transpondría de octava,
+    rompiendo el cambio de articulación.
+    Criterio (conservador): pitch < E1 (28) Y duración ≤ 1/128 de redonda
+    (tpb/32 ticks, mínimo 4).
+    """
+    max_dur = max(4, tpb // 32)
+    real, ks = [], []
+    for n in notes:
+        (ks if (n.pitch < 28 and (n.end - n.start) <= max_dur) else real).append(n)
+    return real, ks
+
+
 def detect_instrument(trk: MidiTrackData, override: Optional[str] = None) -> str:
     if override:
         if override not in INSTRUMENT_DB:
@@ -934,6 +953,7 @@ def audit_midi(path: str,
     scores, weights = [], []
     for idx, trk in enumerate(mid.tracks):
         notes = extract_notes(trk)
+        notes, ks_notes = _split_keyswitches(notes, mid.tpb)
         if not notes:
             continue                                  # pista de metadatos / vacía
         if tracks is not None and idx not in tracks:
@@ -952,6 +972,11 @@ def audit_midi(path: str,
             issues.extend(_CHECK_FUNCS[ch](notes, prof, tc, scale, idx))
         issues = _group(issues)
         issues.sort(key=lambda i: (0 if i.severity == "ERROR" else 1, i.bar))
+        if ks_notes:
+            issues.append(Issue("rango", "INFO", idx, tc.bar(ks_notes[0].start),
+                                f"{len(ks_notes)} keyswitch(es) ignorados "
+                                f"(notas < E1 de duración mínima; no se auditan como notas)",
+                                count=len(ks_notes)))
         ta = TrackAudit(index=idx, name=trk.name or f"Pista {idx}",
                         instrument=inst, instrument_es=prof["es"],
                         n_notes=len(notes), issues=issues,
@@ -989,6 +1014,7 @@ def fix_midi(path: str, out_path: str,
 
     for idx, trk in enumerate(mid.tracks):
         notes = extract_notes(trk)
+        notes, ks_notes = _split_keyswitches(notes, mid.tpb)   # los KS no se tocan
         if not notes:
             continue
         inst, _auto = resolve_instrument(trk, notes, overrides.get(idx))
@@ -1069,7 +1095,7 @@ def fix_midi(path: str, out_path: str,
         # reconstruir eventos de nota de la pista
         others = [e for e in trk.events if e.kind not in ("note_on", "note_off")]
         nevents = []
-        for n in notes:
+        for n in notes + ks_notes:
             nevents.append(MidiEvent(abs=n.start, kind="note_on",
                                      channel=n.channel, pitch=n.pitch, vel=n.vel))
             nevents.append(MidiEvent(abs=n.end, kind="note_off",

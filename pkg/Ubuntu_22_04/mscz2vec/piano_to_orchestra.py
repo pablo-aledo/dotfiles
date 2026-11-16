@@ -3226,6 +3226,52 @@ class InstrumentAssigner:
                     return p
         return max(lo, min(hi, pitch))
 
+    # Polifonía máxima idiomática por instrumento (una línea de viento = 1 voz;
+    # la trompa se trata como sección de 4, el trombón como sección de 3).
+    MAX_POLY = {'flute': 1, 'oboe': 1, 'clarinet': 1, 'bassoon': 1,
+                'trumpet': 1, 'horn': 4, 'trombone': 3}
+
+    def _limit_polyphony(self, notes, cap, role):
+        """Adapta el material de piano a un instrumento con polifonía limitada.
+
+        · Ataques simultáneos > cap: bajo → se quedan las más graves; melodía
+          (cap=1) → la más aguda (skyline); resto (pads) → la más grave + las
+          más agudas.
+        · Solapes que superan cap: se acorta la nota activa más antigua en el
+          ataque de la nueva (legato), como haría un instrumentista.
+        Devuelve notas (t, pitch, dur, vel) ordenadas.
+        """
+        from collections import defaultdict
+        by_t = defaultdict(list)
+        for n in notes:
+            by_t[n[0]].append(n)
+        out = []
+        active = []                                  # [t, p, dur, vel] mutables
+        for t in sorted(by_t):
+            grp = sorted(by_t[t], key=lambda n: n[1])
+            # quitar duplicados de altura exacta
+            seen, uniq = set(), []
+            for n in grp:
+                if n[1] not in seen:
+                    seen.add(n[1]); uniq.append(n)
+            grp = uniq
+            if len(grp) > cap:
+                if role in ('bass', 'bass_double'):
+                    grp = grp[:cap]
+                elif cap == 1:
+                    grp = grp[-1:]
+                else:
+                    grp = grp[:1] + grp[-(cap - 1):]
+            active = [a for a in active if a[0] + a[2] > t]
+            while active and len(active) + len(grp) > cap:
+                a = min(active, key=lambda x: x[0])
+                a[2] = max(1, t - a[0])              # acortar: termina al entrar la nueva
+                active.remove(a)
+            for n in grp:
+                m = [n[0], n[1], n[2], n[3]]
+                out.append(m); active.append(m)
+        return [tuple(m) for m in out]
+
     def _section_for(self, tick, sections):
         for s in sections:
             end = s['end_tick'] if s['end_tick'] else float('inf')
@@ -3381,6 +3427,16 @@ class InstrumentAssigner:
         if octsh:
             raw_notes = [(t, p + octsh*12, d, v) for t,p,d,v in raw_notes]
 
+        # Instrumentos de polifonía limitada: ajustar al rango y reducir acordes
+        # / solapes ANTES de generar eventos (evita acordes en vientos, 5-7 notas
+        # simultáneas en la trompa y solapes en líneas monofónicas).
+        cap = self.MAX_POLY.get(name)
+        if cap is not None:
+            raw_notes = [(t, self._fit(p, name), d, v) for t, p, d, v in raw_notes]
+            raw_notes = self._limit_polyphony(raw_notes, cap, role)
+            if not raw_notes:
+                return []
+
         events     = []
         prev_art   = None
         prev_note  = None
@@ -3468,6 +3524,16 @@ class InstrumentAssigner:
 
             events.append((t_on, 'note', pitch, eff_vel, dur_ticks))
             prev_note = note
+
+        # El humanize desplaza los ataques ±unos ticks sin tocar las duraciones, lo
+        # que reintroduce solapes en instrumentos de polifonía limitada: se
+        # vuelve a recortar sobre los eventos finales.
+        if cap is not None and self.humanize > 0:
+            note_evs = [(e[0], e[2], e[4], e[3]) for e in events if e[1] == 'note']
+            fixed = self._limit_polyphony(note_evs, cap, role)
+            events = [e for e in events if e[1] != 'note'] + \
+                     [(t, 'note', p, v, d) for t, p, d, v in fixed]
+            events.sort(key=lambda e: e[0])
 
         return events
 

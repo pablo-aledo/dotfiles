@@ -60,6 +60,30 @@ import tempfile
 from collections import defaultdict
 
 import mido
+
+
+def _open_midi(path):
+    """Abre un MIDI de forma tolerante.
+
+    1) Lectura estricta. 2) Si falla por datos fuera de rango (MIDI ligeramente
+    corrupto), reintenta con clip=True y avisa por stderr. 3) Si tampoco así se
+    puede leer, lanza ValueError con un mensaje que apunta a midi_doctor.
+    """
+    try:
+        return mido.MidiFile(path)
+    except FileNotFoundError:
+        raise
+    except (OSError, ValueError, EOFError, IndexError, KeyError) as e1:
+        try:
+            mid = mido.MidiFile(path, clip=True)
+        except Exception as e2:
+            raise ValueError(
+                f"MIDI ilegible ({e1!r}; con clip=True: {e2!r}). "
+                f"Pruebe: python midi_doctor.py fix {path}") from e2
+        print(f"[AVISO] {path}: MIDI con datos fuera de rango ({e1}); "
+              f"leído con clip=True. Repárelo con: python midi_doctor.py fix {path}",
+              file=sys.stderr)
+        return mid
 import numpy as np
 
 def _ensure_parent(path):
@@ -98,7 +122,7 @@ def _c(code):
 
 def load_tracks(path):
     """→ (tracks, tpb, ticks_per_bar). Cada pista: dict con notas (start,end,pitch,vel)."""
-    mid = mido.MidiFile(path)
+    mid = _open_midi(path)
     tpb = mid.ticks_per_beat
     ts = (4, 4)
     tracks = []
@@ -463,6 +487,9 @@ def main():
         sys.exit(a.fn(a))
     except FileNotFoundError as e:
         print(f"[ERROR] fichero no encontrado: {e.filename}", file=sys.stderr)
+        sys.exit(2)
+    except ValueError as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
         sys.exit(2)
 
 

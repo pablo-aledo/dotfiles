@@ -193,6 +193,77 @@ CHORD_VOICINGS = {
 }
 CHORD_DEFAULT = 'C'
 
+# ── Voicing por análisis de cifrado (raíz + calidad [+ /bajo]) ────────────────
+# CHORD_VOICINGS es una tabla cerrada: se consulta primero (voicings afinados a
+# mano). Si el acorde no está, se construye con el mismo patrón de registro:
+# bajo (F1..E2), raíz duplicada una octava arriba y el resto de notas del acorde
+# por encima de esa raíz.
+_ROOT_PC = {'C':0,'D':2,'E':4,'F':5,'G':7,'A':9,'B':11}
+_QUALITY_INTERVALS = {
+    '':[0,4,7], 'maj':[0,4,7], 'M':[0,4,7],
+    'm':[0,3,7], 'min':[0,3,7], '-':[0,3,7],
+    '5':[0,7],
+    '7':[0,4,7,10], '9':[0,4,7,10,14],
+    'maj7':[0,4,7,11], 'M7':[0,4,7,11], 'Δ':[0,4,7,11], 'Δ7':[0,4,7,11],
+    'maj9':[0,4,7,11,14], 'M9':[0,4,7,11,14],
+    'm7':[0,3,7,10], 'min7':[0,3,7,10], '-7':[0,3,7,10],
+    'm9':[0,3,7,10,14],
+    'mmaj7':[0,3,7,11], 'mM7':[0,3,7,11], 'minmaj7':[0,3,7,11],
+    'dim':[0,3,6], 'o':[0,3,6], '°':[0,3,6],
+    'dim7':[0,3,6,9], 'o7':[0,3,6,9], '°7':[0,3,6,9],
+    'm7b5':[0,3,6,10], 'm7-5':[0,3,6,10], 'ø':[0,3,6,10], 'ø7':[0,3,6,10],
+    'aug':[0,4,8], '+':[0,4,8], 'aug7':[0,4,8,10], '+7':[0,4,8,10], '7#5':[0,4,8,10],
+    'sus4':[0,5,7], 'sus':[0,5,7], 'sus2':[0,2,7], '7sus4':[0,5,7,10],
+    '6':[0,4,7,9], 'm6':[0,3,7,9],
+    'add9':[0,4,7,14], 'madd9':[0,3,7,14],
+    '7b5':[0,4,6,10], '7b9':[0,4,7,10,13], '7#9':[0,4,7,10,15],
+}
+
+def _parse_note_pc(txt):
+    """'F#', 'Bb', 'C♯', 'Ef', 'Bs'... → pitch class (o None)."""
+    if not txt or txt[0] not in _ROOT_PC:
+        return None
+    pc = _ROOT_PC[txt[0]]
+    for ch in txt[1:]:
+        if ch in ('#', '♯', 's'):   pc += 1
+        elif ch in ('b', '♭', 'f'): pc -= 1
+        else: return None
+    return pc % 12
+
+def _bass_midi(pc):
+    """Nota grave en el rango F1..E2 (29..40), como en CHORD_VOICINGS."""
+    m = 24 + pc
+    return m + 12 if m < 29 else m
+
+def chord_from_symbol(sym):
+    """Cifrado ('Ebmaj7', 'C#dim7', 'Bb/D', 'F#m7b5'…) → lista de notas MIDI, o None."""
+    import re
+    s = str(sym).strip()
+    mt = re.match(r'^([A-G](?:#|♯|b|♭)?)(.*?)(?:/([A-G](?:#|♯|b|♭)?))?$', s)
+    if not mt:
+        return None
+    root_txt, qual, bass_txt = mt.groups()
+    # ambigüedad 'Bb' = Si♭ frente a 'B' + calidad 'b…': la regex voraz ya
+    # prefiere Si♭; si la calidad resultante no existe se prueba sin alteración.
+    candidates = [(root_txt, qual)]
+    if len(root_txt) == 2 and root_txt[1] in ('b', '♭'):
+        candidates.append((root_txt[0], root_txt[1] + qual))
+    for rt, q in candidates:
+        ivs = _QUALITY_INTERVALS.get(q)
+        pc = _parse_note_pc(rt)
+        if ivs is None or pc is None:
+            continue
+        bass_pc = pc
+        if bass_txt:
+            bass_pc = _parse_note_pc(bass_txt)
+            if bass_pc is None:
+                return None
+        root3 = _bass_midi(pc) + 12
+        notes = [_bass_midi(bass_pc), root3]
+        notes += [root3 + iv for iv in ivs if iv != 0]
+        return notes
+    return None
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  SISTEMA MODAL
 # ══════════════════════════════════════════════════════════════════════════════
@@ -463,6 +534,9 @@ def parse_chord(acorde_str):
         return []
     voicing = CHORD_VOICINGS.get(str(acorde_str))
     if voicing is None:
+        built = chord_from_symbol(acorde_str)
+        if built is not None:
+            return built
         print(f"  ⚠ Acorde no reconocido: '{acorde_str}' — usando {CHORD_DEFAULT}")
         voicing = CHORD_VOICINGS[CHORD_DEFAULT]
     return [note_to_midi(n) for n in voicing]
@@ -2030,10 +2104,10 @@ def validate_yaml(obra):
                         err(f"{fp}: origen_leitmotiv=true pero '{lm}' sin notas_canonicas")
             for item in (frase.get('armonia') or []):
                 ac=item.get('acorde')
-                if ac and ac not in ('null','None',None,'—','-') and ac not in CHORD_VOICINGS:
+                if ac and ac not in ('null','None',None,'—','-') and ac not in CHORD_VOICINGS and chord_from_symbol(ac) is None:
                     # tolerar si hay 'grado' que lo reemplaza
                     if not item.get('grado'):
-                        err(f"{fp}: acorde '{ac}' no en CHORD_VOICINGS (ni hay 'grado' alternativo)")
+                        err(f"{fp}: acorde '{ac}' no en CHORD_VOICINGS ni interpretable como cifrado (ni hay 'grado' alternativo)")
                 grado_raw = item.get('grado')
                 if grado_raw and not item.get('acorde'):
                     modo_s, tonica_s = _get_seccion_modo(sec, obra)
@@ -3851,17 +3925,22 @@ def preview(obra):
     if obra['obra'].get('subtitulo'): print(f"  {obra['obra']['subtitulo']}")
     print(f"  {obra['obra'].get('compas','?')} · {obra['obra'].get('tonalidad','?')} · {obra['obra'].get('compases_totales','?')} cc.")
     print(f"{'─'*60}")
+    # preview es tolerante con campos ausentes: el validador (--validar) es quien
+    # informa de ellos; aquí se muestran como '?' / '(sin nombre)' en vez de KeyError.
     lms=(obra.get('leitmotivs') or [])
     if lms:
         print(f"\n  LEITMOTIVS ({len(lms)}):")
-        for lm in lms: print(f"    [{lm['id']:20s}] {lm['nombre']}")
+        for lm in lms: print(f"    [{str(lm.get('id','?')):20s}] {lm.get('nombre','(sin nombre)')}")
     for sec in (obra.get('secciones') or []):
-        c=sec['compases']; t=sec['tempo']
-        print(f"\n  SECCIÓN {sec['id']}: {sec['nombre']}")
-        print(f"  Cc.{c[0]}–{c[1]} · {sec.get('duracion_aprox','?')} · {t['bpm_inicio']}→{t.get('bpm_fin',t['bpm_inicio'])} BPM ({t['tipo']})")
+        c=sec.get('compases') or ['?','?']; t=sec.get('tempo') or {}
+        print(f"\n  SECCIÓN {sec.get('id','?')}: {sec.get('nombre','(sin nombre)')}")
+        bpm_i=t.get('bpm_inicio','?')
+        print(f"  Cc.{c[0]}–{c[1]} · {sec.get('duracion_aprox','?')} · {bpm_i}→{t.get('bpm_fin',bpm_i)} BPM ({t.get('tipo','?')})")
         for frase in (sec.get('frases') or []):
-            fc=frase['compases']
-            print(f"    {frase['id']:8s} cc.{fc[0]:3d}–{fc[1]:3d}  {frase['nombre'][:35]:35s} mel:{len((frase.get('melodia') or [])):3d}  arm:{len((frase.get('armonia') or [])):2d}  lm:{frase.get('leitmotiv','—')}")
+            fc=frase.get('compases') or ['?','?']
+            fc0=f"{fc[0]:>3}" if not isinstance(fc[0],int) else f"{fc[0]:3d}"
+            fc1=f"{fc[1]:>3}" if not isinstance(fc[1],int) else f"{fc[1]:3d}"
+            print(f"    {str(frase.get('id','?')):8s} cc.{fc0}–{fc1}  {str(frase.get('nombre','(sin nombre)'))[:35]:35s} mel:{len((frase.get('melodia') or [])):3d}  arm:{len((frase.get('armonia') or [])):2d}  lm:{frase.get('leitmotiv','—')}")
     print(f"\n{'═'*60}")
 
 # ══════════════════════════════════════════════════════════════════════════════

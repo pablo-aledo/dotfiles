@@ -1286,6 +1286,13 @@ def main():
     if args.param == "all": params = list(ALL_PARAMS)
     elif args.param:        params = [args.param]
     else:                   params = args.params or ["density"]
+    if "all" in params: params = list(ALL_PARAMS)
+    if len(params) >= len(ALL_PARAMS) - 1:
+        print(f"[AVISO] se modulan {len(params)} ejes a la vez, incluidos los estructurales "
+              f"(register, contour, density, tempo): con --intensity "
+              f"{getattr(args, 'intensity', 1.0)} puede degradar mucho la obra (en pruebas, "
+              f"quality_scorer 0.77 → 0.39 con 1.0 y → 0.54 con 0.3). Pruebe ejes "
+              f"concretos (--param dynamics, --param tension…).", file=sys.stderr)
 
     try:
         modulate_midi(

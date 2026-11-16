@@ -67,13 +67,37 @@ except ImportError:                                   # pragma: no cover
 VERSION = "1.0"
 
 
+def _open_midi(path):
+    """Abre un MIDI de forma tolerante.
+
+    1) Lectura estricta. 2) Si falla por datos fuera de rango (MIDI ligeramente
+    corrupto), reintenta con clip=True y avisa por stderr. 3) Si tampoco así se
+    puede leer, lanza ValueError con un mensaje que apunta a midi_doctor.
+    """
+    try:
+        return mido.MidiFile(path)
+    except FileNotFoundError:
+        raise
+    except (OSError, ValueError, EOFError, IndexError, KeyError) as e1:
+        try:
+            mid = mido.MidiFile(path, clip=True)
+        except Exception as e2:
+            raise ValueError(
+                f"MIDI ilegible ({e1!r}; con clip=True: {e2!r}). "
+                f"Pruebe: python midi_doctor.py fix {path}") from e2
+        print(f"[AVISO] {path}: MIDI con datos fuera de rango ({e1}); "
+              f"leído con clip=True. Repárelo con: python midi_doctor.py fix {path}",
+              file=sys.stderr)
+        return mid
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Modelo: pistas como notas + eventos sueltos en ticks absolutos
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Song:
     def __init__(self, path, time_sig=None, pickup=0.0):
-        self.mid = mido.MidiFile(path)
+        self.mid = _open_midi(path)
         self.path = str(path)
         self.tpb = self.mid.ticks_per_beat or 480
         self.type = self.mid.type

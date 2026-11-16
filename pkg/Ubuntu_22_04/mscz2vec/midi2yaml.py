@@ -179,6 +179,24 @@ def extraer_notas_track(track, tpb: int) -> list:
     return sorted(notas, key=lambda x: x[0])
 
 
+def fraccion_polifonica(notas: list) -> float:
+    """Fracción de ataques que caen en un tick con más de una nota."""
+    por_tick = {}
+    for (t_on, _t_off, _p, _v) in notas:
+        por_tick[t_on] = por_tick.get(t_on, 0) + 1
+    total = sum(por_tick.values())
+    return sum(v for v in por_tick.values() if v > 1) / total if total else 0.0
+
+
+def skyline(notas: list) -> list:
+    """Conserva la nota más aguda de cada ataque (melodía monofónica)."""
+    mejor = {}
+    for n in notas:
+        if n[0] not in mejor or n[2] > mejor[n[0]][2]:
+            mejor[n[0]] = n
+    return sorted(mejor.values(), key=lambda x: x[0])
+
+
 def elegir_track_melodia(mid: MidiFile, track_forzado: int = None) -> int:
     """Elige la pista melódica, o usa track_forzado.
 
@@ -434,6 +452,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output", default=None, metavar="FILE",
                    help="Escribe el YAML generado en FILE (crea el directorio si "
                         "no existe) en lugar de imprimirlo por stdout")
+    p.add_argument("--skyline", action="store_true",
+                   help="Si la pista de melodía es polifónica, conserva solo la nota "
+                        "más aguda de cada ataque (así 'melodia:' es monofónica)")
+    p.add_argument("--strict", action="store_true",
+                   help="rc=3 (sin emitir YAML) si la melodía es polifónica y no se "
+                        "ha pedido --skyline")
     p.add_argument("--verbose", action="store_true",
                    help="Informe detallado del análisis")
     return p
@@ -481,6 +505,26 @@ def main():
 
     # ── Extraer notas de melodía ─────────────────────────────────
     notas_mel = extraer_notas_track(mid.tracks[track_melodia], tpb)
+
+    # Polifonía en la melodía (también con --track forzado, donde elegir_track_melodia
+    # no avisa): 'melodia:' debe ser monofónica para sus consumidores.
+    if args.modo in ("melodia", "todos"):
+        frac = fraccion_polifonica(notas_mel)
+        if args.skyline:
+            n0 = len(notas_mel)
+            notas_mel = skyline(notas_mel)
+            if frac > 0 and args.verbose:
+                print(f"[INFO] --skyline: {n0} → {len(notas_mel)} notas", file=sys.stderr)
+        elif frac > 0.3:
+            if args.strict:
+                print(f"[ERROR] la pista {track_melodia} es polifónica "
+                      f"({frac:.0%} de ataques simultáneos): 'melodia:' no sería "
+                      f"monofónica. Use --skyline o --modo armonia.", file=sys.stderr)
+                sys.exit(3)
+            if args.track is not None:
+                print(f"AVISO: la pista {track_melodia} es polifónica ({frac:.0%} de "
+                      f"ataques simultáneos); 'melodia:' mezclará acordes. "
+                      f"Use --skyline para quedarse con la voz aguda.", file=sys.stderr)
 
     # Calcular número de compases totales
     if notas_mel:

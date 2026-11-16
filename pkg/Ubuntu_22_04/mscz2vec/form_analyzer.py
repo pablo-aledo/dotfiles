@@ -311,7 +311,7 @@ def estimate_key(pc):
 GRID = 16
 
 
-def bar_features(bars, notes):
+def bar_features(bars, notes, mid_tpb=480):
     n = len(bars)
     starts = [b[0] for b in bars]
     pc = [[0.0] * 12 for _ in range(n)]
@@ -343,7 +343,12 @@ def bar_features(bars, notes):
             cnt[b0] += 1
             vel[b0] += nt.vel
             reg[b0] += nt.pitch
-            k = nt.start
+            # Los ataques se agrupan con tolerancia (1/32 de redonda ≈ tpb/8): un
+            # MIDI con rubato / micro-timing (performer) ya no comparte ticks exactos
+            # entre las notas de un acorde y, sin esto, 'bass' y 'contour' se llenan
+            # de ruido y la SSM pierde la estructura.
+            _q = max(1, mid_tpb // 8)
+            k = int(round(nt.start / _q)) * _q
             if k not in top[b0] or nt.pitch > top[b0][k]:
                 top[b0][k] = nt.pitch
             if k not in low[b0] or nt.pitch < low[b0][k]:
@@ -586,7 +591,7 @@ def analyze(path, min_bars=None, sens=0.5, same_thr=0.86, var_thr=0.70, snap=0,
     n = len(bars)
     if min_bars is None:
         min_bars = 2 if n < 12 else (4 if n < 64 else (6 if n < 128 else 8))
-    feats = bar_features(bars, notes)
+    feats = bar_features(bars, notes, mid["tpb"])
     S = similarity_matrix(feats)
     off = [S[i][j] for i in range(n) for j in range(n) if i != j]
     mean_off = sum(off) / len(off) if off else 1.0

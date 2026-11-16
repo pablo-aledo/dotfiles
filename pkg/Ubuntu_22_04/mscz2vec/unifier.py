@@ -1709,7 +1709,7 @@ def build_parser():
     p.add_argument("--anchor", type=int, default=0,
                    help="Índice del fragmento ancla (default: 0)")
     p.add_argument("--key", default=None,
-                   help="Tonalidad global, p.ej. C, Am, Eb, F#m")
+                   help="Tonalidad global (con --tonal-plan emotion/auto+emociones: tónica de HOGAR de la que se desplaza cada emoción), p.ej. C, Am, Eb, F#m")
     p.add_argument("--tempo", type=float, default=None)
     p.add_argument("--tempo-blend", type=float, default=0.25)
     p.add_argument("--bridge-bars", type=int, default=2)
@@ -1800,6 +1800,11 @@ def main():
         any_emotion = any(f.emotion for f in fragments)
         plan_mode = "emotion" if any_emotion else "global"
     if plan_mode == "emotion":
+        if args.key and args.tonal_plan != "emotion":
+            print(f"[AVISO] --key {args.key} actúa solo como tónica de HOGAR: hay emociones "
+                  f"en los fragmentos, así que el plan tonal es 'emotion' y cada fragmento "
+                  f"viaja a una tónica desplazada respecto a {args.key}. Para toda la obra "
+                  f"en {args.key} use --tonal-plan global.", file=sys.stderr)
         tonal_decisions = plan_tonal_emotion(fragments, anchor,
                                              args.key if args.key else None)
         # la tonalidad efectiva para puentes/score es la del ancla

@@ -927,8 +927,9 @@ def inject_floreo(notes, grid, bar_num, hand, beat=None, tipo="mordente"):
     in_bar = notes_in_bar_at_beat(hand_notes, bar_start, bar_len, qpb, grid.tpb, beat)
     in_bar = [n for n in in_bar if n.duration_ticks >= beat_ticks * 0.3]
     if not in_bar:
-        return None, ("No hay ninguna nota de esa mano en ese compás con duración "
-                       "suficiente para alojar un floreo. Prueba otro compás/pulso.")
+        return None, ("No hay ninguna nota de esa mano que ataque en ese compás con duración "
+                       "suficiente para alojar un floreo (las notas sostenidas desde compases "
+                       "anteriores no cuentan). Prueba otro compás/pulso u otra mano (--hand).")
     target = in_bar[0]
     orig_pitch = target.pitch
 
