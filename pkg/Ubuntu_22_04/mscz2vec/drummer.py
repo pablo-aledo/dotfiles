@@ -3478,28 +3478,6 @@ def apply_velocity_dynamic(events: list[DrumEvent],
             timing_offset = e.timing_offset,
         ))
     return result
-    """Convierte grids a lista de DrumEvent."""
-    events = []
-    ticks_per_bar = tpb * 4
-
-    for instr, arr in grids.items():
-        pitch = GM.get(instr)
-        if pitch is None:
-            continue
-        ticks_per_step = ticks_per_bar // 16
-
-        for i, vel_f in enumerate(arr):
-            if vel_f <= 0:
-                continue
-            t = i * ticks_per_step
-            events.append(DrumEvent(
-                time_ticks=t,
-                pitch=pitch,
-                velocity=int(np.clip(vel_f * 127, 1, 127)),
-                duration_ticks=max(10, ticks_per_step // 2),
-            ))
-
-    return sorted(events, key=lambda e: e.time_ticks)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -164,13 +164,13 @@ input_midi  file  io=in required
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO — TRAIN ──
-  python style_transfer_v3.py train \
+  python genetic_style_transfer.py train \
       --src  carpeta_origen/ \
       --dst  carpeta_destino/ \
       --model modelo.pkl
 
   # Con todas las mejoras v3 activas y GA mas intenso:
-  python style_transfer_v3.py train \
+  python genetic_style_transfer.py train \
       --src  tango/      --dst  epico/ \
       --model tango2epico.pkl \
       --segments 4       # vectorizar en 4 ventanas temporales \
@@ -199,12 +199,12 @@ Ejemplos de uso
     --verbose          Mostrar detalle por generacion y par
 
 ── USO — TRANSFORM ──
-  python style_transfer_v3.py transform entrada.mid \
+  python genetic_style_transfer.py transform entrada.mid \
       --model  modelo.pkl \
       --output salida.mid
 
   # Transferencia parcial (50%% de intensidad):
-  python style_transfer_v3.py transform entrada.mid \
+  python genetic_style_transfer.py transform entrada.mid \
       --model modelo.pkl  --intensity 0.5  --output salida_suave.mid
 
   Opciones de transform:
@@ -216,13 +216,13 @@ Ejemplos de uso
 
 ── USO — VERBOSE ──
   # Con modelo (igual que transform pero con salida detallada):
-  python style_transfer_v3.py verbose entrada.mid \
+  python genetic_style_transfer.py verbose entrada.mid \
       --model  modelo.pkl \
       --output salida.mid \
       --max-events 50
 
   # Sin modelo, inspeccionando parametros manuales:
-  python style_transfer_v3.py verbose entrada.mid \
+  python genetic_style_transfer.py verbose entrada.mid \
       --params "tempo_factor=1.8, pitch_shift=3, modal_remap=0.7" \
       --max-events 30 \
       --log-json log_eventos.json
@@ -237,18 +237,18 @@ Ejemplos de uso
 
 ── USO — APPLY ──
   # Subir tempo y transponer sin modelo:
-  python style_transfer_v3.py apply entrada.mid \
+  python genetic_style_transfer.py apply entrada.mid \
       --params "tempo_factor=1.6, pitch_shift=2" \
       --output salida.mid
 
   # Cuantizar, añadir subdivision y remap armonico:
-  python style_transfer_v3.py apply entrada.mid \
+  python genetic_style_transfer.py apply entrada.mid \
       --params "quantize_strength=0.8, note_subdivision=0.4, \
                 modal_remap=0.9, harmony_density=0.3" \
       --output salida.mid
 
   # Comprimir registro hacia zona aguda:
-  python style_transfer_v3.py apply entrada.mid \
+  python genetic_style_transfer.py apply entrada.mid \
       --params "register_remap_low=0.45, register_remap_high=0.85, \
                 velocity_scale=1.3, velocity_shape=0.6" \
       --output salida.mid
@@ -260,13 +260,13 @@ Ejemplos de uso
 
 ── USO — BLOCK ──
   # Aplicar modelo pero sin tocar el tempo ni el registro:
-  python style_transfer_v3.py block entrada.mid \
+  python genetic_style_transfer.py block entrada.mid \
       --model  modelo.pkl \
       --block  "tempo_factor, register_remap_low, register_remap_high" \
       --output salida.mid
 
   # Conservar la dinamica original, solo transformar altura y textura:
-  python style_transfer_v3.py block entrada.mid \
+  python genetic_style_transfer.py block entrada.mid \
       --model  modelo.pkl \
       --block  "velocity_scale, velocity_offset, velocity_shape" \
       --output salida.mid
@@ -280,20 +280,20 @@ Ejemplos de uso
 ── Más modos ──
 
   # Entrenar el modelo v3
-  python genetic_style_transfer.py train --src entrada.mid --dst valor
+  python genetic_style_transfer.py train --src carpeta_origen/ --dst carpeta_destino/
 
   # Transformar un MIDI usando el modelo entrenado
-  python genetic_style_transfer.py transform entrada.mid --model modelo.pt
+  python genetic_style_transfer.py transform entrada.mid --model modelo.pkl
 
   # Mostrar detalle nota a nota de las transformaciones aplicadas
-  python genetic_style_transfer.py verbose entrada.mid
+  python genetic_style_transfer.py verbose entrada.mid --params "tempo_factor=1.4"
 
   # Aplicar parámetros de transformación concretos (sin modelo)
-  python genetic_style_transfer.py apply entrada.mid --params entrada.mid
+  python genetic_style_transfer.py apply entrada.mid --params "tempo_factor=1.6, pitch_shift=2"
 
   # Como transform pero omitiendo los operadores indicados
-  python genetic_style_transfer.py block entrada.mid --model modelo.pt \
-        --block entrada.mid
+  python genetic_style_transfer.py block entrada.mid --model modelo.pkl \
+        --block "tempo_factor, register_remap_low"
 
 ────────────────────────────────────────────────────────────────────────────
 Dependencias
@@ -1033,6 +1033,80 @@ def neutral_params() -> dict:
     for name in TRANSFORM_PARAM_NAMES:
         lo, hi = PARAM_RANGES[name]
         params[name] = lo + (hi - lo) * NEUTRAL_NORM[name]
+    return params
+
+
+_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def midi_note_name(n) -> str:
+    """Nombre de nota para un número MIDI (60 → 'C4')."""
+    n = int(n)
+    return f"{_NOTE_NAMES[n % 12]}{n // 12 - 1}"
+
+
+def parse_block_list(text: str) -> set:
+    """Parsea "op1, op2, ..." (operadores a neutralizar) → set de nombres.
+
+    Cadena vacía → set vacío. Lanza ValueError si algún nombre no existe.
+    """
+    names = [p.strip() for p in str(text).replace("\n", ",").split(",")]
+    names = [p for p in names if p]
+    unknown = [p for p in names if p not in PARAM_RANGES]
+    if unknown:
+        raise ValueError("operador(es) desconocido(s): " + ", ".join(unknown)
+                         + ". Válidos: " + ", ".join(TRANSFORM_PARAM_NAMES))
+    return set(names)
+
+
+def print_params_table(params: dict, title: str = "Parámetros", blocked=None) -> None:
+    """Tabla de parámetros: valor, rango y desviación respecto al neutro.
+    Los operadores de `blocked` se muestran en gris y marcados."""
+    blocked = set(blocked or ())
+    neutral = neutral_params()
+    print(f"\n  {c('bold')}{title}{c('reset')}")
+    print(f"  {'Operador':<22} {'Valor':>9}  {'Neutro':>9}  {'Rango':>16}")
+    print(f"  {'─' * 62}")
+    for name in TRANSFORM_PARAM_NAMES:
+        if name not in params:
+            continue
+        lo, hi = PARAM_RANGES[name]
+        val, neu = float(params[name]), neutral[name]
+        active = abs(val - neu) > 1e-4
+        col = c("gray") if (name in blocked or not active) else c("green")
+        mark = "  [bloqueado]" if name in blocked else ""
+        print(f"  {col}{name:<22} {val:>+9.3f}  {neu:>+9.3f}  "
+              f"{f'[{lo}, {hi}]':>16}{mark}{c('reset')}")
+
+
+def parse_params_string(text: str) -> dict:
+    """Parsea "nombre=valor, nombre=valor, ..." (comas y/o saltos de línea).
+
+    Devuelve un dict completo de parámetros: los no indicados quedan en su
+    valor neutro (sin transformación). Lanza ValueError si hay un nombre
+    desconocido, un valor no numérico o un valor fuera de PARAM_RANGES.
+    """
+    params = neutral_params()
+    items = [p.strip() for p in str(text).replace("\n", ",").split(",")]
+    items = [p for p in items if p]
+    if not items:
+        raise ValueError("no se ha indicado ningún parámetro "
+                         "(formato: \"nombre=valor, nombre=valor\")")
+    for item in items:
+        if "=" not in item:
+            raise ValueError(f"'{item}': falta '=' (formato nombre=valor)")
+        name, raw = (x.strip() for x in item.split("=", 1))
+        if name not in PARAM_RANGES:
+            raise ValueError(f"parámetro desconocido '{name}'. Válidos: "
+                             + ", ".join(TRANSFORM_PARAM_NAMES))
+        try:
+            val = float(raw)
+        except ValueError:
+            raise ValueError(f"'{name}': el valor '{raw}' no es numérico") from None
+        lo, hi = PARAM_RANGES[name]
+        if not (lo <= val <= hi):
+            raise ValueError(f"'{name}'={val:g} fuera de rango [{lo}, {hi}]")
+        params[name] = val
     return params
 
 
@@ -2641,7 +2715,7 @@ def mode_apply(args):
     No necesita un modelo entrenado.
 
     Ejemplo:
-      python style_transfer_v2.py apply entrada.mid \\
+      python genetic_style_transfer.py apply entrada.mid \\
           --params "tempo_factor=1.8, pitch_shift=3, velocity_scale=1.2" \\
           --output salida.mid
     """
@@ -2720,7 +2794,7 @@ def mode_block(args):
     de los operadores indicados en --block.
 
     Ejemplo:
-      python style_transfer_v2.py block entrada.mid --model modelo.pkl \\
+      python genetic_style_transfer.py block entrada.mid --model modelo.pkl \\
           --block "tempo_factor, register_remap_low, register_remap_high" \\
           --output salida.mid
     """
@@ -2858,7 +2932,7 @@ def mode_block(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="style_transfer_v3.py",
+        prog="genetic_style_transfer.py",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent("""\
             STYLE TRANSFER v3.0 — Transferencia de estilo musical

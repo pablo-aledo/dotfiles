@@ -1985,7 +1985,7 @@ def cmd_round_trip(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog='cycle_gan_composer',
+        prog='cyclegan_composer',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent("""\
             CYCLE-GAN COMPOSER v1

@@ -51,6 +51,24 @@ EJEMPLOS
 
 El fichero de roles es {"roles": {"<índice de pista>": "<rol>"}} y tiene prioridad
 sobre la heurística (confianza 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[detect]
+midi file io=in ext=mid required
+--json file io=out
+--roles-file str
+[explain]
+midi file io=in ext=mid required
+pista str required
+--roles-file str
+[override]
+midi file io=in ext=mid required
+--set list of=str required
+--roles-file str
+@end
 """
 import argparse
 import json

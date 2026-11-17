@@ -3774,7 +3774,7 @@ def cmd_inspect(args) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_parser() -> argparse.ArgumentParser:
-    p=argparse.ArgumentParser(prog="ml_architect_v3",
+    p=argparse.ArgumentParser(prog="ml_architect",
         description=f"ML ARCHITECT v{VERSION}",formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--version",action="version",version=f"%(prog)s {VERSION}")
     sub=p.add_subparsers(dest="command",required=True)

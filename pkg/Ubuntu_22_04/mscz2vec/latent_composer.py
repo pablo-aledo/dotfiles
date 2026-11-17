@@ -177,7 +177,7 @@ Opciones
     --window INT                Índice de ventana a mostrar (default: 0,
                                 soporta negativos)
     --bars-show INT             Compases de la ventana a renderizar (default:
-                                todos)
+                                4)
     --roles ROL […]             Mostrar solo estos roles (default: todos)
     --tension-curve             Mostrar curvas de tensión completas
     --no-roll                   Omitir piano roll (solo metadatos y tensión)
@@ -3702,7 +3702,7 @@ def build_parser() -> argparse.ArgumentParser:
         help='Índice de ventana a mostrar (default: 0, soporta negativos)')
     p_ins.add_argument('--bars-show',     type=int, default=4, metavar='INT',
         dest='bars_show',
-        help='Compases de la ventana a renderizar (default: todos)')
+        help='Compases de la ventana a renderizar (default: 4)')
     p_ins.add_argument('--roles',         nargs='+', metavar='ROL',
         choices=ROLES,
         help='Mostrar solo estos roles (default: todos)')

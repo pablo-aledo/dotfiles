@@ -174,7 +174,8 @@ Opciones de train (además de --model, --cache-file, --key, --mode,
   --beats N           Pulsos por compás (default: el del MIDI, o 4)
   --quant BEATS       Rejilla de cuantización de la melodía (default: 0.25)
   --melody-track N    Forzar la pista (0-based) que contiene la melodía
-  --style S           generate | fixed | both (default: both)
+  --train-mode M      generate | fixed | both (default: both). Antes se llamaba
+                      --style, que en el resto de la suite es un estilo musical
   --desc TEXTO        Descripción para los MIDIs sin 'descripción:' en su .txt
   --overwrite         Reescribir entradas ya existentes (por defecto se
                       respetan, p. ej. las obtenidas de Jev de verdad)
@@ -250,6 +251,65 @@ Dependencias
   chord_table.py y motif_table.py (se invocan como comandos)
   OPENROUTER_API_KEY en el entorno (salvo con --cache-only)
   mido (opcional, solo para exportación MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[*]
+dir dir io=in required  # Directorio con los .mid/.midi (y sus .txt)
+--model str default=typesafe/jev-1.14
+--url str default=https://openrouter.ai/api/alpha/decisions
+--cache-file str
+--overwrite bool default=false  # Reescribir entradas ya existentes en la cache
+--depth str default=4  # Profundidades de ventana a reconstruir (default: 4)
+--octave int  # Octava base (default: automática por obra)
+--leap int default=9  # Salto melódico máximo en semitonos (default: 9)
+--beats int  # Pulsos por compás (default: el del MIDI, o 4)
+--quant float default=0.25  # Rejilla de cuantización de la melodía (default: 0.25)
+--melody-track int  # Forzar la pista (0-based) con la melodía
+--train-mode enum default=both values=generate|fixed|both  # Entradas del modo normal, del modo --chords-midi, o ambas
+--desc str  # Descripción para los MIDIs sin 'descripción:' en su .txt
+--key str  # Fijar la tónica de todos los MIDIs
+--mode enum values=major|minor|dorian|phrygian|lydian|mixolydian|harmonic_minor|phrygian_dominant  # Fijar el modo de todos los MIDIs
+--bass-only bool default=false  # Detectar acordes solo con las notas graves
+--min-dur float default=0.5  # Fundir con el anterior los acordes más cortos que esto (default: 0.5)
+--chord-table str  # Ruta de chord_table.py (default: junto a este script)
+--motif-table str  # Ruta de motif_table.py (default: junto a este script)
+desc str  # Descripción de la obra (o --file)
+--file str  # Leer la descripción de un fichero
+--model str default=typesafe/jev-1.14
+--url str default=https://openrouter.ai/api/alpha/decisions  # Endpoint de decisiones de OpenRouter
+--cache bool default=false  # Guardar y reutilizar las consultas en la cache local
+--cache-only bool default=false  # Solo leer de la cache: nunca llama a la API
+--cache-file str
+--key str  # Fijar la tónica ('Am' implica menor)
+--mode enum values=major|minor|dorian|phrygian|lydian|mixolydian|harmonic_minor|phrygian_dominant  # Fijar el modo
+--seed-temp float default=0.0  # Temperatura para elegir modo/tónica/semillas (default: 0 = la más probable)
+--rng int  # Semilla del generador aleatorio
+--verbose bool default=false  # Mostrar las probabilidades de cada consulta
+--octave int default=5  # Octava base de la tónica (default: 5)
+--chord-table str  # Ruta de chord_table.py (default: junto a este script)
+--motif-table str  # Ruta de motif_table.py (default: junto a este script)
+[semillas]
+--export-json file io=out  # Exportar las semillas elegidas a JSON
+[componer]
+--bars int  # Compases a generar (default: 16; con --chords-midi, los del MIDI)
+--beats int default=4  # Pulsos por compás (default: 4)
+--tempo float default=100.0  # Tempo BPM para exportación MIDI (default: 100)
+--depth int default=4  # Profundidad de la ventana en acordes (default: 4)
+--temperature float default=1.0  # Temperatura del sampling (default: 1.0; 0 = la más probable)
+--leap int default=9  # Salto melódico máximo en semitonos (default: 9)
+--output file io=out default=obra  # Nombre base para salidas (default: obra)
+--notes str  # Indicaciones por compás: 'compás 29: texto; 30-32: texto' (repetible)
+--notes-file str  # Leer indicaciones por compás de un fichero (una por línea)
+--chords-midi file io=in ext=mid  # Usar los acordes de este MIDI en vez de generarlos
+--bass-only bool default=false  # (con --chords-midi) detectar acordes solo con notas graves
+--min-dur float default=0.5  # (con --chords-midi) fundir con el anterior los acordes más cortos que esto (default: 0.5)
+[cache]
+--cache-file str
+--clear bool default=false  # Vaciar la cache
+@end
 """
 
 import sys
@@ -2056,7 +2116,7 @@ def seed_opts_train():
                    help='Rejilla de cuantización de la melodía (default: 0.25)')
     t.add_argument('--melody-track', type=int, default=None, dest='melody_track',
                    metavar='N', help='Forzar la pista (0-based) con la melodía')
-    t.add_argument('--style', choices=['generate', 'fixed', 'both'], default='both',
+    t.add_argument('--train-mode', dest='style', choices=['generate', 'fixed', 'both'], default='both',
                    help='Entradas del modo normal, del modo --chords-midi, o ambas')
     t.add_argument('--desc', type=str, default=None, metavar='TEXTO',
                    help="Descripción para los MIDIs sin 'descripción:' en su .txt")

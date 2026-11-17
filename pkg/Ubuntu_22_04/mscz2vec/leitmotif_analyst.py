@@ -72,6 +72,7 @@ midi              file  io=in ext=mid required  # Archivo MIDI de la obra a anal
 --save-all        bool  default=false  # Guardar forma fundamental + un MIDI por cada aparición…
 --save-dir        dir   io=out  # Carpeta de destino para los MIDIs exportados
 --verbose         bool  default=false  # Salida detallada
+--no-color       bool  default=false  # Aceptado por uniformidad con la suite (no emite color ANSI)
 @end
 
 ────────────────────────────────────────────────────────────────────────────

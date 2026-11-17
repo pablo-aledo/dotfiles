@@ -67,6 +67,8 @@ midi              file  io=in ext=mid required  # Ruta al archivo MIDI de entrad
 --preview         bool  default=false  # Mostrar estructura sin generar YAML
 --output          file  io=out ext=yaml,yml alias=-o  # Escribe el YAML generado en FILE (crea el…
 --verbose         bool  default=false  # Informe detallado del análisis
+--skyline         bool  default=false  # Si la pista de melodía es polifónica, conserva solo la nota más aguda de cada ataque
+--strict          bool  default=false  # rc=3 (sin emitir YAML) si la melodía es polifónica y no se ha pedido --skyline
 @end
 
 ────────────────────────────────────────────────────────────────────────────

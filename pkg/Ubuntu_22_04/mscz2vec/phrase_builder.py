@@ -1338,7 +1338,7 @@ def main():
     types  = ALL_TYPES  if args.all_types  else [args.phrase_type]
     _cad = [t for a in args.cadences for t in a.replace(",", " ").split()]
     if len(_cad) != 2:
-        p.error(f"--cadences necesita exactamente 2 cadencias (ANT CONS), recibido: {_cad}")
+        parser.error(f"--cadences necesita exactamente 2 cadencias (ANT CONS), recibido: {_cad}")
     cadence_ant, cadence_cons = _cad
 
     out_dir = Path(args.output_dir)

@@ -50,6 +50,36 @@
 ║      para unir MIDIs distintos usa midi_concat.py.                           ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[*]
+midi file io=in ext=mid required
+--tracks str
+--time-sig str
+--pickup float default=0.0
+--drop-held bool default=false
+[cut]
+--bars str required
+--output file io=out alias=-o
+[sections]
+--form str  # JSON de form_analyzer.py detect
+--bars str
+--out-dir dir io=out required
+--prefix str default=seccion
+[grid]
+--every int required
+--out-dir dir io=out required
+--prefix str default=frase
+--keep-tail bool default=false  # No une el resto corto al último trozo
+[assemble]
+--bars str
+--form str
+--order str  # Etiquetas o índices: A,B,A / 1,2,1
+--output file io=out alias=-o
+@end
 """
 import argparse
 import json

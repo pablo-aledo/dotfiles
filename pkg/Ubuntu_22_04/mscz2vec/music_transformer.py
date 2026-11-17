@@ -160,6 +160,22 @@ except ImportError:
         def __getattr__(self, name):
             raise ImportError("PyTorch no disponible. Instala con: pip install torch")
     nn = _TorchStub()
+
+    class _TorchNamespaceStub:
+        """`torch` mínimo para anotaciones y decoradores evaluados al importar."""
+        Tensor = object
+        Module = object
+        device = object
+        dtype = object
+        Generator = object
+
+        @staticmethod
+        def no_grad():
+            return lambda fn: fn
+
+        def __getattr__(self, name):
+            raise ImportError("PyTorch no disponible. Instala con: pip install torch")
+    torch = _TorchNamespaceStub()
     _TORCH_OK = False
 
 

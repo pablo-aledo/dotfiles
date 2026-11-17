@@ -60,6 +60,32 @@
 ║  · Con pocos compases (< --min-bars) se niega a inferir.                     ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[*]
+--candidates str
+--min-bars int default=4
+--no-drums bool default=false
+[infer]
+midi file io=in ext=mid required
+--json file io=out
+--phase bool default=false  # Muestra la fase estimada del 1er tiempo
+[fix]
+midi file io=in ext=mid required
+--output file io=out alias=-o
+--inplace bool default=false
+--min-conf float default=0.75
+--force bool default=false
+[scan]
+dir dir io=in required
+--csv file io=out
+--json file io=out
+--only-suspect bool default=false
+--limit int default=0
+@end
 """
 import argparse
 import csv

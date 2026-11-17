@@ -432,7 +432,6 @@ _DESCRIBE_MAP = {
     "orquestal":   {"instruments": "full orchestra"},
     "orchestra":   {"instruments": "full orchestra"},
     "medieval":    {"genre": "medieval", "instruments": "lute, horn, drums"},
-    "medieval":    {"genre": "medieval", "instruments": "lute, horn, drums"},
     # Carácter
     "melanc":      {"character": "melancholic, nostalgic"},     # melancólico/melancholic
     "triste":      {"character": "sad, melancholic"},

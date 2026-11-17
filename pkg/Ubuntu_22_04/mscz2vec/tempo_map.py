@@ -47,6 +47,37 @@ EJEMPLOS
   python tempo_map.py edit obra.mid --fermata 146=3 --set 1:50 -o obra2.mid
   python tempo_map.py smooth obra.mid --window 5 -o suave.mid
   python tempo_map.py export obra.mid --csv tempo.csv
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[show]
+midi file io=in ext=mid required
+--width int default=60
+--bars str
+--no-table bool default=false
+--compact bool default=false  # omite compases con tempo igual al anterior
+[edit]
+midi file io=in ext=mid required
+--output file io=out alias=-o
+--set list of=str
+--scale list of=str
+--rubato list of=str
+--fermata list of=str
+--shape enum default=arch values=arch|ritard|accel|hold
+--resolution enum default=beat values=beat|bar
+[smooth]
+midi file io=in ext=mid required
+--output file io=out alias=-o
+--window float default=3
+--resolution enum default=beat values=beat|bar
+[export]
+midi file io=in ext=mid required
+--json file io=out
+--csv file io=out
+--yaml file io=out
+@end
 """
 import argparse
 import bisect

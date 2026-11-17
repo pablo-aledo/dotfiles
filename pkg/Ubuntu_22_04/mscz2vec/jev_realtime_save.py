@@ -189,6 +189,126 @@ No actúa con --chord-source keyboard (los acordes los tocas tú) ni con --ref-a
 
 DEPENDENCIAS: numpy; mido + python-rtmidi (MIDI en vivo y train); pyfluidsynth + .sf2
 (sonido). render, bench y el modelo no necesitan hardware.
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[*]
+dir dir io=in required  # Directorio (o fichero) con los .mid/.midi y sus .txt
+--levels int default=5  # Niveles de cada slider (default: 5)
+--depth int default=4  # Compases de histórico en la consulta (default: 4)
+--leap int default=12  # Salto melódico máximo en semitonos (default: 12)
+--half-width int default=14  # Semiancho de la ventana de registro (default: 14)
+--quant float default=0.25  # Rejilla de la melodía en pulsos (default: 0.25)
+--beats int  # Pulsos por compás (default: el del MIDI o 4)
+--desc str  # Descripción para los MIDIs sin .txt
+--key str  # Fijar la tónica de todos los MIDIs
+--mode enum values=major|minor|dorian|phrygian|lydian|mixolydian|harmonic_minor|phrygian_dominant  # Fijar el modo de todos los MIDIs
+--melody-track int  # Forzar la pista (0-based) con la melodía
+--model-dir dir io=in  # Modelo entrenado (sin él: estimador de reglas)
+--desc str  # Descripción de la obra (default: el MIDI de referencia o «obra instrumental»)
+--tonic str  # Tónica (default: la del MIDI de referencia o C)
+--mode enum values=major|minor|dorian|phrygian|lydian|mixolydian|harmonic_minor|phrygian_dominant  # Modo (default: el del MIDI de referencia o major)
+--beats int  # Pulsos por compás (default: el del MIDI de referencia o 4)
+--reference str  # MIDI de referencia: guía la tonalidad, modo, compás, tempo, acordes, melodía y ritmo
+--references list of=str  # Dos MIDIs de referencia mezclados con Jev: pesos (1-top) Jev, top·s para A y top·(1-s) para B, con s =…
+--ref-fader enum values=valencia|energia|densidad|tension|registro|complejidad|sorpresa|groove|vol_melodia|vol_acordes|vol_bajo|reverb|tempo|humanizar|temperatura|amplitud  # Slider/knob que mezcla las dos referencias (1 = solo A, 0 = solo B)
+--ref-top float default=0.7  # Peso total de las referencias frente a Jev en --references (0 = solo Jev, 1 = solo MIDIs; default: 0.7).…
+--ref-strength float default=0.6  # Intensidad con que se sigue la referencia (0 = ignorar, 1 = casi literal; default: 0.6)
+--ref-chords enum default=follow values=follow|bias|off  # Acordes: follow = los de la referencia; bias = mezcla con Jev; off (default: follow)
+--ref-melody enum default=bias values=bias|off  # Alturas: bias = mezcla el contorno de la referencia con Jev; off (default: bias)
+--ref-rhythm enum default=follow values=follow|bias|off  # Ritmo: follow = duraciones y silencios de la referencia; bias; off (default: follow)
+--ref-sliders bool default=false  # Pilotar los 8 sliders con los valores por compás de la referencia
+--ref-slider-gain float default=1.0  # Ganancia del desplazamiento del slider sobre la referencia (default: 1.0)
+--ref-slider-relax bool  # Mover un slider reduce la fuerza de la referencia en su decisión (activo por defecto; desactivar con --no-ref-slider-relax)
+--no-ref-slider-relax bool default=true
+--ref-tempo bool  # Usar el tempo del MIDI como --bpm base (activo por defecto; desactivar con --no-ref-tempo)
+--no-ref-tempo bool default=true
+--ref-loop bool  # Al acabar la referencia, volver al compás 0 (activo por defecto; desactivar con --no-ref-loop)
+--no-ref-loop bool default=true
+--ref-melody-track int  # Pista (0-based) con la melodía de la referencia
+--ref-accomp bool default=false  # Acompañamiento fiel: toca la armonía de la referencia en vez de las plantillas
+--bpm float  # Tempo base fijo (default: lo marca la energía)
+--lookahead float default=1.5  # Pulsos de antelación
+--programs str default=0,48,32  # Programas GM de melodía, acordes y bajo
+--temperature float default=1.0  # Temperatura base del sampling
+--valence-mode bool default=false  # La valencia cambia el modo (frigio…lidio) en cada compás
+--live-sliders bool default=false  # Las notas usan el valor actual de los sliders (no el del inicio del compás)
+--drift-slider enum values=valencia|energia|densidad|tension|registro|complejidad|sorpresa|groove|vol_melodia|vol_acordes|vol_bajo|reverb|tempo|humanizar|temperatura|amplitud  # Slider/knob que actúa como «pitch drift»: en 0.5 no hace nada; por encima favorece notas más agudas que la…
+--drift-gain float default=12.0  # Semitonos de desplazamiento del centro por unidad de distancia al medio (valor 1.0 = +gain/2 semitonos;…
+--drift-sigma float default=4.0  # Desviación típica (semitonos) de la gaussiana de drift (default 4)
+--drift-octaves int default=3  # Octavas máximas (arriba/abajo) que el drift puede desplazar la ventana de notas al llegar a su borde (0 =…
+--drift-return float default=0.0  # Con el drift en reposo (≈0.5), semitonos por compás con que la ventana vuelve a la octava base (0 = se…
+--chord-patterns str  # Patrones del ciclo de MARKER ◄ ►, separados por comas (default: plantilla, block, bombo-caja, alberti,…
+--chord-pattern str default=plantilla  # Patrón de acompañamiento inicial (default: plantilla = textura por energía)
+--chord-custom str  # Patrón propio de roles, p.ej. "bajo,agudo,resto,medio" o "[0,1],1,2,0"; con NOMBRE= se le da nombre…
+--chord-reps int default=0  # Repeticiones del patrón por compás (0 = según la energía; default 0)
+--chord-gate float default=0.85  # Fracción sonante de cada paso, 0-1 (default 0.85)
+--chord-accent float default=1.0  # Multiplicador de velocity del primer golpe de cada repetición (default 1.0)
+--chord-octave int default=0  # Transporta las notas del acorde N octavas (default 0)
+--chord-source enum default=model values=model|keyboard|curve  # Acorde del compás: generado por Jev (model), leído de un teclado (keyboard) o leído de un fichero «compás:…
+--kb-port str  # Fragmento del nombre del teclado MIDI
+--kb-chords str  # Acordes simulados, uno por compás: "C Am F G7"
+--curve-bars int default=0  # Modo curvas: los sliders se leen de un fichero por compás y se graba una curva nueva cada N compases (una…
+--curve-in list of=str  # Curva inicial «compás: v1 … v16» (8 faders + 8 knobs; con solo 8 valores los knobs quedan en 0.5). Sin…
+--curve-out file io=out default=curva  # Base de los ficheros grabados: NOMBRE_%%04d.txt (o plantilla con %%) (default: curva)
+--curve-interp enum default=lineal values=lineal|linear|escalonada|step|suave|smooth  # Interpolación entre compases: lineal | escalonada | suave (default: lineal)
+--curve-lap-reset bool default=false  # Con --curve-bars: cada vuelta reinicia semilla, histórico de compases, drift, voces y modo, así que su…
+--curve-no-rec bool default=false  # Con --curve-bars: no grabar ni guardar nada (reproducción también con un solo fichero)
+--no-curve-sliders bool default=true  # Con --curve-bars: dejar los 8 faders en vivo (no siguen la curva ni se graban)
+--no-curve-knobs bool default=true  # Con --curve-bars: dejar los 8 knobs en vivo (no siguen la curva ni se graban)
+--chord-curve-in list of=str  # Curva de acordes inicial «compás: acorde» (sin ella los genera Jev en la 1ª vuelta). Con 2 o más ficheros…
+--chord-curve-out file io=out default=acordes  # Base de los ficheros de acordes grabados: NOMBRE_%%04d.txt (default: acordes)
+--rng int default=0
+[train]
+--model-dir dir io=in required
+--epochs int default=40
+--batch-size int default=32
+--dim int default=32
+--bits int default=16  # Filas por tabla de rasgos: 2^bits (default: 16)
+--lr float default=0.05
+--l2 float default=1e-06
+--patience int default=8
+--val-frac float default=0.15
+--label-smoothing float default=0.02
+--no-calibrate bool default=false
+--reference-mode bool default=false  # Un solo MIDI: validación por bloques de compases contiguos y sin calibrar
+--dump-queries str  # Guardar las consultas generadas (texto legible) en un JSONL
+--seed int default=42
+[analyze]
+--show-bars int default=16
+[run]
+--no-synth bool default=false
+--no-virtual bool default=false
+--soundfont str
+--driver str default=pulseaudio
+--port-name str default="Jev Realtime"
+--korg str default=nanoKONTROL2
+--map str  # JSON con el mapa de CC del Korg
+--record file io=out  # Grabar la sesión a este .mid
+--thru bool default=false  # (keyboard) oír también los acordes que tocas
+--demo bool default=false  # Sliders en piloto automático
+[render]
+--bars int default=32
+--seconds float
+--out-file file io=out default=jev_demo.mid
+--script str  # [{"bar": 8, "set": {"valencia": 0.9, "cadence": 1}}, ...]
+--demo bool default=false
+[compare]
+ref str required
+out file io=out required
+--beats int
+--key str
+--mode enum values=major|minor|dorian|phrygian|lydian|mixolydian|harmonic_minor|phrygian_dominant
+--melody-track int
+--verbose bool default=false
+[bench]
+--n int default=300
+--bars int default=32
+[monitor]
+--korg str default=nanoKONTROL2
+@end
 """
 import argparse
 import bisect

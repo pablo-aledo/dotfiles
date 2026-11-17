@@ -61,6 +61,29 @@ Uso
 FICHERO ÚNICO: no depende de ningún otro módulo propio.
 DEPENDENCIAS externas: mido + python-rtmidi (puertos MIDI) y pyfluidsynth (+ fluidsynth
 y un .sf2) para el sintetizador interno. El render offline y las pruebas son Python puro.
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[*]
+--demo bool default=false  # faders en piloto automático (sin hardware)
+--no-synth bool default=false  # sin sintetizador interno
+--no-virtual bool default=false  # sin puerto MIDI virtual
+--soundfont str  # archivo .sf2
+--driver str default=pulseaudio  # driver de audio de FluidSynth
+--port-name str default="Mutopia Live"  # nombre del puerto virtual
+--korg str default=nanoKONTROL2  # fragmento del nombre del puerto del Korg
+--map str  # JSON con mapa de CC
+--leds bool default=false
+--record file io=out  # grabar toda la sesión a este .mid
+--render str  # render offline a .mid (sin audio, sin hardware)
+--bars int default=32  # compases del render
+--seed int
+--key int default=0  # tónica inicial (0=Do … 11=Si)
+--list-ports bool default=false
+--monitor bool default=false  # solo mostrar los CC del Korg y los valores suavizados
+@end
 """
 import argparse
 import bisect
@@ -76,6 +99,15 @@ import sys
 import threading
 import time
 from types import SimpleNamespace
+
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    d = os.path.dirname(os.path.abspath(os.fsdecode(path)))
+    if d:
+        os.makedirs(d, exist_ok=True)
+    return path
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -909,7 +941,7 @@ class Recorder:
             body += _varlen(tk - last) + data
             last = tk
         body += _varlen(0) + b"\xFF\x2F\x00"
-        with open(path, "wb") as f:
+        with open(_ensure_parent(path), "wb") as f:
             f.write(b"MThd" + struct.pack(">IHHH", 6, 0, 1, tpq))
             f.write(b"MTrk" + struct.pack(">I", len(body)) + body)
         return path

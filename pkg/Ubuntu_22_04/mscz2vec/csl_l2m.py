@@ -308,6 +308,8 @@ sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
 --n-codes    int   default=512 min=0
 --n-groups   int   default=16 min=0
 --device     str   default=cpu
+--dec-seqlen   int   default=2048 min=1  # Longitud máx. de la secuencia del decoder
+--max-seqs     int   default=64 min=0  # Máx. frases por canción
 [extract-feats]
 --events-dir   dir   io=in required
 --vocab-melody file  io=in required

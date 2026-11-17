@@ -3172,7 +3172,7 @@ def cmd_validate(args):
         sys.exit(1)
 
     print(f"\n{bold('PREFERENCE TRAINER — VALIDATE')}")
-    print(f"  Modelo:   {cyan(model_file)}  [{dim(model.MODEL_TYPE)}]")
+    print(f"  Modelo:   {cyan(model_file)}  [{dim(model_ref.MODEL_TYPE)}]")
     print(f"  Ejemplos: {n}  (con vector recuperable)")
 
     k = min(args.folds, n)

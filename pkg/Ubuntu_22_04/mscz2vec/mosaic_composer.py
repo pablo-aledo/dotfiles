@@ -970,12 +970,11 @@ def _generate_variation_for_slot(frag: Fragment, slot: Slot, out_dir: Optional[s
         "bridge": "V06",        # ornamentación
     }
     var_type = var_map.get(slot.function, "V14")  # estocástica por defecto
-    out_path = str(Path(out_dir) / f"{frag.id}_{var_type}.mid")
-    generate_variation(frag.file, [var_type], output_dir=out_dir)
-    # variation_engine nombra el archivo automáticamente
-    candidates = list(Path(out_dir).glob(f"*{var_type}*.mid"))
-    if candidates:
-        return str(candidates[0])
+    # variation_engine se invoca por subprocess (no es un módulo importable
+    # con una función generate_variation); devuelve los Fragment generados.
+    var_frags = _generate_variations_for_fragment(frag, [var_type], out_dir)
+    if var_frags:
+        return var_frags[0].file
     return frag.file  # fallback al original
 
 
@@ -1079,15 +1078,10 @@ def stitch_midi_pair(
     elif stitch_mode == "bridge" and os.path.exists(
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "morpher.py")):
         try:
-            bridge_path = os.path.join(out_dir, f"bridge_{frag_a.id}_{frag_b.id}.mid")
-            morph_midi(
-                frag_a.file, frag_b.file,
-                steps=3,
-                mode="sigmoid",
-                bars=bridge_bars,
-                output_dir=out_dir,
-                catalog=True,
-            )
+            bridge_path = _morph_transition(frag_a, frag_b, bridge_bars, out_dir,
+                                            target_key, verbose=verbose)
+            if not bridge_path:
+                raise RuntimeError("morpher no generó el puente")
             # El puente ya está en out_dir, se concatenará en assemble_sequence
         except Exception as e:
             if verbose:
@@ -2656,8 +2650,6 @@ def cmd_assemble(args) -> List[str]:
         print(f"{'═'*60}")
 
     return results
-
-    return str(final_path)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

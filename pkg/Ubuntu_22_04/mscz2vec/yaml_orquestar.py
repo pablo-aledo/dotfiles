@@ -44,6 +44,25 @@ EJEMPLOS
   python yaml_orquestar.py check obra.mid --instrument 7=cuerdas 8=viento_metal_gen
   python yaml_orquestar.py suggest partitura.yaml --top 3
   python yaml_orquestar.py stats partitura.yaml --cols 80
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[*]
+entrada str required
+--suite-dir dir io=in
+[check]
+--instrument list of=str
+--max-issues int default=5
+--profile enum default=estandar values=estandar|estricto|tolerante
+[suggest]
+--top int default=3
+--json file io=out
+[stats]
+--cols int default=64
+--json file io=out
+@end
 """
 import argparse
 import glob

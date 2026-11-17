@@ -74,8 +74,8 @@ Cada herramienta puede llevar en su cabecera un bloque delimitado por las línea
            io=in|out  ext=mid,json   para file/dir: lectura/escritura y extensiones
            format="…"    microsintaxis de un str (p. ej. "1-4:right,5-12:left", "K=V")
            required      obligatorio        advanced   oculto por defecto en la GUI
-           when=--x:v    solo relevante si --x vale v
-           excludes=--a,--b   mutuamente excluyente con esos flags
+           when=--flag:v  solo relevante si --flag vale v
+           excludes=--json,--out   mutuamente excluyente con esos flags
            alias=-o,--out     otros nombres del mismo parámetro
   Los valores con espacios o «#» van entre comillas. «#» abre la
   descripción. Tipo, default, values y required se verifican contra el argparse
@@ -460,7 +460,7 @@ def _categorize(name: str, text: str):
 
 
 _OUT_RE = re.compile(r"^--?(output|out|o|out-?dir|outdir|out-?json|export-.*|json|report|save.*|"
-                     r"out-?midi|output-?dir|output-?name|output-?prefix|prefix|dest.*|write.*)$")
+                     r"out-?(midi|text|file)|output-.+|record|prefix|dest.*|write.*)$")
 
 
 def _is_output_opt(opt: str) -> bool:
@@ -847,7 +847,10 @@ def parse_tool(path: Path):
         "outdir_ok": bool(re.search(r"_ensure_parent|makedirs|\.mkdir\(", src)),
         "local_deps": local, "third_party": third,
         "category": _categorize(name, title + " " + purpose_txt),
-        "doc_flags": sorted(set(re.findall(r"(?<![\w-])(--[a-z][a-z0-9\-]*)", doc))),
+        # Las opciones de «pip install …» pertenecen a pip, no a la herramienta.
+        "doc_flags": sorted(set(re.findall(
+            r"(?<![\w-])(--[a-z][a-z0-9\-]*)",
+            re.sub(r"(?m)^[ \t]*(?:python3? -m )?pip3? install\b.*$", "", doc)))),
         "doc_text": " ".join(lines)[:2500],
         "spec": {k: spec[k] for k in ("present", "version", "errors", "params")},
     })
@@ -1539,7 +1542,7 @@ def lint_docs_extra(idx, checks):
                     add("example-args", t["name"], "warn", f"{msg}   ← {_short(cmd, 90)}", {"example": cmd})
         if "missing-refs" in checks:
             text = " ".join(_doc_lines(path))
-            refs = {r for r in re.findall(r"\b([A-Za-z][A-Za-z0-9_]*\.py)\b", text)
+            refs = {r for r in re.findall(r"(?<!old/)\b([A-Za-z][A-Za-z0-9_]*\.py)\b", text)   # old/… = archivo histórico, fuera de la suite por diseño
                     if r not in names and r not in _REF_IGNORE and r != t["file"]}
             if refs:
                 add("missing-refs", t["name"], "info",

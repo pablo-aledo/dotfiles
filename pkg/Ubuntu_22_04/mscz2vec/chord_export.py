@@ -54,6 +54,27 @@
 ║      --time-sig, o repáralo antes con midi_meter.py fix.                     ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[*]
+midi file io=in ext=mid required
+--track int
+--channel int
+--drop-top bool default=false
+--window str default=auto  # auto|bar|half|beat|N (negras)
+--time-sig str
+--offset float default=0.0
+--simplify enum default=none values=none|sevenths|triads
+--key str default=auto
+--no-merge bool default=false
+--output file io=out alias=-o
+[text]
+--roman bool default=false
+--explicit bool default=false
+@end
 """
 import argparse
 import json

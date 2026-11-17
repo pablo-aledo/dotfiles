@@ -528,6 +528,7 @@ BATCH_GENERATORS = [
 
 def generate_batch(out_dir: str, cfg: dict = None):
     import os
+    from midi_pianoroll_analyzer import analyze
     os.makedirs(out_dir, exist_ok=True)
     cfg = cfg or {}
     for slug, gen_fn, desc in BATCH_GENERATORS:

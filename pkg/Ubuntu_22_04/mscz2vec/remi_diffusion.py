@@ -229,7 +229,7 @@ Ejemplos de uso
     --noise-type {mask,uniform}   Tipo de proceso de difusion [uniform]
     --n-layer-enc N                Capas del encoder (pesado) [6]
     --n-layer-dec N                Capas del decoder (ligero) [2]
-    (--n-layer de v1 ya no existe; se sustituye por los dos anteriores)
+    (el flag único de capas de v1 ya no existe; se sustituye por los dos anteriores)
 
   OPCIONES COMUNES (heredadas de v1):
     --canvas-len N, --history-bars N, --d-model N, --n-head N,

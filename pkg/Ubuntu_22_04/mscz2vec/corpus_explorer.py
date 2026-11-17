@@ -1349,6 +1349,14 @@ def cmd_search(args):
 #  REPRODUCCIÓN
 # ════════════════════════════════════════════════════════════════════
 
+def _play_results(results, paths, meta, vectors):
+    """Reproduce secuencialmente los resultados de `search --play`
+    (cada uno hasta 20 s; Enter pasa al siguiente)."""
+    for rank, (idx, _dist) in enumerate(results, 1):
+        print(f"\n  [{rank}/{len(results)}]")
+        _play_midi(str(paths[idx]))
+
+
 def _play_midi(path: str, seconds: int = 20):
     """Reproduce un MIDI con pygame bloqueando hasta timeout o Enter.
 
@@ -1535,7 +1543,7 @@ def cmd_seed(args):
             print(f"      {cyan(sim_bar)} {sim:.2f}")
 
             if HAS_PYGAME:
-                print(f"      {dim('p{rank} para escuchar')}")
+                print(f"      {dim(f'p{rank} para escuchar')}")
 
             shown.append(idx)
             seed_state["seen_indices"].append(idx)
@@ -2700,7 +2708,7 @@ def _generate_voice(profile: dict, voice_idx: int,
     return events
 
 
-def _build_midi(profile: dict, instrument_group: dict, seed: int = 42) -> mido.MidiFile:
+def _build_midi(profile: dict, instrument_group: dict, seed: int = 42) -> "mido.MidiFile":
     """
     Construye el archivo MIDI completo a partir del perfil y la instrumentación.
     """

@@ -39,7 +39,7 @@ Opciones
 ────────────────────────────────────────────────────────────────────────────
   --analyze-midi MIDI_FILE    Analizar un MIDI y mostrar las progresiones del
                               catálogo que contiene
-  --min-score F               Score mínimo de coincidencia 0-1 (default: 0.6)
+  --min-score F               Score mínimo de coincidencia 0-1 (default: 0.65)
   --list                      Listar todas las progresiones
   --stats                     Estadísticas del catálogo
   --custom GRADOS             Progresión personalizada en numerales romanos,

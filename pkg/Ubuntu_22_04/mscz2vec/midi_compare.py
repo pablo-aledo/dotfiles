@@ -42,6 +42,27 @@ EJEMPLOS
   python midi_compare.py report semilla.mid obra_final.mid --motif "D4 G4 C5 A4"
   python midi_compare.py curves a.mid b.mid --points 24
   python midi_compare.py motifs a.mid b.mid --motif-midi motivo.mid --tolerance 1
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[*]
+a str required
+b str required
+--json file io=out
+[curves]
+--points int default=32
+[motifs]
+--motif str
+--motif-midi file io=in ext=mid
+--tolerance enum default=0 values=0|1
+--no-inversion bool default=false
+--no-retrograde bool default=false
+[report]
+--motif str
+--motif-midi file io=in ext=mid
+@end
 """
 import argparse
 import json

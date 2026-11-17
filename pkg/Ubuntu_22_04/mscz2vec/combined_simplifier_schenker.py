@@ -137,6 +137,29 @@ Véase también: old/combined_simplifier_transformed.py (añade transformaciones
 musicales sobre este motor), old/combined_simplifier_transformed_2.py y
 combined_simplifier_hybrid*.py (versiones autocontenidas que lo fusionan con el
 optimizador adaptativo).
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[*]
+--level list of=str  # deriva versiones beginner / intermediate / advanced con el perfil aprendido del corpus (en vez de…
+--excerpt str  # [con --level] recorta un extracto contiguo: nº de compases o 'auto' (beginner ≈40%% de la pieza, 8-32…
+--excerpt-start int  # [con --excerpt] compas inicial del extracto (defecto: primer compas con notas)
+--legacy bool default=false  # usar el motor clasico tambien para --target-grade 1..5 (por defecto esos grados se derivan con el perfil…
+--transpose bool default=false  # transportar a la tonalidad con menos teclas negras (OPT-IN desde v5: en el corpus coincide menos con la…
+midi file io=in ext=mid required
+--target-grade list of=int  # uno o mas grados objetivo (1-8). Requerido salvo con --schenker-sequence.
+--floor-level str default=ursatz
+--split int default=60
+--outdir dir io=out
+--schenker-sequence bool default=false  # en vez de simplificar a grados de dificultad, genera la escalera de practica de niveles schenkerianos…
+--schenker-threshold float default=0.35  # umbral de peso estructural para el primer recorte de la reduccion (solo aplica con --schenker-sequence).
+--schenker-max-levels int default=8
+--schenker-min-diff float default=0.08  # fraccion minima de cambio en numero de notas entre peldaños consecutivos para conservar un peldaño intermedio.
+--schenker-mode enum default=collapse values=collapse|threshold_sweep  # 'collapse' (por defecto): los 3 peldaños originales tal cual (ursatz/recorte-por-umbral/superficie).…
+--schenker-thresholds list of=float  # valores de threshold a barrer en modo threshold_sweep (por defecto: 0.2 0.35 0.5 0.65 0.8).
+@end
 """
 
 # ══════════════════════════════════════════════════════════════════════════════

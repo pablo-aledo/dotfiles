@@ -49,6 +49,26 @@ EJEMPLOS
   python split_ensemble.py split obra.mid --track "Cuerdas" --voices 4 -o cuerdas_4v.mid
   python split_ensemble.py split obra.mid --all --keep-others -o obra_voces.mid
   python split_ensemble.py check obra.mid obra_voces.mid --track Cuerdas
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+@params v1
+[info]
+midi file io=in ext=mid required
+[split]
+midi file io=in ext=mid required
+--track str
+--all bool default=false
+--voices int
+--programs list of=int
+--keep-others bool default=false
+--output file io=out alias=-o
+[check]
+original str required
+split str required
+--track str
+@end
 """
 import argparse
 import itertools
