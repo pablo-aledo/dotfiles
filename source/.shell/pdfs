@@ -10,6 +10,13 @@ pdf_explode_jpg(){
 	convert -density 300 "../$1" page-%04d.jpg
 }
 
+pdf_explode_jpg () {
+    mkdir "$(basename "$1" .pdf)"
+    cd "$(basename "$1" .pdf)"
+    convert -density 300 -background white "../$1" \
+        -alpha remove -alpha off page-%04d.jpg
+}
+
 pdf_explode_pdf(){
 	mkdir "`basename $1 .pdf`"
 	cd "`basename $1 .pdf`"
