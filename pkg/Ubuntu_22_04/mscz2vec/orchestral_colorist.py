@@ -184,7 +184,8 @@ def detect_roles(tracks_notes, mid) -> dict:
     roles = {}
     stats = {}
     for idx, ns in tracks_notes.items():
-        if 9 in mid.tracks[idx].channels:
+        # Percusión: canal 10 o pista de timbales (GM 47) en otro canal.
+        if 9 in mid.tracks[idx].channels or 47 in mid.tracks[idx].programs:
             roles[idx] = "percusion"
             continue
         mean_p = sum(n.pitch for n in ns) / len(ns)
@@ -213,6 +214,35 @@ def detect_roles(tracks_notes, mid) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 #  MOTOR PRINCIPAL
 # ══════════════════════════════════════════════════════════════════════════════
+
+def _monophonize(ns, keep="top"):
+    """Reduce una lista de notas a una sola voz (para perfiles monofónicos).
+
+    Entre notas que empiezan a la vez (±1 tick) se conserva la más aguda
+    (la más grave con keep="bottom"); los solapes se recortan al inicio de
+    la siguiente. Devuelve (notas, nº de notas descartadas o recortadas).
+    Evita que, al reasignar una pista polifónica (p.ej. violines con dobles
+    cuerdas) a un instrumento monofónico, aparezca polifonía imposible.
+    """
+    pick = max if keep == "top" else min
+    ordered = sorted(ns, key=lambda n: (n.start, n.pitch))
+    singles, i = [], 0
+    while i < len(ordered):
+        j = i + 1
+        while j < len(ordered) and ordered[j].start - ordered[i].start <= 1:
+            j += 1
+        singles.append(pick(ordered[i:j], key=lambda n: n.pitch))
+        i = j
+    touched = len(ordered) - len(singles)
+    out = []
+    for k, n in enumerate(singles):
+        if k + 1 < len(singles) and n.end > singles[k + 1].start:
+            n.end = singles[k + 1].start
+            touched += 1
+        if n.end > n.start:
+            out.append(n)
+    return out, touched
+
 
 def _set_program(trk, channel, program):
     trk.events = [e for e in trk.events
@@ -286,8 +316,12 @@ def colorize_midi(path: str, emotion: str, out_path: Optional[str] = None,
             if dynamics:
                 x = (n.vel - vmin) / (vmax - vmin) if vmax > vmin else 0.5
                 n.vel = max(1, min(127, int(round(vlo + x * (vhi - vlo)))))
+        mono_fixed = 0
+        if prof.get("mono"):
+            ns, mono_fixed = _monophonize(ns, keep="bottom" if role == "bajo" else "top")
         table.append({"track": idx, "old": mid.tracks[idx].name or f"Pista {idx}",
                       "role": role, "new": new_name, "program": program,
+                      "mono_fixed": mono_fixed,
                       "profile": prof_key, "shift": shift,
                       "dyn": (vlo, vhi)})
         if not report_only:

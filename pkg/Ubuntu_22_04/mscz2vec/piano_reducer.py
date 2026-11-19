@@ -1012,16 +1012,49 @@ def notes_to_track(notes: List[dict], tpb: int, channel: int,
     return track
 
 
+def collect_source_meta(mid: MidiFile) -> List[Tuple[int, 'MetaMessage']]:
+    """Recoge compás y armadura del MIDI de origen como (tick_abs, mensaje).
+
+    Une todas las pistas; si varias declaran un evento en el mismo tick,
+    prevalece la primera. Así la reducción conserva la métrica y la
+    armadura reales en lugar de imponer 4/4 sin armadura.
+    """
+    found: Dict[Tuple[str, int], 'MetaMessage'] = {}
+    for track in mid.tracks:
+        t = 0
+        for msg in track:
+            t += msg.time
+            if msg.type in ('time_signature', 'key_signature'):
+                found.setdefault((msg.type, t), msg)
+    return sorted(((t, m) for (_, t), m in found.items()), key=lambda x: x[0])
+
+
+def _append_meta_events(track, events: List[Tuple[int, 'MetaMessage']]) -> None:
+    """Añade eventos meta (tick absoluto) a una pista con tiempos delta."""
+    prev = 0
+    for tick, msg in events:
+        track.append(msg.copy(time=tick - prev))
+        prev = tick
+
+
 def build_piano_midi(rh_notes: List[dict], lh_notes: List[dict],
-                     tpb: int, tempo: int, output_path: str) -> None:
-    """Genera MIDI con dos pistas: MD (canal 0) y MI (canal 1)."""
+                     tpb: int, tempo: int, output_path: str,
+                     source_meta: Optional[List[Tuple[int, 'MetaMessage']]] = None) -> None:
+    """Genera MIDI con dos pistas: MD (canal 0) y MI (canal 1).
+
+    Si se pasa ``source_meta`` (ver ``collect_source_meta``) se copian el
+    compás y la armadura originales; si no hay compás, se usa 4/4.
+    """
     mid = MidiFile(type=1, ticks_per_beat=tpb)
 
-    # Pista de tempo
+    # Pista de tempo + metadatos del original
     tempo_track = MidiTrack()
     tempo_track.append(MetaMessage('set_tempo', tempo=tempo, time=0))
-    tempo_track.append(MetaMessage('time_signature', numerator=4, denominator=4,
-                                   clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
+    source_meta = source_meta or []
+    if not any(m.type == 'time_signature' for _, m in source_meta):
+        tempo_track.append(MetaMessage('time_signature', numerator=4, denominator=4,
+                                       clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
+    _append_meta_events(tempo_track, source_meta)
     mid.tracks.append(tempo_track)
 
     # Pista MD — piano acústico (program 0)
@@ -1312,7 +1345,8 @@ def main():
 
     # ── Escribir MIDI ────────────────────────────────────────────────────────
     print(f"\n  Escribiendo: {output_midi}")
-    build_piano_midi(rh_notes, lh_notes, tpb, tempo, output_midi)
+    build_piano_midi(rh_notes, lh_notes, tpb, tempo, output_midi,
+                     source_meta=collect_source_meta(mid))
 
     # ── Combinado ────────────────────────────────────────────────────────────
     if args.combine_output:

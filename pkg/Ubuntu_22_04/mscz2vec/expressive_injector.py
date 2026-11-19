@@ -498,7 +498,45 @@ KRUMHANSL_MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53,
                              2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
 
 
-def estimate_key(notes):
+KEY_SIG_BONUS = 0.15
+
+
+def key_signature_from_mid(mid):
+    """Armadura dominante (sf, mi) de un MidiFile de mido, o None si falta o
+    las pistas discrepan (<60 % de los eventos coinciden)."""
+    from collections import Counter
+    cnt = Counter()
+    for trk in mid.tracks:
+        for msg in trk:
+            if msg.type == "key_signature":
+                try:
+                    cnt[_KEY_TO_SF[msg.key]] += 1
+                except KeyError:
+                    pass
+    if not cnt:
+        return None
+    (sig, n), = cnt.most_common(1)
+    return sig if n / sum(cnt.values()) >= 0.6 else None
+
+
+_KEY_TO_SF = {}
+for _sf, (_maj, _min) in enumerate(zip(
+        ["C", "G", "D", "A", "E", "B", "F#", "C#"],
+        ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "D#m", "A#m"])):
+    _KEY_TO_SF[_maj] = (_sf, 0); _KEY_TO_SF[_min] = (_sf, 1)
+for _sf, (_maj, _min) in enumerate(zip(
+        ["F", "Bb", "Eb", "Ab", "Db", "Gb", "Cb"],
+        ["Dm", "Gm", "Cm", "Fm", "Bbm", "Ebm", "Abm"]), start=1):
+    _KEY_TO_SF[_maj] = (-_sf, 0); _KEY_TO_SF[_min] = (-_sf, 1)
+
+
+def estimate_key(notes, key_sig=None):
+    """Krumhansl-Schmuckler. ``key_sig=(sf, mi)`` bonifica la tonalidad de la
+    armadura y su relativa (antes se ignoraba y se elegía a veces la quinta)."""
+    favored = set()
+    if key_sig is not None:
+        mt = (key_sig[0] * 7) % 12
+        favored = {(mt, "mayor"), ((mt + 9) % 12, "menor")}
     weights = np.zeros(12)
     for n in notes:
         weights[n.pitch % 12] += max(n.duration_ticks, 1)
@@ -512,6 +550,8 @@ def estimate_key(notes):
             corr = np.corrcoef(rotated, profile)[0, 1]
             if np.isnan(corr):
                 continue
+            if (tonic, mode) in favored:
+                corr += KEY_SIG_BONUS
             if corr > best_score:
                 best_score, best = corr, (tonic, mode)
 
@@ -1654,7 +1694,7 @@ def cmd_info(args):
     notes = assign_hands(mid, notes)
     last_tick = max((n.end_tick for n in notes), default=0)
     grid = MetricGrid(tpb, time_sigs, last_tick)
-    key_tonic, key_mode, _ = estimate_key(notes)
+    key_tonic, key_mode, _ = estimate_key(notes, key_signature_from_mid(mid))
 
     rh = [n for n in notes if n.hand == "RH"]
     lh = [n for n in notes if n.hand == "LH"]
@@ -1721,7 +1761,7 @@ def cmd_inject(args):
 
     fn = INJECTORS[args.recurso]
     if args.recurso in NEEDS_KEY:
-        key_tonic, key_mode, scale_pcs = estimate_key(notes)
+        key_tonic, key_mode, scale_pcs = estimate_key(notes, key_signature_from_mid(mid))
         ctx = AnalysisContext(key_tonic=key_tonic, key_mode=key_mode, scale_pcs=scale_pcs)
         result, msg = fn(notes, grid, ctx, args.compas, hand, **kwargs)
     else:

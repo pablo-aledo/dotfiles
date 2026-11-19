@@ -347,7 +347,10 @@ def design_tempo(path: str, out_path: Optional[str] = None,
     }
 
     if write_json:
-        sidecar = str(Path(path).with_suffix("")) + ".tempo.json"
+        # El sidecar va junto al MIDI de SALIDA (no contamina el directorio de
+        # entrada, que puede ser un corpus de solo lectura). Sin --output se
+        # mantiene el comportamiento anterior (junto a la entrada).
+        sidecar = str(Path(out_path if out_path else path).with_suffix("")) + ".tempo.json"
         with open(_ensure_parent(sidecar), "w", encoding="utf-8") as fh:
             json.dump({"version": VERSION, "n_bars": int(n_bars),
                        "shape": shape, "base_bpm": round(base_bpm, 2),

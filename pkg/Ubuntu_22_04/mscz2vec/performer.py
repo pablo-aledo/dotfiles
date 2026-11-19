@@ -268,6 +268,23 @@ def _resolve_same_pitch_overlaps(notes):
                 a.end = max(a.start + 1, min(a.end, b.start))
 
 
+def _trim_monophonic_overlaps(notes):
+    """En instrumentos monofónicos, el jitter/lead mueve los ataques pero no los
+    finales: la nota previa podía seguir sonando cuando empieza la siguiente
+    (polifonía imposible que antes no existía). Se recorta cada nota al inicio
+    de la siguiente. Si dos notas caen en el mismo tick (el warp/jitter puede
+    juntarlas), la segunda se retrasa 1 tick y la primera queda en 1 tick.
+    Nunca alarga ni elimina notas."""
+    ordered = sorted(notes, key=lambda n: (n.start, n.end))
+    for a, b in zip(ordered, ordered[1:]):
+        if b.start <= a.start:
+            b.start = a.start + 1
+            if b.end <= b.start:
+                b.end = b.start + 1
+        if a.end > b.start:
+            a.end = max(a.start + 1, b.start)
+
+
 def _rebuild(trk, notes, extra_events=None):
     others = [e for e in trk.events if e.kind not in ("note_on", "note_off")]
     evs = list(others) + (extra_events or [])
@@ -370,6 +387,8 @@ def perform_midi(path: str, out_path: Optional[str] = None,
         # una repetición de la misma altura podía quedar atacada antes de cerrarse
         # la anterior (solape + note_off huérfano). Se recorta la nota previa.
         _resolve_same_pitch_overlaps(notes)
+        if INSTRUMENT_DB[inst].get("mono"):
+            _trim_monophonic_overlaps(notes)
 
         # [5] controladores
         extra = []

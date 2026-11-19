@@ -956,6 +956,15 @@ def main():
     # simplificar al grado objetivo
     records, tc, mid, tonic_pc, mode, spans, rh, lh, achieved = simplify_to_grade(
         args.midi, args.grade, split=args.split)
+    # Si el grado pedido es inalcanzable (la simplificación se queda a >1 del
+    # objetivo), antes se descartaban TODAS las variaciones y la herramienta
+    # terminaba con error. Ahora se trabaja en torno al grado realmente
+    # alcanzado y se avisa.
+    if abs(achieved - args.grade) > 1:
+        print(f"[AVISO] grado {args.grade} inalcanzable para esta pieza (la versión "
+              f"simplificada queda en grado {achieved}); se generan variaciones en "
+              f"torno al grado {achieved}", file=sys.stderr)
+        args.grade = achieved
     outdir = Path(args.outdir) if args.outdir else Path(args.midi).parent
     outdir.mkdir(parents=True, exist_ok=True)
     stem = Path(args.midi).stem

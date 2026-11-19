@@ -162,6 +162,12 @@ class Song:
         self.end_tick = max([n[1] for tr in self.tracks for n in tr["notes"]] or [0])
         self.pickup_ticks = int(round(pickup * self.tpb))
         self.forced_ts = _parse_ts(time_sig) if time_sig else None
+        # Sin time_signature en el MIDI se asume 4/4 (norma MIDI): se avisa para
+        # que un recorte por compases no falle o salga desplazado sin explicación.
+        self.assumed_ts = not self.ts_events and not self.forced_ts
+        if self.assumed_ts:
+            print(f"[AVISO] {path}: el MIDI no declara time_signature; se asume 4/4 "
+                  f"(si no lo es, indica --time-sig N/D)", file=sys.stderr)
         self.starts = self._bar_starts()
 
     # -- compases ------------------------------------------------------------
@@ -202,7 +208,9 @@ class Song:
         if k0 < 0 or k1 < k0 or k1 >= len(self.starts) - 1:
             lo = self.first_bar
             hi = self.first_bar + len(self.starts) - 2
-            raise ValueError(f"compases {b0}-{b1} fuera de rango ({lo}-{hi})")
+            hint = (" — el MIDI no declara compás y se asumió 4/4: prueba --time-sig N/D"
+                    if getattr(self, "assumed_ts", False) else "")
+            raise ValueError(f"compases {b0}-{b1} fuera de rango ({lo}-{hi}){hint}")
         return self.starts[k0], self.starts[k1 + 1]
 
 

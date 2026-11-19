@@ -181,15 +181,55 @@ def detect_chord(pcs_weight: Dict[int, float], bass_pc: Optional[int]
     return best
 
 
-def detect_key(pc_hist: np.ndarray) -> Tuple[int, str]:
-    """Krumhansl-Schmuckler → (tonic_pc, 'maj'|'min')."""
+def key_signature_of(mid) -> Optional[Tuple[int, int]]:
+    """Armadura dominante del MIDI como (sf, mi) o None.
+
+    sf = nº de sostenidos (+) / bemoles (-); mi = 0 mayor, 1 menor.
+    Se usa la más frecuente entre todas las pistas y solo si domina
+    (≥60 % de los eventos); si las pistas discrepan se ignora.
+    """
+    from collections import Counter
+    cnt = Counter()
+    for trk in mid.tracks:
+        for ev in trk.events:
+            if ev.kind == "meta" and ev.meta_type == 0x59 and len(ev.data) >= 5:
+                sf = ev.data[3] - 256 if ev.data[3] > 127 else ev.data[3]
+                if -7 <= sf <= 7:
+                    cnt[(sf, ev.data[4] & 1)] += 1
+    if not cnt:
+        return None
+    (sig, n), = cnt.most_common(1)
+    return sig if n / sum(cnt.values()) >= 0.6 else None
+
+
+# Bonificación de correlación para las tonalidades que concuerdan con la
+# armadura (mayor y su relativa menor). Las correlaciones K-S de candidatas
+# vecinas (quinta, relativa) difieren típicamente en <0.1, de modo que la
+# armadura actúa como voto fuerte sin anular a un histograma muy contundente.
+KEY_SIG_BONUS = 0.15
+
+
+def detect_key(pc_hist: np.ndarray,
+               key_sig: Optional[Tuple[int, int]] = None) -> Tuple[int, str]:
+    """Krumhansl-Schmuckler → (tonic_pc, 'maj'|'min').
+
+    Con ``key_sig=(sf, mi)`` (ver ``key_signature_of``) se favorecen la
+    tonalidad de la armadura y su relativa. Sin armadura, K-S puro.
+    """
     h = pc_hist - pc_hist.mean() if pc_hist.sum() else pc_hist
+    favored = set()
+    if key_sig is not None:
+        sf, mi = key_sig
+        maj_tonic = (sf * 7) % 12
+        favored = {(maj_tonic, "maj"), ((maj_tonic + 9) % 12, "min")}
     best = (0, "maj", -1e9)
     for tonic in range(12):
         for mode, prof in (("maj", _KS_MAJ), ("min", _KS_MIN)):
             p = np.roll(prof - prof.mean(), tonic)
             denom = np.linalg.norm(h) * np.linalg.norm(p)
             corr = float(np.dot(h, p) / denom) if denom > 1e-9 else 0.0
+            if (tonic, mode) in favored:
+                corr += KEY_SIG_BONUS
             if corr > best[2]:
                 best = (tonic, mode, corr)
     return best[0], best[1]
@@ -321,7 +361,7 @@ def analyze_harmony(path: str, key: Optional[str] = None,
     if key:
         tonic_pc, mode = _parse_key(key)
     else:
-        tonic_pc, mode = detect_key(pc_hist)
+        tonic_pc, mode = detect_key(pc_hist, key_sig=key_signature_of(mid))
 
     # segmentación por ventana
     tpb = tc.tpb

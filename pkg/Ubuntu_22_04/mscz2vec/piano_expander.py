@@ -879,6 +879,37 @@ def conductor_track(meta, tempo=None):
     return trk
 
 
+MONOPHONIC_INSTRUMENTS = {'flute','oboe','clarinet','bassoon','trumpet'}
+
+
+def make_monophonic(notes, keep='top'):
+    """Fuerza una línea monofónica (instrumentos de viento de una sola voz).
+
+    - Notas con inicio simultáneo (±1 tick): se conserva una sola
+      (la más aguda; la más grave si keep='bottom', p.ej. fagot).
+    - Solapes: cada nota se acorta hasta el inicio de la siguiente.
+    Antes, la orquestación podía asignar acordes o solapes a clarinete,
+    oboe, etc., que ``playability_auditor`` marca como ERROR de polifonía.
+    """
+    pick = max if keep == 'top' else min
+    ordered = sorted(notes, key=lambda n: n['tick'])
+    singles, i = [], 0
+    while i < len(ordered):
+        j = i + 1
+        while j < len(ordered) and ordered[j]['tick'] - ordered[i]['tick'] <= 1:
+            j += 1
+        singles.append(pick(ordered[i:j], key=lambda n: n['pitch']))
+        i = j
+    out = []
+    for k, n in enumerate(singles):
+        n = dict(n)
+        if k + 1 < len(singles):
+            n['duration'] = min(n['duration'], singles[k + 1]['tick'] - n['tick'])
+        if n['duration'] >= 1:
+            out.append(n)
+    return out
+
+
 def build_midi(instr_notes,instr_cc,instruments,tempo,tpb,output_path,meta=None):
     mid=MidiFile(type=1,ticks_per_beat=tpb)
     # Compás y armadura: se heredan del MIDI de entrada (antes se forzaba 4/4
@@ -894,6 +925,8 @@ def build_midi(instr_notes,instr_cc,instruments,tempo,tpb,output_path,meta=None)
         if not notes: continue
         prog=INSTR_PROGRAM.get(name,40)
         disp=INSTR_DISPLAY.get(name,name)
+        if name in MONOPHONIC_INSTRUMENTS:
+            notes=make_monophonic(notes,keep='bottom' if name=='bassoon' else 'top')
         track=build_track(notes,cc,ch%16,disp,prog)
         mid.tracks.append(track)
         created.append(disp)

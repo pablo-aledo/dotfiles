@@ -1403,7 +1403,10 @@ def analyse(midi_path: str,
 
     if report:
         stem = Path(midi_path).stem
-        report_path = Path(midi_path).parent / f"{stem}.leitmotif_analysis.json"
+        # El reporte NO se escribe junto al MIDI de entrada (puede ser un corpus
+        # de solo lectura): va a --save-dir si se indica y, si no, al directorio
+        # de trabajo actual.
+        report_path = Path(save_dir or ".") / f"{stem}.leitmotif_analysis.json"
         with open(_ensure_parent(report_path), "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
         print(f"  Reporte JSON guardado: {report_path}")
@@ -1515,7 +1518,8 @@ Ejemplos:
     p.add_argument("--top",            type=int,   default=8,
                    help="Número máximo de leitmotifs en modo automático (default: 8)")
     p.add_argument("--report",         action="store_true",
-                   help="Guardar reporte JSON con el análisis completo")
+                   help="Guardar reporte JSON con el análisis completo "
+                        "(en --save-dir o, si no se indica, en el directorio actual)")
     p.add_argument("--map-cols",       type=int, default=1, metavar="N",
                    help=("Compases por columna en el mapa de apariciones "
                          "(default: 1 — una columna por compás)"))

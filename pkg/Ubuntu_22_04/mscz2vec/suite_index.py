@@ -345,9 +345,30 @@ def _extract_cli(tree, env):
     calls = []
     dynamic = False
 
+    # Funciones auxiliares que añaden argumentos a un parser recibido como
+    # parámetro (p.ej. ``def two(p): p.add_argument("a")``, luego ``two(sub_p)``).
+    # Sus add_argument pertenecen al subcomando al que se aplica el helper en
+    # cada llamada, no al parser global.
+    helpers = {}                # nombre de función -> [(índice de parámetro, Call)]
+    helper_call_ids = set()
+    for fn in (n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))):
+        pnames = [a.arg for a in fn.args.args]
+        for c in ast.walk(fn):
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) \
+                    and c.func.attr == "add_argument" and isinstance(c.func.value, ast.Name) \
+                    and c.func.value.id in pnames:
+                helpers.setdefault(fn.name, []).append((pnames.index(c.func.value.id), c))
+                helper_call_ids.add(id(c))
+
+    applied_helpers = set()
     nodes = sorted((n for n in ast.walk(tree) if hasattr(n, "lineno")),
                    key=lambda n: (n.lineno, getattr(n, "col_offset", 0)))
     for n in nodes:
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in helpers:
+            applied_helpers.add(n.func.id)
+            for idx_, hc in helpers[n.func.id]:
+                if idx_ < len(n.args) and isinstance(n.args[idx_], ast.Name):
+                    calls.append((scope.get(n.args[idx_].id, ""), hc))
         # x = <algo>.add_parser('nombre', help=...)  /  g = p.add_argument_group()
         if isinstance(n, ast.Assign) and isinstance(n.value, ast.Call) \
                 and isinstance(n.value.func, ast.Attribute) \
@@ -376,7 +397,9 @@ def _extract_cli(tree, env):
                     scope[tgt] = scope.get(base.id, "")
         # with-as no es habitual; se ignora
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
-            if n.func.attr == "add_argument":
+            if n.func.attr == "add_argument" and id(n) in helper_call_ids:
+                pass                # se atribuye en la llamada al helper (arriba)
+            elif n.func.attr == "add_argument":
                 base = n.func.value
                 sc = scope.get(base.id, "") if isinstance(base, ast.Name) else ""
                 calls.append((sc, n))
@@ -390,6 +413,12 @@ def _extract_cli(tree, env):
                         name = (owner + " " + name).strip()
                         if name not in sub_help:
                             sub_help[name] = ""
+
+    # Helper que nunca se invoca: se conserva el comportamiento anterior
+    # (sus argumentos cuentan como globales).
+    for hname, hcalls in helpers.items():
+        if hname not in applied_helpers:
+            calls.extend(("", hc) for _, hc in hcalls)
 
     flags = []
     for sc, n in calls:
@@ -577,6 +606,18 @@ def _attach_spec(flags, spec):
     for f in flags:
         for p in spec["params"]:
             if p.get("matched") or p["sub"] != f["sub"]:
+                continue
+            names = {p["name"]} | set(p.get("alias", []))
+            if names & set(f["opts"]):
+                p["matched"] = True
+                f["spec"] = {k: v for k, v in p.items() if k not in ("sub", "line", "matched", "desc")}
+                break
+        if f.get("spec") or not f["sub"]:
+            continue
+        # Un parámetro declarado en [*] que el parser define en cada subcomando
+        # (argumentos comunes vía helper) se aplica a todos esos subcomandos.
+        for p in spec["params"]:
+            if p["sub"] != "":
                 continue
             names = {p["name"]} | set(p.get("alias", []))
             if names & set(f["opts"]):

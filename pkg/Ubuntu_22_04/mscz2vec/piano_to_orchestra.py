@@ -1789,6 +1789,88 @@ class FingerprintGenerator:
 #  HUMAN REVIEW LOOP
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Instrumentos de una sola voz: la orquestación no puede asignarles acordes/solapes.
+MONOPHONIC_INSTRUMENTS = {'flute', 'oboe', 'clarinet', 'bassoon', 'trumpet'}
+
+
+def _make_monophonic_events(events, keep='top'):
+    """Deja las notas de ``events`` ((t,'note',p,v,d), más 'cc'/'ks') en una
+    sola voz: elige una nota por inicio simultáneo y recorta los solapes.
+    Los eventos no-nota (CC, keyswitch) pasan intactos."""
+    pick = max if keep == 'top' else min
+    notes = sorted((e for e in events if e[1] == 'note'), key=lambda e: e[0])
+    others = [e for e in events if e[1] != 'note']
+    singles, i = [], 0
+    while i < len(notes):
+        j = i + 1
+        while j < len(notes) and notes[j][0] - notes[i][0] <= 1:
+            j += 1
+        singles.append(pick(notes[i:j], key=lambda e: e[2]))
+        i = j
+    # Los keyswitch se emiten 5 ticks antes de cada nota (2 ticks de duración):
+    # se deja un hueco de 6 ticks para que no solapen con la nota anterior.
+    gap = 6 if any(e[1] == 'ks' for e in others) else 0
+    out = []
+    for k, (t, _, p, v, d) in enumerate(singles):
+        if k + 1 < len(singles):
+            d = min(d, singles[k + 1][0] - t - gap)
+        if d >= 1:
+            out.append((t, 'note', p, v, d))
+    return sorted(out + others, key=lambda e: e[0])
+
+
+# MIDI de entrada del que se heredan compás y armadura (lo fija main()).
+_SOURCE_META_PATH = None
+
+
+def _inherit_source_meta(mid):
+    """Copia compás y armadura del MIDI de entrada a la pista de conductor.
+
+    Antes la orquestación descartaba time_signature/key_signature y el
+    resultado perdía la métrica real (22/42 obras sin compás, 42/42 sin
+    armadura). Se inserta en la primera pista (tempo) conservando los
+    ticks absolutos y sin duplicar eventos ya presentes.
+    """
+    if not _SOURCE_META_PATH or not mid.tracks:
+        return
+    try:
+        src = MidiFile(_SOURCE_META_PATH)
+    except Exception:
+        return
+    found = {}
+    for trk in src.tracks:
+        t = 0
+        for msg in trk:
+            t += msg.time
+            if msg.type in ('time_signature', 'key_signature'):
+                found.setdefault((msg.type, t), msg)
+    if not found:
+        return
+    cond = mid.tracks[0]
+    present = set()
+    t = 0
+    for msg in cond:
+        t += msg.time
+        if msg.type in ('time_signature', 'key_signature'):
+            present.add((msg.type, t))
+    abs_events = []
+    t = 0
+    for msg in cond:
+        t += msg.time
+        if msg.type != 'end_of_track':
+            abs_events.append((t, 1, msg))
+    for (typ, tick), msg in found.items():
+        if (typ, tick) not in present:
+            abs_events.append((tick, 0, msg.copy(time=0)))
+    abs_events.sort(key=lambda e: (e[0], e[1]))
+    new, prev = [], 0
+    for tick, _, msg in abs_events:
+        new.append(msg.copy(time=tick - prev)); prev = tick
+    new.append(MetaMessage('end_of_track', time=0))
+    cond[:] = new
+
+
+
 class HumanReviewLoop:
     """
     Revisión humana por escucha directa.
@@ -2233,6 +2315,7 @@ class MIDIWriter:
                     track.append(Message('note_off', channel=ch,
                                          note=pitch, velocity=0,  time=delta))
 
+        _inherit_source_meta(mid)
         mid.save(_ensure_parent(output_path))
         return output_path
 
@@ -3696,6 +3779,9 @@ class InstrumentAssigner:
             events = self._process(raw, cfg, sections, fingerprints)
             if not events:
                 continue
+            if name in MONOPHONIC_INSTRUMENTS:
+                events = _make_monophonic_events(
+                    events, keep='bottom' if name == 'bassoon' else 'top')
 
             prog = GM_PROGRAMS.get(name, 40)
             disp = INSTR_DISPLAY.get(name, name)
@@ -3723,6 +3809,7 @@ class InstrumentAssigner:
                 9, 'Percusión', 0)
             if trk: mid.tracks.append(trk)
 
+        _inherit_source_meta(mid)
         mid.save(_ensure_parent(output_path))
         return n_notes
 
@@ -3851,6 +3938,8 @@ def main():
 
     # ── 1. Cargar MIDI ────────────────────────────────────────────────────────
     print(f"\n  [1/5] Cargando MIDI...")
+    global _SOURCE_META_PATH
+    _SOURCE_META_PATH = args.midi
     loader    = MIDILoader(args.midi, verbose=args.verbose)
     notes, tempo, tpb = loader.load()
     midi_hash = loader.midi_hash()
@@ -4079,6 +4168,7 @@ def main():
                     mid_out.tracks.append(trk)
 
         out_orch = base + '.mid'
+        _inherit_source_meta(mid_out)
         mid_out.save(_ensure_parent(out_orch))
         n_notes = n_notes_total
 

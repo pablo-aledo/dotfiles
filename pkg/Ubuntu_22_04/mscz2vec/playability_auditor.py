@@ -581,6 +581,9 @@ class AuditReport:
     tracks: List[TrackAudit] = field(default_factory=list)
     global_score: float = 1.0
     fixed_path: Optional[str] = None
+    # Re-auditoría del MIDI corregido (solo con --fix); el resto del informe
+    # describe SIEMPRE el estado previo a la corrección.
+    post_fix: Optional[dict] = None
 
     def errors(self):
         return [i for t in self.tracks for i in t.errors()]
@@ -1169,7 +1172,12 @@ def print_report(report: AuditReport, max_issues: int = 12,
           f"({_score_label(report.global_score)}){R}   "
           f"errores: {len(report.errors())}   avisos: {len(report.warnings())}")
     if report.fixed_path:
+        print(f"  (el informe anterior describe el estado PREVIO a la corrección)")
         print(f"  MIDI corregido: {report.fixed_path}")
+        if report.post_fix:
+            pf = report.post_fix
+            print(f"  Tras corregir: tocabilidad {pf['global_score']:.2f}   "
+                  f"errores: {pf['errors']}   avisos: {pf['warnings']}")
     print(f"{'═' * 78}\n")
 
 
@@ -1180,7 +1188,9 @@ def report_to_dict(report: AuditReport) -> dict:
         "file": report.file,
         "profile": report.profile,
         "global_score": report.global_score,
+        "state": "pre-fix" if report.fixed_path else "original",
         "fixed_path": report.fixed_path,
+        "post_fix": report.post_fix,
         "tracks": [
             {
                 "index": t.index, "name": t.name,
@@ -1292,6 +1302,20 @@ def main():
             stats = fix_midi(path, out, profile=args.profile,
                              instrument_overrides=overrides)
             report.fixed_path = out
+            try:
+                post = audit_midi(out, profile=args.profile, tracks=args.tracks,
+                                  scope=args.scope, checks=checks,
+                                  instrument_overrides=overrides)
+                report.post_fix = {
+                    "file": out,
+                    "global_score": post.global_score,
+                    "errors": len(post.errors()),
+                    "warnings": len(post.warnings()),
+                    "tracks": [{"index": t.index, "name": t.name, "score": t.score,
+                                "n_issues": len(t.issues)} for t in post.tracks],
+                }
+            except Exception as e:  # la corrección ya está escrita; no abortar
+                print(f"[AVISO] no se pudo re-auditar {out}: {e}", file=sys.stderr)
             if not args.quiet:
                 print(f"\n  Correcciones aplicadas → {out}")
                 print(f"    rango: {stats['rango']} notas transpuestas · "
