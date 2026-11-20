@@ -753,8 +753,9 @@ class AbcState:
     """Autómata del cuerpo ABC. step(ch) devuelve True si ch es válido y avanza
     el estado; si devuelve False el estado queda indefinido (probar sobre clone())."""
 
-    def __init__(self, bar_len, unit, chords=False, palette=None):
+    def __init__(self, bar_len, unit, chords=False, palette=None, compound=False):
         self.bar_len, self.unit = bar_len, unit
+        self.compound = compound                         # numerador múltiplo de 3 (abc2midi): (5 (7 (9 ocupan el tiempo de 3
         self.chords, self.chord = chords, None          # símbolos de acorde "..." (opcional)
         self.pal = None                                  # paleta rítmica: duraciones absolutas permitidas
         if palette:
@@ -767,6 +768,10 @@ class AbcState:
             for k in range(1, K + 1):
                 tile[k] = any(k >= x and tile[k - x] for x in G)
             self.tile, self.g, self.pmin = tile, g, min(self.pal)
+        self.deco_pending = self.note_deco = False
+        self.tilde_pending = self.note_tilde = False
+        self.need_pick, self.closing_comp = False, False   # tras un compás de cierre parcial debe venir la anacrusa
+        self.origin, self.open_rep = "start", False        # destino de un ":|" y repetición abierta ("|:" sin cerrar)
         self.suf = ""                                    # sufijo de longitud escrito (dígitos, /)
         self.last_deg, self.last_int = None, None        # altura (grados diatónicos) y salto previos
         self.recent = ()                                 # últimos grados (para centro de registro)
@@ -789,6 +794,11 @@ class AbcState:
         t.__dict__ = self.__dict__.copy()
         return t
 
+    @property
+    def cap(self):
+        """Longitud efectiva del compás en curso: la anacrusa si toca anacrusa, si no el compás."""
+        return self.pickup if self.need_pick else self.bar_len
+
     # ── duración de la nota en curso ──
     def _dur(self):
         m = Fraction(int(self.num)) if self.num else Fraction(1)
@@ -803,11 +813,12 @@ class AbcState:
 
     def _min_next(self):
         """Duración mínima de lo que debe caber aún (siguiente nota + resto del tresillo)."""
+        floor = self.unit / 2 if self.tilde_pending else 0        # "~" pendiente: la nota será >= media unidad
         if self.pal is not None:
-            return self.pmin
+            return max(self.pmin, floor)
         if self.tup_rem > 0:
             return self.tup_rem * self.unit * self.tup_fac * self.next_factor
-        return self.unit * self.next_factor / 4
+        return max(self.unit * self.next_factor / 4, floor)
 
     def _reserve(self):
         r = Fraction(0)
@@ -832,25 +843,32 @@ class AbcState:
             f = Fraction(1, 4)
         else:
             f = Fraction(m, 4) if (m % 2 == 1 and m < 4) else Fraction(m, 2)
+        if self.note_tilde and f < Fraction(1, 2):
+            f = Fraction(1, 2)                 # "~" no admite notas menores que media unidad
         return self.n_base * f
 
     def _pal_ok(self, d):
         """¿Una nota que acaba durando d es válida con la paleta? (está en ella y el resto del compás se puede teselar)"""
-        if d not in self.pal or self.n_start + d > self.bar_len:
+        if d not in self.pal or self.n_start + d > self.cap or (self.note_tilde and d * 2 < self.n_base):
             return False
-        return self.first_bar or self.tile[int((self.bar_len - self.n_start - d) / self.g)]
+        return self.first_bar or self.tile[int((self.cap - self.n_start - d) / self.g)]
+
+    def _fits_pal_from(self, pos, d):
+        return pos + d <= self.cap and (self.first_bar or self.tile[int((self.cap - pos - d) / self.g)])
 
     def _could_fit(self):
+        if self.note_tilde and self._dur() * 2 < self.n_base:      # abc2midi: "~" no admite notas menores que media unidad
+            return False
         if self.pal is not None:
             if self.in_tup or self.broken is not None:
                 return self._pal_ok(self.n_base)
             return any(self._pal_ok(self.n_base * m) for m in _suf_mults(self.suf))
-        return self.n_start + self._min_dur() + self._reserve() <= self.bar_len
+        return self.n_start + self._min_dur() + self._reserve() <= self.cap
 
     def _fits(self):
         if self.pal is not None and not self._pal_ok(self._dur()):
             return False
-        return self.n_start + self._dur() + self._reserve() <= self.bar_len
+        return self.n_start + self._dur() + self._reserve() <= self.cap
 
     def _commit(self):
         if not self.in_note:
@@ -862,7 +880,7 @@ class AbcState:
         if not self._fits():
             return False
         newpos = self.n_start + self._dur()
-        if self.tup_rem == 0 and (self.bar_len - newpos) % (self.unit / 4) != 0:
+        if self.tup_rem == 0 and (self.cap - newpos) % (self.unit / 4) != 0:
             return False
         self.pos = newpos
         if self.broken == ">":
@@ -894,6 +912,8 @@ class AbcState:
             self.slur += 1
             self.paren = False
         self.need_note = False
+        self.note_deco, self.deco_pending = self.deco_pending, False
+        self.note_tilde, self.tilde_pending = self.tilde_pending, False
         return True
 
     def _init_dur(self):
@@ -921,6 +941,16 @@ class AbcState:
         self.last_token = t
         if t in _SECTION_TOKENS:
             self.sec_first = True
+        comp, self.closing_comp = self.closing_comp, False
+        if comp:
+            self.need_pick = True                 # compás de cierre parcial → el siguiente es la anacrusa
+        if t in (":|", ":||", "::"):
+            self.open_rep = False
+            self.origin = "pick" if comp else "full"
+        if t in ("|:", "::"):
+            self.open_rep = True
+            if t == "|:":
+                self.origin = "start" if self.first_bar else ("pick" if self.need_pick else "full")
         self.bt, self.bt_zero, self.bt_partial = "", False, False
 
     def _chord_step(self, ch):
@@ -939,7 +969,7 @@ class AbcState:
         if (not self.chords or self.paren or self.need_note or self.tie is not None
                 or self.next_factor != 1 or self.tup_rem > 0):
             return False
-        if not self._commit() or self.pos + self._min_next() > self.bar_len:
+        if not self._commit() or self.pos + self._min_next() > self.cap:
             return False
         self.chord = ""
         return True
@@ -952,6 +982,8 @@ class AbcState:
                 nbt = self.bt + ch
                 if self.bt_zero and nbt != "|:":
                     return False
+                if nbt == "|:" and (self.open_rep or self.need_pick):
+                    return False           # "|:" con otra repetición abierta, o antes de una anacrusa
                 if self.bt_partial and nbt not in ("||", "|]"):
                     return False
                 self.bt = nbt
@@ -983,10 +1015,10 @@ class AbcState:
         if ch == "(":
             if self.paren or self.need_note or self.tie is not None:
                 return False
-            if not self._commit() or self.pos + self._min_next() > self.bar_len:
+            if not self._commit() or self.pos + self._min_next() > self.cap:
                 return False
             if self.slur > 0:                 # con ligadura abierta, "(" solo puede ser un tresillo
-                if self.pal is not None or self.tup_rem > 0 or self.next_factor != 1 or self.pos + 2 * self.unit > self.bar_len:
+                if self.pal is not None or self.tup_rem > 0 or self.next_factor != 1 or self.pos + 2 * self.unit > self.cap:
                     return False
                 self.paren = "tup"
             else:
@@ -997,8 +1029,8 @@ class AbcState:
                 return False
             if self.next_factor != 1:
                 return False
-            tf = Fraction(_TUP_Q[ch], int(ch))
-            if self.pos + int(ch) * self.unit * tf * self.next_factor > self.bar_len:
+            tf = Fraction(3 if (self.compound and ch in "579") else _TUP_Q[ch], int(ch))
+            if self.pos + int(ch) * self.unit * tf * self.next_factor > self.cap:
                 return False
             self.tup_rem, self.tup_fac = int(ch), tf
             self.paren = False
@@ -1011,11 +1043,18 @@ class AbcState:
             self.slur -= 1
             return True
         if ch in ".~":
-            if self.paren or self.need_note or self.tie is not None:
+            if self.paren or self.need_note or self.tie is not None or self.broken is not None or self.next_factor != 1:
+                return False               # abc2midi no admite decoración junto a ritmo roto
+            if not self._commit():
                 return False
-            if not self._commit() or self.pos + self._min_next() > self.bar_len:
+            self.tilde_pending = ch == "~"
+            if self.pos + self._min_next() > self.cap:
                 return False
+            if self.tilde_pending and self.pal is not None and not any(
+                    d * 2 >= self.unit and self._fits_pal_from(self.pos, d) for d in self.pal):
+                return False                                 # paleta sin ninguna duración válida para una nota con "~"
             self.need_note = True
+            self.deco_pending = True
             return True
         if ch in "^_=":
             return self._note_acc(ch)
@@ -1034,7 +1073,7 @@ class AbcState:
         if self.in_note and self.phase == "pre":
             np_ = self.pitch + ch
             return np_ in ("^", "^^", "_", "__", "=") and self._set_pitch(np_)
-        if not self._commit() or self.pos + self._min_next() > self.bar_len:
+        if not self._commit() or self.pos + self._min_next() > self.cap:
             return False
         if not self._begin_note():
             return False
@@ -1099,12 +1138,12 @@ class AbcState:
             self.suf += "/"
             return self._could_fit()
         if ch in "<>":
-            if self.in_tup or self.has_slash or self.pal is not None:   # sin subdivisiones: se saldría de la rejilla
-                return False
+            if self.in_tup or self.has_slash or self.num != "" or self.pal is not None or self.note_deco:
+                return False               # abc2midi exige dos notas de igual longitud escrita; sin subdivisiones
             self.broken = ch
             return self._could_fit()
         if ch == "-":
-            if self.is_rest:
+            if self.is_rest or self.note_deco:   # abc2midi no entiende ".A-"
                 return False
             pitch = self.pitch
             if not self._commit():
@@ -1124,20 +1163,32 @@ class AbcState:
                 return False
             if not (self.last_token is None or self.last_token in _ZERO_OK):
                 return False
+            if self.open_rep or self.need_pick:    # una barra a principio de línea solo puede ser "|:"
+                return False
             self.bt, self.bt_zero, self.bt_partial = "|", True, False
             return True
         full = pos == bl
         comp = self.pickup is not None and pos == bl - self.pickup and not full
-        pick = self.pickup is not None and self.sec_first and pos == self.pickup and not full
+        pick = self.need_pick and pos == self.pickup and not full
         first_partial = self.first_bar and pos < bl
-        if ch == ":":                      # fin de repetición: compás completo o complemento
-            if not (full or comp):
+        self.closing_comp = False
+        if self.need_pick:                 # tras un cierre parcial: solo la anacrusa, con barra simple
+            if not pick or ch == ":":
                 return False
             partial = False
-        elif full or first_partial or pick:
+            self.need_pick = False
+        elif ch == ":":                    # fin de repetición
+            origin_pick = self.origin == "pick" or (self.origin == "start" and self.pickup is not None)
+            if self.tie is not None or origin_pick or not full or not (self.open_rep or self.origin == "start"):
+                return False               # ":|" sin "|:" solo vale una vez, desde el inicio               # volver a una anacrusa haría sonar un compás corto (abc2midi avisa)
+            partial = False
+        elif full or first_partial:
+            if first_partial and self.open_rep:
+                return False               # "|:" al inicio: el primer compás debe ser completo (si no, no se podría cerrar)
             partial = False
         elif comp:                         # compás de cierre de sección: exige || o |]
             partial = True
+            self.closing_comp = True
         else:
             return False
         if self.first_bar:
@@ -1157,6 +1208,13 @@ class AbcState:
         if self.bt and (self.bt not in _TOKENS or (self.bt_partial and self.bt not in ("||", "|]"))
                         or (self.bt_zero and self.bt != "|:")):
             return False
+        op = self.open_rep                    # no terminar con una repetición abierta
+        if self.bt in (":|", ":||"):
+            op = False
+        elif self.bt in ("|:", "::"):
+            op = True
+        if op:
+            return False
         if self.in_note:
             if self.phase != "post" or self.broken is not None:
                 return False
@@ -1165,6 +1223,8 @@ class AbcState:
             end = self.n_start + self._dur()
         else:
             end = self.pos
+        if self.need_pick and not self.bt:     # a mitad de la anacrusa que sigue a un cierre parcial
+            return end == 0
         ok = {self.bar_len, Fraction(0)}
         if self.pickup is not None:
             ok.add(self.bar_len - self.pickup)
@@ -1494,7 +1554,7 @@ class CopyBarController(Controller):
         if not g.just_barred:
             return None
         st = g.st
-        if st.bt not in _TOKENS or st.bt_zero or st.bt_partial or st.pos != 0:
+        if st.bt not in _TOKENS or st.bt_zero or st.bt_partial or st.pos != 0 or st.need_pick:
             return None
         k = len(g.bars)
         if k >= 2 and g.bars[-1] == g.bars[-2]:
@@ -1568,7 +1628,9 @@ class Generator:
         self.pred, self.header, self.body_prime = pred, header, body_prime
         self.bar_len, self.unit, self.chars, self.temp = bar_len, unit, chars, temp
         self.constraints, self.priors, self.controllers = list(constraints), list(priors), list(controllers)
-        self.st0 = AbcState(bar_len, unit, chords=chords, palette=palette)
+        mm = re.search(r"(?m)^M:\s*(\d+)/(\d+)", header)
+        compound = bool(mm and int(mm.group(1)) % 3 == 0)     # regla de abc2midi: numerador múltiplo de 3
+        self.st0 = AbcState(bar_len, unit, chords=chords, palette=palette, compound=compound)
         for i, c in enumerate(body_prime):
             if not self.st0.step(c):
                 die(f"--prime incompatible con --constrain en el carácter {i} ({c!r})")
@@ -1648,6 +1710,11 @@ class Generator:
                     continue
             allowed = [o for c, o in self.cand
                        if st.clone().step(c) and all(k.allows(st, c) for k in self.constraints)]
+            if allowed and self.nprod >= self.chars and st.open_rep:     # fase final: cerrar la repetición abierta
+                if st.bt == ":" and ord("|") in allowed:
+                    allowed = [ord("|")]
+                elif ord(":") in allowed:
+                    allowed = [ord(":")]
             if not allowed:
                 self.dead += 1
                 dead_end[0] += 1
@@ -1976,7 +2043,7 @@ def parse_abc(text, tune=0):
         elif g == "tup":
             nums = [int(x) if x else None for x in m.group()[1:].split(":")]
             p = nums[0]
-            q = nums[1] if len(nums) > 1 and nums[1] else _TUPQ.get(p, 2)
+            q = nums[1] if len(nums) > 1 and nums[1] else (3 if (meter[1] == 8 and meter[0] % 3 == 0 and meter[0] >= 6 and p in (5, 7, 9)) else _TUPQ.get(p, 2))
             r = nums[2] if len(nums) > 2 and nums[2] else p
             items.append(("tup", p, q, r))
         elif g == "grp":
