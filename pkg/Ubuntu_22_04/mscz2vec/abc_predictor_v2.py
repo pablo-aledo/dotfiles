@@ -21,6 +21,9 @@
 # ║    generate  --chords --rhythms 1/2,1,2|auto:N --prior-strength S        ║
 # ║              --form copy|AABA --curve arch|rise|a,b,c --style reel       ║
 # ║              --best-of N --report --midi f.mid --expressive              ║
+# ║              --harmony [S]  armonía primero: plan de acordes por frases  ║
+# ║                (abierta→V, cerrada→I), acorde forzado en cada compás,    ║
+# ║                melodía atraída por el acorde y fin en cadencia           ║
 # ║    render      ABC → MIDI expresivo (humanización, rubato, acompañ.)     ║
 # ║    rank        puntúa/ordena piezas ABC por estructura (+bpc)            ║
 # ║    prepare --minimal --keep LETRAS   (conserva R: para --style)          ║
@@ -778,6 +781,7 @@ class AbcState:
         self.pos = Fraction(0)                 # posición dentro del compás (fracción de redonda)
         self.first_bar, self.pickup, self.sec_first = True, None, True
         self.last_token = None
+        self.last_bar = None
         self.bt, self.bt_zero, self.bt_partial = "", False, False
         self.in_note, self.phase, self.pitch, self.is_rest = False, None, "", False
         self.n_start, self.n_base = Fraction(0), Fraction(0)
@@ -966,9 +970,9 @@ class AbcState:
         return False
 
     def _chord_start(self):
-        if (not self.chords or self.paren or self.need_note or self.tie is not None
+        if (not self.chords or self.paren or self.need_note or (self.tie is not None and self.pos != 0)
                 or self.next_factor != 1 or self.tup_rem > 0):
-            return False
+            return False                       # (una ligadura que cruza la barra admite el acorde del compás nuevo)
         if not self._commit() or self.pos + self._min_next() > self.cap:
             return False
         self.chord = ""
@@ -1196,6 +1200,7 @@ class AbcState:
             if pos < bl:
                 self.pickup = pos
         self.sec_first = False
+        self.last_bar = pos                # duración real del compás que se cierra (ya con la última nota)
         self.pos = Fraction(0)
         self.bt, self.bt_zero, self.bt_partial = ch, False, partial
         return True
@@ -1408,6 +1413,11 @@ class Controller:
         return 1.0
     def after(self, g, ch, bits):
         pass
+    def can_end(self, g):
+        return True
+    def intercept(self, g, ch):
+        """Tras muestrear ch y antes de emitirlo: texto a forzar en su lugar, o None."""
+        return None
 
 _LETTERS = "ABCDEFGabcdefg"
 _DEF_INT = {0: 1.0, 1: 3.0, 2: 2.2, 3: 1.2, 4: 0.7, 5: 0.4, 6: 0.25, 7: 0.3}
@@ -1557,6 +1567,8 @@ class CopyBarController(Controller):
         if st.bt not in _TOKENS or st.bt_zero or st.bt_partial or st.pos != 0 or st.need_pick:
             return None
         k = len(g.bars)
+        if g.harm is not None and g.harm.cadence:
+            return None                          # el compás de cadencia se genera, no se copia
         if k >= 2 and g.bars[-1] == g.bars[-2]:
             return None
         r = self._source(g, k)
@@ -1576,6 +1588,193 @@ class CopyBarController(Controller):
             if n > bn:
                 best, bn = c[:n], n
         return best or None
+
+# ── armonía primero: progresión por frases con cadencias + melodía atraída por el acorde ──
+_PLAN_OPEN4 = [[0, 3, 0, 4], [0, 5, 3, 4], [0, 0, 3, 4], [0, 3, 1, 4], [0, 5, 1, 4]]
+_PLAN_CLOSE4 = [[0, 3, 4, 0], [0, 5, 4, 0], [0, 1, 4, 0], [0, 3, 1, 0]]
+_ACC_NAME = {1: "#", -1: "b", 0: ""}
+
+class KeyInfo:
+    """Escala de la tonalidad K: nombres, clases de altura y tríadas diatónicas."""
+    def __init__(self, header):
+        m = re.search(r"(?m)^K:\s*(.*)$", header)
+        ks = m.group(1) if m else "C"
+        pk = parse_key(ks)
+        mm = re.match(r"\s*([A-G])", ks)
+        if pk is None or not mm:
+            die(f"--harmony: tonalidad K:{ks} no reconocida")
+        self.fifths, self.shift = pk
+        self.minor = self.shift == -3
+        sig = key_sig(self.fifths)
+        i0 = "CDEFGAB".index(mm.group(1))
+        self.pc, self.name = [], []
+        for i in range(7):
+            L = "CDEFGAB"[(i0 + i) % 7]
+            adj = sig.get(L, 0)
+            self.pc.append((_BASE_PC[L] + adj) % 12)
+            self.name.append(L + _ACC_NAME[adj])
+        self.letter_pc = {L: (_BASE_PC[L] + sig.get(L, 0)) % 12 for L in "ABCDEFG"}
+
+    def triad(self, deg, seventh=False):
+        """Nombre del acorde diatónico del grado deg (0-6); en menor, V mayor. None si disminuido."""
+        r = self.pc[deg % 7]
+        if self.minor and deg % 7 == 4:
+            q = ""
+        else:
+            t, f = (self.pc[(deg + 2) % 7] - r) % 12, (self.pc[(deg + 4) % 7] - r) % 12
+            q = {(4, 7): "", (3, 7): "m"}.get((t, f))
+            if q is None:
+                return None
+        if seventh and q == "":
+            q = "7"
+        return self.name[deg % 7] + q
+
+class HarmonyController(Controller):
+    """La armonía se decide por frases (abierta: acaba en V; cerrada: acaba en I) y el símbolo de acorde
+    se fuerza al empezar cada compás. Las frases se alternan abierta/cerrada y la pieza solo puede
+    acabar al cerrar una frase cerrada (cadencia auténtica). La melodía sigue el plan mediante ChordTonePrior."""
+    is_harmony = True
+
+    def __init__(self, phrase_bars=4):
+        self.pb = max(1, phrase_bars)
+        self.key = None
+        self.reset()
+
+    def bind(self, g):
+        self.key = KeyInfo(g.header)
+        m = re.search(r"(?m)^M:\s*(\d+)/(\d+)", g.header)
+        self.meter = (int(m.group(1)), int(m.group(2))) if m else (g.bar_len.numerator, g.bar_len.denominator)
+        self.last_beat = Fraction(3, 8) if (self.meter[0] % 3 == 0 and self.meter[1] == 8) else Fraction(1, 4)
+
+    def reset(self):
+        self.nfull, self.plan, self.pending = 0, {}, True
+        self.cur = None            # (nombre, pcs, raíz) del compás en curso
+        self.cadence = False       # ¿último compás de una frase?
+        self.closing = False       # ¿frase cerrada?
+        self.log = []
+
+    def _phrase(self, g, ph):
+        rng, b = g.rng, self.pb
+        closed = ph % 2 == 1
+        if b == 4:
+            degs = list((_PLAN_CLOSE4 if closed else _PLAN_OPEN4)[int(rng.integers(0, len(_PLAN_CLOSE4 if closed else _PLAN_OPEN4)))])
+        elif b == 1:
+            degs = [0]
+        elif b == 2:
+            degs = [4, 0] if closed else [0, 4]
+        else:
+            degs = [0] + [int(rng.choice([0, 3, 5, 1, 4])) for _ in range(b - 2)] + [0 if closed else 4]
+            if b >= 3:
+                degs[-2] = 4 if closed else int(rng.choice([3, 1, 5]))
+        out = []
+        for i, d in enumerate(degs):
+            if self.key.minor and d == 1:
+                d = 3
+            sev = d == 4 and rng.random() < 0.4 and i >= len(degs) - 2
+            nm = self.key.triad(d, sev) or self.key.triad(3 if d else 0)
+            out.append((nm, d))
+        return out
+
+    def _chord(self, g, i):
+        ph, off = divmod(i, self.pb)
+        if ph not in self.plan:
+            self.plan[ph] = self._phrase(g, ph)
+        nm, d = self.plan[ph][off]
+        pcs, bass = chord_pcs(nm)
+        return nm, pcs, bass
+
+    def _set_bar(self, g):
+        self.cur = self._chord(g, self.nfull)
+        self.cadence = self.nfull % self.pb == self.pb - 1
+        self.closing = (self.nfull // self.pb) % 2 == 1
+
+    def before(self, g):
+        if g.last_len is not None and self._counts(g, g.last_len):
+            self.nfull += 1
+        self.pending = True
+        self._set_bar(g)
+        return None
+
+    @staticmethod
+    def _counts(g, n):
+        """Un compás cuenta para el plan si es completo o es el complemento de la anacrusa."""
+        pk = g.st.pickup
+        return n == g.bar_len or (pk is not None and n == g.bar_len - pk)
+
+    def chord_text(self):
+        return '"' + self.cur[0] + '"' if self.cur else None
+
+    def intercept(self, g, ch):
+        st = g.st
+        if (not self.pending or self.cur is None or st.pos != 0 or st.in_note or st.chord is not None or st.paren
+                or st.need_note or st.tup_rem or st.need_pick or st.next_factor != 1
+                or (g.nprod >= g.chars and st.open_rep)):
+            return None
+        if st.bt and ch in "|:]" and (st.bt + ch) in _TOK_PREFIXES:
+            return None                      # la barra todavía se está escribiendo
+        t = self.chord_text()
+        if g.count_accepted(t) != len(t):
+            return None
+        self.pending = False
+        self.log.append((self.nfull, self.cur[0]))
+        return t
+
+    def can_end(self, g):
+        st = g.st
+        end = st.n_start + st._dur() if st.in_note else st.pos
+        if g.just_barred and g.last_len is not None:
+            n = self.nfull + (1 if self._counts(g, g.last_len) else 0)
+        elif end == g.bar_len or (st.pickup is not None and end == g.bar_len - st.pickup):
+            n = self.nfull + 1
+        elif end == 0:
+            n = self.nfull
+        else:
+            return False
+        return n > 0 and n % self.pb == 0 and (n // self.pb) % 2 == 0
+
+class ChordTonePrior(Prior):
+    """Atrae las alturas hacia las notas del acorde vigente: fuerte en tiempos fuertes, suave en los débiles;
+    en el último pulso del compás final de frase favorece la fundamental (tónica o dominante)."""
+    def __init__(self, strength=1.0):
+        self.s = strength
+
+    def apply(self, g, allowed, q):
+        h, st = g.harm, g.st
+        if self.s <= 0 or h is None or h.cur is None or h.key is None or st.chord is not None:
+            return
+        letters = [o for o in allowed if chr(o) in _LETTERS]
+        if not letters:
+            return
+        sp = (st.n_start + st._dur()) if (st.in_note and st.phase == "post") else st.pos
+        sp = sp % g.bar_len
+        bw = metric_weight(float(sp * 4), h.meter)
+        pcs, root = h.cur[1], h.cur[2]
+        zone = h.cadence and sp >= g.bar_len / 2                   # 2ª mitad del compás de cadencia
+        last = h.cadence and sp >= g.bar_len - h.last_beat
+        t0 = q[letters].sum()
+        if t0 <= 0:
+            return
+        for o in letters:
+            pc = h.key.letter_pc[chr(o).upper()]
+            if pc in pcs:
+                f = 1.0 + self.s * (3.2 * bw * bw + 0.3)
+            else:
+                f = 1.0 / (1.0 + self.s * 2.5 * bw * bw)
+                if zone:
+                    f /= 1.0 + 2.0 * self.s
+            if zone and pc == root:
+                f *= 1.0 + 1.5 * self.s
+            if last and pc == root:
+                f *= 1.0 + 4.0 * self.s
+            q[o] *= f
+        t1 = q[letters].sum()
+        if t1 > 0:
+            q[letters] *= t0 / t1
+
+class NoChordConstraint(Constraint):
+    """Con --harmony los símbolos de acorde los pone el plan, no el muestreo."""
+    def allows(self, st, ch):
+        return ch != '"'
 
 class SurpriseController(Controller):
     """Curva de sorpresa objetivo: la temperatura se ajusta para que los bits/carácter
@@ -1631,6 +1830,11 @@ class Generator:
         mm = re.search(r"(?m)^M:\s*(\d+)/(\d+)", header)
         compound = bool(mm and int(mm.group(1)) % 3 == 0)     # regla de abc2midi: numerador múltiplo de 3
         self.st0 = AbcState(bar_len, unit, chords=chords, palette=palette, compound=compound)
+        self.harm = next((c for c in self.controllers if getattr(c, "is_harmony", False)), None)
+        self.last_len = None
+        for c in self.controllers + self.priors:
+            if hasattr(c, "bind"):
+                c.bind(self)
         for i, c in enumerate(body_prime):
             if not self.st0.step(c):
                 die(f"--prime incompatible con --constrain en el carácter {i} ({c!r})")
@@ -1652,14 +1856,17 @@ class Generator:
 
     def _push(self, ch, bits=None):
         st = self.st
-        pos0, bt0 = st.pos, st.bt
+        bt0 = st.bt
+        st.last_bar = None
         ok = st.step(ch)
         assert ok
+        pos0 = st.last_bar or Fraction(0)
         o = ord(ch)
         self.out.append(ch)
         self.pred.update(o, False)
-        if not bt0 and st.bt and ch in "|:" and pos0 > 0 and st.pos == 0:
+        if not bt0 and st.bt and ch in "|:" and pos0 > 0:
             seg = "".join(self.out[self.seg_start:-1]).lstrip("|:] \n").strip()
+            self.last_len = pos0
             if pos0 == self.bar_len and seg and any(c in _LETTERS for c in seg):
                 self.bars.append(seg)          # solo compases completos
             self.seg_start = len(self.out)
@@ -1678,7 +1885,8 @@ class Generator:
         self.rng = np.random.default_rng(seed)
         self.st = self.st0.clone()
         self.out = list(self.body_prime)
-        self.bars, self.seg_start, self.just_barred = [], len(self.out), False
+        self.bars, self.seg_start, self.just_barred = [], len(self.out), self.harm is not None
+        self.last_len = None
         self.safe, self.nprod, self.curve_log = None, 0, []
         self.dead = 0
         self.rej_sum = self.rej_bits = 0.0
@@ -1692,7 +1900,8 @@ class Generator:
         while True:
             self.nprod = len(self.out) - p0
             if self.nprod >= self.chars:
-                if (self.safe is not None and self.safe[0] == len(self.out)) or extra >= 250:
+                if ((self.safe is not None and self.safe[0] == len(self.out)
+                     and all(c.can_end(self) for c in self.controllers)) or extra >= (450 if self.harm else 250)):
                     break
                 extra += 1
             st = self.st
@@ -1703,6 +1912,17 @@ class Generator:
                     if forced:
                         break
                 self.just_barred = False
+                if forced and self.harm is not None:           # el acorde lo manda el plan, no el compás copiado
+                    body = re.sub(r'"[^"]*"', "", forced)
+                    ft = self.harm.chord_text() if self.harm.pending else None
+                    cand = (ft or "") + body
+                    if cand and self.count_accepted(cand) == len(cand):
+                        forced = cand
+                        if ft:
+                            self.harm.pending = False
+                            self.harm.log.append((self.harm.nfull, self.harm.cur[0]))
+                    else:
+                        forced = None
                 if forced:
                     for ch in forced:
                         self._push(ch)
@@ -1744,6 +1964,13 @@ class Generator:
                 pr.apply(self, allowed, q)
             q /= q.sum()
             o = int(self.rng.choice(256, p=q))
+            if self.harm is not None:
+                ft = self.harm.intercept(self, chr(o))
+                if ft:
+                    for ch in ft:
+                        self._push(ch)
+                        self.forced += 1
+                    continue
             bits = -math.log2(max(float(p[o]), 1e-12))
             self.bits_sum += bits
             if len(self.rej_worst) < 5 or rej > self.rej_worst[-1][0]:
@@ -1795,6 +2022,13 @@ def _build_generator(a, pred):
     s = getattr(a, "prior_strength", 0.0) or 0.0
     if s > 0:
         priors += [IntervalPrior((meta or {}).get("int_hist"), s), ContourPrior(s), RangePrior(s)]
+    hs = getattr(a, "harmony", 0) or 0
+    need(hs >= 0, "--harmony debe ser >= 0")
+    constraints = []
+    if hs > 0:
+        controllers.append(HarmonyController(a.phrase_bars))     # primero: fija el acorde antes que la copia
+        priors.append(ChordTonePrior(hs))
+        constraints.append(NoChordConstraint())
     form = getattr(a, "form", None)
     if form and form != "none":
         mode = "copy" if form == "copy" else form.upper()
@@ -1808,7 +2042,8 @@ def _build_generator(a, pred):
             die("--curve: none, flat, arch, rise o lista de multiplicadores (p. ej. 0.8,1,1.3,0.9)")
         controllers.append(SurpriseController(curve, a.curve_gain))
     g = Generator(pred, header, body_prime, bar_len, unit, chars=a.chars, temp=a.temp,
-                  chords=bool(getattr(a, "chords", False)), palette=palette, priors=priors, controllers=controllers)
+                  chords=bool(getattr(a, "chords", False)) or hs > 0, palette=palette,
+                  constraints=constraints, priors=priors, controllers=controllers)
     return g, header, ptitle, bar_len, unit
 
 def _compose_text(a, g, header, ptitle):
@@ -1857,10 +2092,11 @@ def _prime_text(p):
 
 def cmd_generate(a):
     need(a.temp > 0, "--temp debe ser > 0")
+    need((getattr(a, "harmony", 0) or 0) >= 0, "--harmony debe ser >= 0")
     a.chars = max(0, a.chars)
     if getattr(a, "expressive", False):
         _apply_expressive(a)
-    if not a.constrain and (a.chords or a.rhythms or a.prior_strength > 0 or a.form not in (None, "none")
+    if not a.constrain and (a.chords or a.harmony > 0 or a.rhythms or a.prior_strength > 0 or a.form not in (None, "none")
                             or a.curve not in (None, "none") or a.best_of > 1 or a.style or a.report):
         a.constrain = True                    # estas opciones solo existen en modo restringido
     need(a.best_of >= 1, "--best-of debe ser >= 1")
@@ -2797,6 +3033,9 @@ def main():
     g.add_argument("--form", default="none", help="none | copy | patrón de secciones (AABA) — copia compases con variación")
     g.add_argument("--p-copy", type=float, default=0.35); g.add_argument("--vary", type=float, default=0.5)
     g.add_argument("--phrase-bars", type=int, default=4)
+    g.add_argument("--harmony", type=float, nargs="?", const=1.0, default=0.0, metavar="S",
+                   help="armonía primero: progresión por frases (abierta→V, cerrada→I) con acordes forzados por compás, "
+                        "melodía atraída por el acorde (S = fuerza, 1 por defecto) y fin solo en cadencia")
     g.add_argument("--curve", default="none", help="curva de sorpresa objetivo: none|flat|arch|rise|a,b,c...")
     g.add_argument("--curve-gain", type=float, default=0.04)
     g.add_argument("--best-of", type=int, default=1, metavar="N", help="generar N y quedarse con la mejor puntuada")

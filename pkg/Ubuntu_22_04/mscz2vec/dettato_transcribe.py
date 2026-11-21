@@ -3386,6 +3386,29 @@ def _to_json(res: "Transcription") -> dict:
     return out
 
 
+MIN_AUDIO_S = 0.01  # por debajo (p. ej. un fichero de 0-1 muestras) las etapas no tienen ventanas que procesar
+
+
+def _load_audio(path: Path) -> "Audio":
+    """Decodifica el audio con mensajes de error claros y lo sanea (NaN/Inf → 0)."""
+    try:
+        a = audio_load(str(path))
+    except FileNotFoundError:
+        _err(f"Error: {path.name} necesita ffmpeg para decodificarse y no está en el PATH.")
+        sys.exit(1)
+    except subprocess.CalledProcessError:
+        _err(f"Error: no se pudo decodificar {path}: ¿formato no soportado o fichero corrupto?")
+        sys.exit(1)
+    if a.seconds < MIN_AUDIO_S:
+        _err(f"Error: el audio está vacío o dura menos de {MIN_AUDIO_S} s: {path}")
+        sys.exit(1)
+    bad = ~np.isfinite(a.samples)
+    if bad.any():
+        _err(_c(f"Aviso: {int(bad.sum())} muestras NaN/Inf sustituidas por 0.", YELLOW))
+        a.samples = np.nan_to_num(a.samples, nan=0.0, posinf=0.0, neginf=0.0)
+    return a
+
+
 def cmd_transcribe(args: argparse.Namespace) -> None:
     """Transcribe un fichero de audio a MIDI/JSON."""
     audio_file = Path(args.audio_file)
@@ -3399,13 +3422,26 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
     if output is None:
         output = audio_file.with_suffix(".mid" if args.format == "midi" else ".json")
 
+    if not is_stdout:  # fallar antes de gastar minutos de cómputo si no se puede escribir
+        try:
+            if output.is_dir():
+                raise IsADirectoryError(f"la salida es un directorio: {output}")
+            _ensure_parent(output)
+            if not os.access(output.resolve().parent, os.W_OK):
+                raise PermissionError(f"sin permiso de escritura en {output.resolve().parent}")
+        except OSError as e:
+            _err(f"Error: no se puede escribir la salida: {e}")
+            sys.exit(1)
+
     # Todo el progreso va a stderr: stdout queda reservado para '-o -'.
     _err(_c("Cargando modelos…", DIM))
     model = _load_models(args.device, drums=not args.no_drums)
     _err(_c(f"Transcribiendo {audio_file} en {model.device} …", DIM))
+    audio = _load_audio(audio_file)
     t0 = time.time()
     try:
-        res = model.transcribe(str(audio_file))
+        res = model.transcribe(audio.samples, rate=audio.rate)
+        res.source = str(audio_file)
     except Exception as e:  # noqa: BLE001
         _err(f"Error: fallo al transcribir {audio_file}: {type(e).__name__}: {e}")
         sys.exit(1)
@@ -3417,24 +3453,27 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
     if str(res.info.get("drums", "")).startswith("skipped"):
         _err(_c(f"Aviso: batería {res.info['drums']}", YELLOW))
 
-    if args.format == "midi":
-        if is_stdout:
-            buf = io.BytesIO()
-            res.to_midi().write(buf)
-            sys.stdout.buffer.write(buf.getvalue())
-            sys.stdout.buffer.flush()
+    try:
+        if args.format == "midi":
+            if is_stdout:
+                buf = io.BytesIO()
+                res.to_midi().write(buf)
+                sys.stdout.buffer.write(buf.getvalue())
+                sys.stdout.buffer.flush()
+            else:
+                res.save_midi(str(output))
+                _err(_c(f"✓ MIDI guardado en {output}", GREEN))
         else:
-            _ensure_parent(output)
-            res.save_midi(str(output))
-            _err(_c(f"✓ MIDI guardado en {output}", GREEN))
-    else:
-        payload = json.dumps(_to_json(res), indent=1)
-        if is_stdout:
-            sys.stdout.write(payload + "\n")
-            sys.stdout.flush()
-        else:
-            _ensure_parent(output).write_text(payload)
-            _err(_c(f"✓ JSON guardado en {output}", GREEN))
+            payload = json.dumps(_to_json(res), indent=1)
+            if is_stdout:
+                sys.stdout.write(payload + "\n")
+                sys.stdout.flush()
+            else:
+                output.write_text(payload)
+                _err(_c(f"✓ JSON guardado en {output}", GREEN))
+    except OSError as e:
+        _err(f"Error: no se pudo escribir la salida: {e}")
+        sys.exit(1)
 
 
 def cmd_list_instruments(args: argparse.Namespace) -> None:
@@ -3503,7 +3542,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except BrokenPipeError:  # p. ej. `list-instruments | head -1`: salir en silencio
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        sys.exit(1)
 
 
 if __name__ == "__main__":

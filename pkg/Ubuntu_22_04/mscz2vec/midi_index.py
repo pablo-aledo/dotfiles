@@ -30,7 +30,11 @@ cualquier estilo, y las «sensaciones» se calculan al consultar:
 Las sensaciones (energía, brillo, tensión, estabilidad, repetición,
 insistencia, ambigüedad, movimiento, apertura) son combinaciones de z-scores
 de rasgos y se expresan como PERCENTIL dentro de TU corpus: son hipótesis
-heurísticas sin calibrar. Para calibrarlas con tu oído: `tag` + `similar --tag`.
+heurísticas sin calibrar. Para calibrarlas con tu oído: `tag` + `similar --tag`
+o, mejor, `calibrate TAG`: aprende una regresión logística (L2, clases
+balanceadas) con tus piezas etiquetadas, la guarda en la base y la ofrece como
+una sensación más (`find --feel NOMBRE>0.8`). Informa del AUC en validación
+cruzada, de los rasgos que más pesan y de piezas candidatas a revisar.
 
 Compatibilidad: los rasgos se guardan por nombre. Añadir rasgos nuevos no
 invalida lo indexado (las piezas antiguas quedan sin ese rasgo hasta
@@ -57,6 +61,7 @@ Modos de uso
                        --bars 1-8   |  --values 0,1,2,3,0,1,2,3
                        [--amp-tol 0.5] [--sign] [--per-file 1]
   midi_index.py tag    add|rm|ls ...
+  midi_index.py calibrate TAG --db corpus.db [--neg T2] [--name N]
   midi_index.py export --db corpus.db --out rasgos.csv
   midi_index.py selftest
 
@@ -92,7 +97,7 @@ from collections import Counter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 VERSION = "1.0"
-EXTRACTOR = "1.0"
+EXTRACTOR = "1.1"
 NAN = float("nan")
 ROMAN = ["I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI",
          "bVII", "VII"]
@@ -114,11 +119,14 @@ WIN_SERIES = {"all_pitch": 2.0, "low_pitch": 2.0, "high_pitch": 2.0,
               "all_onsets": 0.5, "rough": 0.1, "span": 3.0, "vel": 8.0,
               "reg_mean": 2.0, "reg_max": 2.0, "bass_low": 2.0}
 WIN_LENGTHS = (4, 8, 16)
+SEC_W = 16              # compases por sección para gestos locales
+SEC_MIN_BARS = 25       # por debajo, la pieza entera es una sola sección
+SEC_MAX = 48            # máximo de secciones analizadas por pieza
 K = 8
 
 GROUPS = {"ton": "tonal", "rhy": "rhythm", "tex": "texture", "reg": "register",
           "mel": "melodic", "har": "harmony", "dyn": "dynamics",
-          "trj": "trajectory", "gst": "gesture"}
+          "trj": "trajectory", "gst": "gesture", "sec": "sections"}
 
 FEELS = {
     "energy": [("rhy_onsets_per_sec", 1), ("dyn_mean", .5), ("tex_poly_mean", .5),
@@ -323,6 +331,88 @@ def _reset_rate(x):
 def _shape_vec(win, gl):
     v, amp = gl.shape_vector([float(a) for a in win])
     return v, amp
+
+
+def _slice_piece(p, gl, b0, b1):
+    """Sub-pieza con los compases [b0, b1) re-ubicados desde 0 (o None)."""
+    import copy
+    q = copy.copy(p)
+    t0, t1 = b0 * p.bar_beats, b1 * p.bar_beats
+
+    def cut(lst):
+        return [(n[0] - t0, n[1], n[2], n[3]) for n in lst
+                if t0 - 1e-9 <= n[0] < t1 - 1e-9]
+    q.mel, q.bass_all, q.harm_all = cut(p.mel), cut(p.bass_all), cut(p.harm_all)
+    if len(q.mel) < 8:
+        return None
+    vs = []
+    for v in p.voices:
+        nt = cut(v["notes"])
+        vs.append(dict(v, notes=nt,
+                       mean=gl._mean([n[2] for n in nt]) if nt else 0.0))
+    q.voices = vs
+    q._bass_on = [n[0] for n in q.bass_all]
+    q._bass_maxdur = max([n[1] for n in q.bass_all] or [0.0])
+    q.nbars = b1 - b0
+    hist = [0.0] * 12
+    for n in q.mel + q.harm_all:
+        hist[n[2] % 12] += max(n[1], 0.05)
+    ke = gl._key_from_hist(hist)
+    if ke:
+        (r, t, m), (r2, t2, m2) = ke
+        q.key = dict(tonic_pc=t, tonic=gl._pcname(t), mode=m, r=r,
+                     second=dict(tonic=gl._pcname(t2), mode=m2, r=r2))
+    return q
+
+
+def _section_ranges(nb):
+    if nb < SEC_MIN_BARS:
+        return []
+    stride = max(SEC_W // 2, int(math.ceil((nb - SEC_W) / float(SEC_MAX - 1))))
+    starts = list(range(0, nb - SEC_W + 1, stride))
+    if starts[-1] != nb - SEC_W:
+        starts.append(nb - SEC_W)
+    return [(s, s + SEC_W) for s in starts]
+
+
+def _section_gestures(p, gl, glob):
+    """Gestos hallados en ventanas de SEC_W compases, con compases absolutos.
+    Se descartan los que repiten uno global y los solapados (>50 %) de la
+    misma forma y rasgo, conservando el de mayor puntuación."""
+    out = []
+    for (a, b) in _section_ranges(p.nbars):
+        q = _slice_piece(p, gl, a, b)
+        if q is None:
+            continue
+        try:
+            an = gl.analyze_piece(q)
+        except Exception:  # noqa
+            continue
+        for g in an["gestures"]:
+            g = dict(g)
+            bars = g["bars"] or [1, b - a]
+            g["bars"] = [bars[0] + a, bars[1] + a]
+            g["text"] = "c.%d-%d: %s" % (g["bars"][0], g["bars"][1], g["text"])
+            out.append(g)
+    out.sort(key=lambda g: -g["score"])
+    keep = []
+    gkeys = set((g["shape"], g["feature"], tuple(g["bars"] or ())) for g in glob)
+    for g in out:
+        if (g["shape"], g["feature"], tuple(g["bars"])) in gkeys:
+            continue
+        dup = False
+        for k in keep:
+            if k["shape"] == g["shape"] and k["feature"] == g["feature"]:
+                lo = max(k["bars"][0], g["bars"][0])
+                hi = min(k["bars"][1], g["bars"][1])
+                span = min(k["bars"][1] - k["bars"][0],
+                           g["bars"][1] - g["bars"][0]) + 1
+                if hi - lo + 1 > 0.5 * span:
+                    dup = True
+                    break
+        if not dup:
+            keep.append(g)
+    return keep[:120]
 
 
 def extract(path, opts=None):
@@ -624,6 +714,16 @@ def extract(path, opts=None):
     for sh in GST_SHAPES:
         F["gst_%s" % sh] = best.get(sh, 0.0)
     F["gst_n"] = float(len(gest))
+    sec_g = _section_gestures(p, gl, gest)
+    sbest = {}
+    for g in sec_g:
+        sh = g["shape"] if g["shape"] in GST_SHAPES else "other"
+        sbest[sh] = max(sbest.get(sh, 0.0), g["score"])
+    for sh in GST_SHAPES:      # en piezas cortas la sección es la pieza entera
+        F["sec_%s" % sh] = sbest.get(sh, 0.0) if p.nbars >= SEC_MIN_BARS \
+            else best.get(sh, 0.0)
+    F["sec_n"] = float(len(sec_g)) if p.nbars >= SEC_MIN_BARS \
+        else float(len(gest))
     kc = an["categorical"].get("key_col")
     F["ton_changes"] = (sum(1 for a, b in zip(kc, kc[1:]) if a != b)
                         / float(max(1, len(kc) - 1))) if kc else NAN
@@ -675,7 +775,9 @@ def extract(path, opts=None):
         key_r=round(key["r"], 3),
         key2="%s %s" % (sec["tonic"], sec["mode"]) if sec else "",
         has_drums=1 if drums else 0, prog=deg1, prog2=deg2)
-    top = sorted(gest, key=lambda g: -g["score"])[:60]
+    top = [dict(g, scope="global")
+           for g in sorted(gest, key=lambda g: -g["score"])[:60]]
+    top += [dict(g, scope="section") for g in sec_g]
     return dict(meta=meta, feats=F, series=series, gestures=top,
                 chords=chords, windows=windows)
 
@@ -697,7 +799,10 @@ CREATE INDEX IF NOT EXISTS ix_feats ON feats(name, value);
 CREATE INDEX IF NOT EXISTS ix_feats_f ON feats(file_id);
 CREATE TABLE IF NOT EXISTS series(file_id INTEGER PRIMARY KEY, data BLOB);
 CREATE TABLE IF NOT EXISTS gestures(file_id INTEGER, shape TEXT, feature TEXT,
-  score REAL, b0 INTEGER, b1 INTEGER, text TEXT, params TEXT);
+  score REAL, b0 INTEGER, b1 INTEGER, text TEXT, params TEXT,
+  scope TEXT DEFAULT 'global');
+CREATE TABLE IF NOT EXISTS models(name TEXT PRIMARY KEY, tag TEXT, neg TEXT,
+  data TEXT, created REAL);
 CREATE INDEX IF NOT EXISTS ix_gest ON gestures(shape, score);
 CREATE INDEX IF NOT EXISTS ix_gest_f ON gestures(file_id);
 CREATE TABLE IF NOT EXISTS chords(file_id INTEGER PRIMARY KEY, seq TEXT);
@@ -728,7 +833,10 @@ def connect(path, create=False):
     except sqlite3.DatabaseError:
         pass
     con.executescript(SCHEMA)
-    con.execute("INSERT OR REPLACE INTO meta VALUES('schema','1')")
+    cols = [r[1] for r in con.execute("PRAGMA table_info(gestures)")]
+    if "scope" not in cols:          # bases creadas con extractor 1.0
+        con.execute("ALTER TABLE gestures ADD COLUMN scope TEXT DEFAULT 'global'")
+    con.execute("INSERT OR REPLACE INTO meta VALUES('schema','2')")
     con.commit()
     return con
 
@@ -779,11 +887,12 @@ def store_result(con, path, st, sha, res):
     con.execute("INSERT INTO series VALUES(?,?)",
                 (fid, zlib.compress(json.dumps(ser).encode("utf-8"))))
     con.executemany(
-        "INSERT INTO gestures VALUES(?,?,?,?,?,?,?,?)",
+        "INSERT INTO gestures VALUES(?,?,?,?,?,?,?,?,?)",
         [(fid, g["shape"], g["feature"], g["score"],
           g["bars"][0] if g.get("bars") else None,
           g["bars"][1] if g.get("bars") else None, g["text"],
-          json.dumps(g["params"])) for g in res["gestures"]])
+          json.dumps(g["params"]), g.get("scope", "global"))
+         for g in res["gestures"]])
     con.execute("INSERT INTO chords VALUES(?,?)",
                 (fid, json.dumps(res["chords"])))
     con.executemany(
@@ -832,7 +941,11 @@ class Corpus(object):
             self.sd = np.ones(len(self.names))
         self.sd = np.where(np.isnan(self.sd) | (self.sd < 1e-6), 1.0, self.sd)
         self.Z = self.zvec(X)
-        self.feel_raw = {k: self._feel(self.Z, k) for k in FEELS}
+        self.models = {}
+        for r in con.execute("SELECT name, data FROM models"):
+            self.models[r["name"]] = json.loads(r["data"])
+        self.feel_raw = {k: self._score(k, X, self.Z)
+                         for k in list(FEELS) + list(self.models)}
 
     def zvec(self, X):
         np = _np()
@@ -849,14 +962,26 @@ class Corpus(object):
                 x[j] = v
         return x
 
-    def _feel(self, Z, name):
+    def _score(self, name, X, Z):
+        """Puntuación cruda (n,) de una sensación o modelo para las filas X/Z."""
         np = _np()
-        s = np.zeros(Z.shape[0] if Z.ndim == 2 else 1)
-        for f, w in FEELS[name]:
-            j = self.col.get(f)
-            if j is not None:
-                s = s + w * (Z[:, j] if Z.ndim == 2 else Z[j])
-        return s
+        if name in FEELS:
+            sc = np.zeros(Z.shape[0])
+            for f, w in FEELS[name]:
+                j = self.col.get(f)
+                if j is not None:
+                    sc = sc + w * Z[:, j]
+            return sc
+        m = self.models[name]
+        sc = np.full(X.shape[0], float(m["b"]))
+        for k, nm in enumerate(m["names"]):
+            j = self.col.get(nm)
+            if j is None:
+                continue
+            z = (X[:, j] - m["mu"][k]) / m["sd"][k]
+            z = np.nan_to_num(np.clip(z, -4, 4), nan=0.0)
+            sc = sc + m["w"][k] * z
+        return sc
 
     def feel_pct(self, raw, name):
         """Percentil (0–1) de un valor crudo dentro del corpus."""
@@ -867,11 +992,14 @@ class Corpus(object):
         return float((ref < raw - 1e-12).sum() + 0.5 * (np.abs(ref - raw) <= 1e-12).sum()) / len(ref)
 
     def feels_of_row(self, k):
-        return {n: self.feel_pct(float(self.feel_raw[n][k]), n) for n in FEELS}
+        return {n: self.feel_pct(float(self.feel_raw[n][k]), n)
+                for n in self.feel_raw}
 
     def feels_of_vec(self, x):
-        z = self.zvec(x)
-        return {n: self.feel_pct(float(self._feel(z, n)[0]), n) for n in FEELS}
+        X = x.reshape(1, -1)
+        Z = self.zvec(X)
+        return {n: self.feel_pct(float(self._score(n, X, Z)[0]), n)
+                for n in self.feel_raw}
 
 
 def resolve_file(con, ref):
@@ -920,7 +1048,7 @@ def _fmt(v, nd=2):
 
 def _col_value(C, k, name):
     """Valor de un rasgo o sensación de la fila k del corpus."""
-    if name in FEELS:
+    if name in C.feel_raw:
         return C.feel_pct(float(C.feel_raw[name][k]), name)
     j = C.col.get(name)
     return None if j is None else C.X[k, j]
@@ -1305,12 +1433,16 @@ def cmd_find(args):
             if not m:
                 raise ValueError("--gesture inválido %r (forma[:rasgo][>=score])" % gs)
             sh, ft, sc = m.group(1), m.group(2), float(m.group(3) or 0.5)
-            q = "SELECT file_id, MAX(score) FROM gestures WHERE shape=? AND score>=?"
+            q = ("SELECT file_id, score, b0, b1, scope FROM gestures "
+                 "WHERE shape=? AND score>=?")
             a = [sh, sc]
             if ft:
                 q += " AND feature=?"
                 a.append(ft)
-            got = {r[0]: r[1] for r in con.execute(q + " GROUP BY file_id", a)}
+            got, where = {}, {}
+            for r in con.execute(q + " ORDER BY score, (scope='global')", a):
+                got[r[0]] = r[1]
+                where[r[0]] = (" c.%d-%d" % (r[2], r[3])) if r[2] else ""
             if not got:
                 known = sorted(r[0] for r in con.execute(
                     "SELECT DISTINCT shape FROM gestures"))
@@ -1318,12 +1450,12 @@ def cmd_find(args):
                                  % (sh, ", ".join(known)))
             ids &= set(got)
             for k, v in got.items():
-                notes.setdefault(k, []).append("%s %.2f" % (sh, v))
+                notes.setdefault(k, []).append("%s %.2f%s" % (sh, v, where[k]))
         for fe in args.feel or []:
             nm, op, val = _parse_cmp(fe)
-            if nm not in FEELS:
+            if nm not in C.feel_raw:
                 raise ValueError("sensación desconocida %r (%s)"
-                                 % (nm, ", ".join(FEELS)))
+                                 % (nm, ", ".join(C.feel_raw)))
             ids &= set(C.ids[k] for k in range(len(C.ids))
                        if _cmp(C.feel_pct(float(C.feel_raw[nm][k]), nm), op, val))
         if args.tag:
@@ -1509,18 +1641,191 @@ def cmd_tag(args):
     return 0
 
 
+def _auc(pos, neg):
+    """Área bajo la curva ROC por rangos (empates con rango medio)."""
+    np = _np()
+    if len(pos) == 0 or len(neg) == 0:
+        return NAN
+    v = np.concatenate([pos, neg])
+    order = np.argsort(v, kind="mergesort")
+    sv = v[order]
+    r = np.arange(1, len(v) + 1, dtype=float)
+    i = 0
+    while i < len(v):
+        j = i
+        while j + 1 < len(v) and sv[j + 1] == sv[i]:
+            j += 1
+        r[i:j + 1] = (i + j + 2) / 2.0
+        i = j + 1
+    ranks = np.empty(len(v))
+    ranks[order] = r
+    n1, n0 = len(pos), len(neg)
+    return float((ranks[:n1].sum() - n1 * (n1 + 1) / 2.0) / (n1 * n0))
+
+
+def _fit_logistic(X, y, sw, lam, iters=40):
+    """Regresión logística L2 ponderada (Newton). Devuelve (w, b)."""
+    np = _np()
+    n, d = X.shape
+    Xb = np.hstack([X, np.ones((n, 1))])
+    R = np.eye(d + 1) * lam
+    R[d, d] = 0.0
+    wb = np.zeros(d + 1)
+    for _ in range(iters):
+        z = np.clip(Xb @ wb, -30, 30)
+        p = 1.0 / (1.0 + np.exp(-z))
+        g = Xb.T @ (sw * (y - p)) - R @ wb
+        H = (Xb.T * (sw * p * (1 - p) + 1e-6)) @ Xb + R
+        step = np.linalg.solve(H, g)
+        wb = wb + step
+        if np.abs(step).max() < 1e-7:
+            break
+    return wb[:d], float(wb[d])
+
+
+def _balanced(y):
+    np = _np()
+    n1 = float(y.sum())
+    n0 = float(len(y) - n1)
+    return np.where(y > 0.5, len(y) / (2.0 * n1), len(y) / (2.0 * n0))
+
+
+def _print_model(m, top):
+    order = sorted(range(len(m["names"])), key=lambda k: -abs(m["w"][k]))[:top]
+    rows = []
+    for k in order:
+        if abs(m["w"][k]) < 1e-6:
+            continue
+        rows.append(["%+.2f" % m["w"][k], m["names"][k], group_of(m["names"][k]),
+                     _fmt(m["pos_mean"][k], 3), _fmt(m["rest_mean"][k], 3)])
+    _table(["peso", "rasgo", "grupo", "media_pos", "media_resto"], rows, maxw=30)
+
+
+def cmd_calibrate(args):
+    np = _np()
+    con = connect(args.db)
+    if args.list:
+        rows = con.execute("SELECT name, tag, neg, data, created FROM models "
+                           "ORDER BY created").fetchall()
+        if not rows:
+            print("(sin modelos; entrena uno con `calibrate TAG`)")
+        for r in rows:
+            m = json.loads(r["data"])
+            print("%-14s etiqueta=%-12s neg=%-10s pos=%d neg=%d AUC_cv=%s  %s" % (
+                r["name"], r["tag"], r["neg"] or "(resto)", m["n_pos"], m["n_neg"],
+                _fmt(m["cv_auc"]), time.strftime("%Y-%m-%d", time.localtime(r["created"]))))
+        return 0
+    if args.show or args.delete:
+        nm = args.show or args.delete
+        r = con.execute("SELECT data FROM models WHERE name=?", (nm,)).fetchone()
+        if r is None:
+            sys.stderr.write("Error: no existe el modelo %r\n" % nm)
+            return 1
+        if args.delete:
+            con.execute("DELETE FROM models WHERE name=?", (nm,))
+            con.commit()
+            print("modelo %s eliminado" % nm)
+            return 0
+        _print_model(json.loads(r["data"]), args.top)
+        return 0
+    if not args.tag:
+        sys.stderr.write("Error: indica la ETIQUETA positiva (o --list/--show/--delete)\n")
+        return 2
+    name = args.name or args.tag
+    if not re.match(r"^[A-Za-z][A-Za-z0-9_]*$", name) or name in FEELS:
+        sys.stderr.write("Error: nombre de modelo inválido o reservado: %r\n" % name)
+        return 2
+    C = Corpus(con)
+    tagged = lambda t: [C.pos[r[0]] for r in con.execute(
+        "SELECT file_id FROM tags WHERE tag=?", (t,)) if r[0] in C.pos]
+    ip = tagged(args.tag)
+    if len(ip) < 3:
+        sys.stderr.write("Error: la etiqueta %r tiene %d piezas indexadas; hacen "
+                         "falta al menos 3\n" % (args.tag, len(ip)))
+        return 1
+    if args.neg:
+        ineg = tagged(args.neg)
+    else:
+        sp = set(ip)
+        ineg = [k for k in range(len(C.ids)) if k not in sp]
+    if len(ineg) < 3:
+        sys.stderr.write("Error: hay solo %d piezas negativas\n" % len(ineg))
+        return 1
+    sel = set(x.strip() for x in args.groups.split(",")) if args.groups else None
+    ex = set(x.strip() for x in args.exclude.split(",")) if args.exclude else set()
+    cols = [j for j, nm in enumerate(C.names)
+            if group_of(nm) != "other" and (sel is None or group_of(nm) in sel)
+            and group_of(nm) not in ex]
+    if not cols:
+        sys.stderr.write("Error: ningún grupo seleccionado\n")
+        return 2
+    idx = np.array(ip + ineg)
+    y = np.array([1.0] * len(ip) + [0.0] * len(ineg))
+    Xa = C.Z[idx][:, cols]
+    w, b = _fit_logistic(Xa, y, _balanced(y), args.lam)
+    # validación cruzada (k pliegues sobre positivas y negativas)
+    k = max(2, min(5, len(ip)))
+    rs = np.random.RandomState(0)
+    fold = np.zeros(len(y), dtype=int)
+    for grp in (np.where(y > 0.5)[0], np.where(y < 0.5)[0]):
+        perm = rs.permutation(grp)
+        fold[perm] = np.arange(len(perm)) % k
+    aucs = []
+    for f in range(k):
+        tr, te = fold != f, fold == f
+        if y[tr].sum() < 1 or y[te].sum() < 1 or (y[te] < 0.5).sum() < 1:
+            continue
+        wf, bf = _fit_logistic(Xa[tr], y[tr], _balanced(y[tr]), args.lam)
+        sc = Xa[te] @ wf + bf
+        aucs.append(_auc(sc[y[te] > 0.5], sc[y[te] < 0.5]))
+    cv = float(np.mean(aucs)) if aucs else NAN
+    pm = np.nanmean(C.X[ip][:, cols], axis=0)
+    rm = np.nanmean(C.X[ineg][:, cols], axis=0)
+    model = dict(names=[C.names[j] for j in cols], w=[float(v) for v in w], b=b,
+                 mu=[float(v) for v in C.mu[cols]], sd=[float(v) for v in C.sd[cols]],
+                 n_pos=len(ip), n_neg=len(ineg), cv_auc=_fnum(cv), lam=args.lam,
+                 groups=sorted(set(group_of(C.names[j]) for j in cols)),
+                 pos_mean=[_fnum(v) for v in pm], rest_mean=[_fnum(v) for v in rm])
+    con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?,?)",
+                (name, args.tag, args.neg, json.dumps(model), time.time()))
+    con.commit()
+    print("Modelo %r: %d positivas (%s) frente a %d %s; %d rasgos; λ=%g"
+          % (name, len(ip), args.tag, len(ineg),
+             "de %s" % args.neg if args.neg else "del resto del corpus (incluye sin etiquetar)",
+             len(cols), args.lam))
+    print("AUC en validación cruzada (%d pliegues): %s" % (len(aucs), _fmt(cv)))
+    if len(ip) < 8:
+        print("aviso: con menos de 8 positivas el AUC es solo orientativo")
+    if not math.isnan(cv) and cv < 0.7:
+        print("aviso: el modelo no separa bien; revisa las etiquetas, usa --groups "
+              "para acotar o sube --lam")
+    print("\nRasgos que más pesan:")
+    _print_model(model, args.top)
+    allsc = C.Z[:, cols] @ w + b
+    excl = set(ip) | (set(ineg) if args.neg else set())
+    cand = [k2 for k2 in np.argsort(-allsc) if k2 not in excl][:args.candidates]
+    if cand:
+        print("\nCandidatas a revisar (no etiquetadas, mejor puntuadas):")
+        _table(["id", "archivo", "prob"],
+               [[C.ids[k2], C.files[C.ids[k2]]["name"],
+                 "%.2f" % (1.0 / (1.0 + math.exp(-float(allsc[k2]))))] for k2 in cand])
+    print("\nÚsalo con: find --feel \"%s>0.8\"   (percentil dentro del corpus)" % name)
+    return 0
+
+
 def cmd_export(args):
     con = connect(args.db)
     C = Corpus(con)
     _ensure_parent(args.out)
     with open(args.out, "w", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["id", "path"] + META_COLS[:-2] + C.names + list(FEELS))
+        w.writerow(["id", "path"] + META_COLS[:-2] + C.names + list(C.feel_raw))
         for k, fid in enumerate(C.ids):
             f = C.files[fid]
             w.writerow([fid, f["path"]] + [f[c] for c in META_COLS[:-2]] +
                        [_fnum(v) if not math.isnan(v) else "" for v in C.X[k]] +
-                       [_fnum(C.feel_pct(float(C.feel_raw[n][k]), n)) for n in FEELS])
+                       [_fnum(C.feel_pct(float(C.feel_raw[n][k]), n))
+                        for n in C.feel_raw])
     print("exportadas %d filas × %d rasgos → %s" % (len(C.ids), len(C.names),
                                                      args.out))
     return 0
@@ -1660,6 +1965,59 @@ def cmd_selftest(args):
         check("info ejecuta", rc == 0 and "duplicados=1" in out)
         rc, out = run(["find", "--db", os.path.join(d, "nada.db")])
         check("base inexistente → código 1", rc == 1)
+        # ── secciones y calibración ──────────────────
+        import random
+        d2 = os.path.join(d, "cal")
+        os.makedirs(d2)
+        rg = random.Random(5)
+        for i in range(8):                   # P: bucle de acordes + melodía en rampa
+            sh = i + 1
+            nn = []
+            for b in range(16):
+                r = [0, 5, 7, 7][b % 4] + sh
+                nn.append((b * 4, 4, 36 + r % 12, 80, 1))
+                for k in range(4):
+                    nn.append((b * 4 + k, 1, 60 + sh % 12 + (b % 8) * 2 + [0, 4, 7, 4][k], 85, 0))
+            _mk_midi(os.path.join(d2, "p%d.mid" % i), nn)
+        for i in range(8):                   # N: notas al azar
+            nn = [(k * 0.5, rg.choice([0.25, 0.5, 1.0]), rg.randint(40, 90),
+                   rg.randint(40, 110), 0) for k in range(130)]
+            _mk_midi(os.path.join(d2, "n%d.mid" % i), nn, tempo=rg.randint(80, 150))
+        mel = []
+        for b in range(48):                  # 24 compases estáticos + 24 con sierra
+            top = 72 if b < 24 else 58 + ((b - 24) % 8) * 3
+            mel.append((b * 4, 4, 36 + [0, 5, 7, 7][b % 4], 80, 1))
+            mel += [(b * 4 + k, 1, top + [0, 4, 7, 4][k], 85, 0) for k in range(4)]
+        _mk_midi(os.path.join(d2, "mitad.mid"), mel)
+        db2 = os.path.join(d, "c.db")
+        rc, out = run(["index", d2, "--db", db2, "--jobs", "1"])
+        check("index de 17 piezas de calibración (%s)" % out.splitlines()[0][:40],
+              rc == 0 and "17 a procesar" in out)
+        rc, out = run(["find", "--db", db2, "--gesture", "ramp_reset>=0.5", "--text", "mitad"])
+        check("gesto por sección localiza compases (%s)" % out.strip().splitlines()[-1][-30:],
+              rc == 0 and "mitad.mid" in out and " c." in out)
+        rc, out = run(["tag", "add", "pos", "p0.mid", "p1.mid", "p2.mid", "p3.mid", "--db", db2])
+        rc, out = run(["calibrate", "pos", "--db", db2])
+        check("calibrate entrena y muestra AUC", rc == 0 and "AUC en validación" in out)
+        rc, out = run(["calibrate", "--list", "--db", db2])
+        check("calibrate --list muestra el modelo", rc == 0 and "pos" in out and "AUC_cv" in out)
+        con2 = connect(db2)
+        C2 = Corpus(con2)
+        pk = [k for k, i in enumerate(C2.ids)
+              if C2.files[i]["name"] in ("p4.mid", "p5.mid", "p6.mid", "p7.mid")]
+        nk = [k for k, i in enumerate(C2.ids) if C2.files[i]["name"].startswith("n")]
+        sp_ = [C2.feel_pct(float(C2.feel_raw["pos"][k]), "pos") for k in pk]
+        sn_ = [C2.feel_pct(float(C2.feel_raw["pos"][k]), "pos") for k in nk]
+        check("el modelo puntúa más alto las positivas no vistas (%.2f vs %.2f)"
+              % (sum(sp_) / len(sp_), sum(sn_) / len(sn_)),
+              sum(sp_) / len(sp_) > sum(sn_) / len(sn_) + 0.2)
+        con2.close()
+        rc, out = run(["find", "--db", db2, "--feel", "pos>0.7"])
+        check("find --feel con el modelo propio", rc == 0 and "p4.mid" in out)
+        rc, out = run(["calibrate", "--db", db2, "inexistente"])
+        check("calibrate con etiqueta vacía → código 1", rc == 1)
+        rc, out = run(["calibrate", "--db", db2, "pos", "--name", "tension"])
+        check("nombre reservado → código 2", rc == 2)
     finally:
         shutil.rmtree(d, ignore_errors=True)
     bad = [n for n, ok in res if not ok]
@@ -1761,6 +2119,23 @@ def main(argv=None):
     sp.add_argument("files", nargs="*")
     db(sp)
     sp.set_defaults(fn=cmd_tag)
+
+    sp = sub.add_parser("calibrate", help="aprende una sensación propia "
+                                          "a partir de piezas etiquetadas")
+    sp.add_argument("tag", nargs="?", help="etiqueta con las piezas positivas")
+    db(sp)
+    sp.add_argument("--neg", help="etiqueta de negativas (por defecto: el resto)")
+    sp.add_argument("--name", help="nombre del modelo (por defecto, la etiqueta)")
+    sp.add_argument("--groups", help="solo estos grupos de rasgos")
+    sp.add_argument("--exclude", help="grupos a ignorar")
+    sp.add_argument("--lam", type=float, default=3.0,
+                    help="regularización L2 (más alta = más conservador)")
+    sp.add_argument("--top", type=int, default=12)
+    sp.add_argument("--candidates", type=int, default=10)
+    sp.add_argument("--list", action="store_true")
+    sp.add_argument("--show", metavar="MODELO")
+    sp.add_argument("--delete", metavar="MODELO")
+    sp.set_defaults(fn=cmd_calibrate)
 
     sp = sub.add_parser("export", help="CSV con todos los rasgos")
     db(sp)
