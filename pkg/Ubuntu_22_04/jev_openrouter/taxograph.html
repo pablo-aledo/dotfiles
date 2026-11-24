@@ -84,6 +84,7 @@ canvas{position:absolute;inset:0;display:block;touch-action:none}
 
   <h2>Filtros</h2>
   <div class="row small">Temas con al menos <input type="number" id="mint" min="1" value="1"> funciones</div>
+  <div class="row small">Programas con al menos <input type="number" id="mine" min="1" value="1"> funciones en cada tema</div>
   <h3>Programas <span class="row" style="display:inline-flex;margin:0 0 0 6px"><button class="btn sm" data-all="prog">todos</button><button class="btn sm" data-none="prog">ninguno</button></span></h3>
   <div class="list" id="proglist"></div>
   <h3>Clasificación <span class="row" style="display:inline-flex;margin:0 0 0 6px"><button class="btn sm" data-all="area">todas</button><button class="btn sm" data-none="area">ninguna</button><button class="btn sm" id="expall">expandir</button><button class="btn sm" id="colall">plegar</button></span></h3>
@@ -324,7 +325,14 @@ function configure(view) {
 function rebuild(alpha = 0.8) {
   if (!data) return;
   const minT = Math.max(1, parseInt($('#mint').value, 10) || 1);
+  const minE = Math.max(1, parseInt($('#mine').value, 10) || 1);
   let recs = data.records.filter(r => progOn.has(r.p) && leafOn.has(r.leaf));
+  if (minE > 1) {   // 1) un programa solo cuenta en un tema si aporta >= minE funciones a él
+    const c = new Map();
+    for (const r of recs) { const k = r.p + '\u0001' + r.t; let s = c.get(k); if (!s) c.set(k, s = new Set()); s.add(r.f); }
+    recs = recs.filter(r => c.get(r.p + '\u0001' + r.t).size >= minE);
+  }
+  // 2) un tema solo se muestra si, con lo que queda, tiene >= minT funciones
   if (minT > 1) {
     const cnt = new Map();
     for (const r of recs) { let s = cnt.get(r.t); if (!s) cnt.set(r.t, s = new Set()); s.add(r.p + '.' + r.f); }
@@ -715,6 +723,7 @@ $('#q').addEventListener('input', () => { clearTimeout($('#q')._t); $('#q')._t =
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') updateSearch(true); });
 document.querySelectorAll('input[name=view]').forEach(r => r.addEventListener('change', () => rebuild(0.8)));
 $('#mint').addEventListener('change', scheduleRebuild);
+$('#mine').addEventListener('change', scheduleRebuild);
 $('#expall').addEventListener('click', () => { if (!tree) return; for (const A of tree.values()) setOpen(A, true); });
 $('#colall').addEventListener('click', () => { if (!tree) return; for (const A of tree.values()) { for (const S of A.kids.values()) setOpen(S, false); setOpen(A, false); } });
 document.querySelectorAll('[data-all]').forEach(b => b.addEventListener('click', () => data && setAll(b.dataset.all, true)));
@@ -753,7 +762,7 @@ function resize() {
 new ResizeObserver(resize).observe(cv.parentElement);
 resize();
 
-window.taxograph = { tf: () => ({x:tf.x,y:tf.y,k:tf.k,W,H,auto:autoFit}), graph: () => cur, select, loadText: loadData, sel: () => sel };
+window.taxograph = { recs: () => cur.recs, tf: () => ({x:tf.x,y:tf.y,k:tf.k,W,H,auto:autoFit}), graph: () => cur, select, loadText: loadData, sel: () => sel };
 })();
 </script>
 </body>
