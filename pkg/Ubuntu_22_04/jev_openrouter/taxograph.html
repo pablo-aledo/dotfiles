@@ -31,6 +31,14 @@ details summary{cursor:pointer;color:var(--acc)}
 .list{max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:#12171f}
 .chk{display:flex;align-items:center;gap:6px;padding:1px 0;cursor:pointer}
 .chk .n{margin-left:auto;color:var(--mut);font-variant-numeric:tabular-nums}
+#arealist{max-height:340px}
+.tn{display:flex;align-items:center;gap:5px;padding:1px 0;white-space:nowrap}
+.tn .car{width:14px;flex:none;text-align:center;color:var(--mut);cursor:pointer;user-select:none}
+.tn .car:hover{color:var(--fg)}
+.tn label{display:flex;align-items:center;gap:5px;cursor:pointer;min-width:0;flex:1}
+.tn .nm{overflow:hidden;text-overflow:ellipsis}
+.tn .n{margin-left:auto;padding-left:6px;color:var(--mut);font-variant-numeric:tabular-nums;flex:none}
+.tn.s .nm{color:#c3cad8}.tn.t .nm{color:var(--mut)}
 .sw{width:10px;height:10px;border-radius:50%;flex:none}
 .radio{display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer}
 main{position:relative;flex:1;min-width:0;overflow:hidden}
@@ -78,7 +86,8 @@ canvas{position:absolute;inset:0;display:block;touch-action:none}
   <div class="row small">Temas con al menos <input type="number" id="mint" min="1" value="1"> funciones</div>
   <h3>Programas <span class="row" style="display:inline-flex;margin:0 0 0 6px"><button class="btn sm" data-all="prog">todos</button><button class="btn sm" data-none="prog">ninguno</button></span></h3>
   <div class="list" id="proglist"></div>
-  <h3>Áreas <span class="row" style="display:inline-flex;margin:0 0 0 6px"><button class="btn sm" data-all="area">todas</button><button class="btn sm" data-none="area">ninguna</button></span></h3>
+  <h3>Clasificación <span class="row" style="display:inline-flex;margin:0 0 0 6px"><button class="btn sm" data-all="area">todas</button><button class="btn sm" data-none="area">ninguna</button><button class="btn sm" id="expall">expandir</button><button class="btn sm" id="colall">plegar</button></span></h3>
+  <div class="mut small">Área › subcategoría › tema. Despliega con ▸; marcar un nivel marca todo lo que contiene.</div>
   <div class="list" id="arealist"></div>
 
   <h2>Opciones</h2>
@@ -167,7 +176,7 @@ function parse(text) {
     } else {
       a = toks[0]; t = toks[toks.length - 1]; s = toks.slice(1, -1).join(' ');
     }
-    records.push({ p, f, a, s, t });
+    records.push({ p, f, a, s, t, leaf: a + '\u0001' + s + '\u0001' + t });
     let m = topicCombos.get(t);
     if (!m) topicCombos.set(t, m = new Map());
     const key = s ? `${a} › ${s}` : a;
@@ -197,7 +206,7 @@ let data = null, cur = null;
 let sel = null, hl = null, hover = null;
 let matchSet = new Set();
 let autoFit = true, paused = false, drawQueued = false, tickN = 0;
-let progOn = new Set(), areaOn = new Set();
+let progOn = new Set(), leafOn = new Set(), tree = null;
 let areaColor = new Map();
 const PALETTE = d3.schemeTableau10.concat(d3.schemeSet3);
 const PROG_COL = '#c9d1e0';
@@ -315,7 +324,7 @@ function configure(view) {
 function rebuild(alpha = 0.8) {
   if (!data) return;
   const minT = Math.max(1, parseInt($('#mint').value, 10) || 1);
-  let recs = data.records.filter(r => progOn.has(r.p) && areaOn.has(r.a));
+  let recs = data.records.filter(r => progOn.has(r.p) && leafOn.has(r.leaf));
   if (minT > 1) {
     const cnt = new Map();
     for (const r of recs) { let s = cnt.get(r.t); if (!s) cnt.set(r.t, s = new Set()); s.add(r.p + '.' + r.f); }
@@ -367,10 +376,68 @@ function mkList(el, entries, on, colorFn) {
 }
 
 function setAll(kind, value) {
-  const set = kind === 'prog' ? progOn : areaOn, src = kind === 'prog' ? data.programs : data.areas;
-  set.clear(); if (value) for (const k of src.keys()) set.add(k);
-  document.querySelectorAll(kind === 'prog' ? '#proglist input' : '#arealist input').forEach(cb => cb.checked = value);
+  if (kind === 'area') {
+    leafOn = new Set(); if (value) for (const A of tree.values()) for (const id of A.leaves) leafOn.add(id);
+    refreshTree(); scheduleRebuild(); return;
+  }
+  progOn.clear(); if (value) for (const k of data.programs.keys()) progOn.add(k);
+  document.querySelectorAll('#proglist input').forEach(cb => cb.checked = value);
   scheduleRebuild();
+}
+
+/* ---- árbol jerárquico: área › subcategoría › tema ---- */
+function buildTree(records) {
+  const root = new Map();
+  for (const r of records) {
+    let A = root.get(r.a); if (!A) root.set(r.a, A = { kind: 'a', name: r.a, n: 0, kids: new Map(), leaves: [] });
+    let S = A.kids.get(r.s); if (!S) A.kids.set(r.s, S = { kind: 's', name: r.s, n: 0, kids: new Map(), leaves: [] });
+    let T = S.kids.get(r.t);
+    if (!T) { S.kids.set(r.t, T = { kind: 't', name: r.t, n: 0, kids: null, leaves: [r.leaf] }); S.leaves.push(r.leaf); A.leaves.push(r.leaf); }
+    A.n++; S.n++; T.n++;
+  }
+  return root;
+}
+const nodeState = n => { let c = 0; for (const id of n.leaves) if (leafOn.has(id)) c++; return c === 0 ? 0 : c === n.leaves.length ? 2 : 1; };
+const sortedKids = n => [...n.kids.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+
+function makeRow(n, depth) {
+  const wrap = document.createElement('div'), row = document.createElement('div');
+  row.className = 'tn ' + n.kind; row.style.paddingLeft = (depth * 14) + 'px';
+  const car = document.createElement('span'); car.className = 'car'; car.textContent = n.kids ? '▸' : '';
+  const lab = document.createElement('label');
+  const cb = document.createElement('input'); cb.type = 'checkbox';
+  lab.appendChild(cb);
+  if (n.kind === 'a') { const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = areaColor.get(n.name); lab.appendChild(sw); }
+  const nm = document.createElement('span'); nm.className = 'nm';
+  nm.textContent = n.name || '(sin subcategoría)'; nm.title = nm.textContent; lab.appendChild(nm);
+  const cnt = document.createElement('span'); cnt.className = 'n'; cnt.textContent = n.n;
+  row.append(car, lab, cnt); wrap.appendChild(row);
+  row._n = n; row._cb = cb;
+  cb.addEventListener('change', () => {
+    for (const id of n.leaves) cb.checked ? leafOn.add(id) : leafOn.delete(id);
+    refreshTree(); scheduleRebuild();
+  });
+  if (n.kids) {
+    const kids = document.createElement('div'); kids.hidden = true; wrap.appendChild(kids);
+    n._ui = { car, kids, done: false, depth };
+    car.addEventListener('click', () => setOpen(n, kids.hidden));
+  }
+  return wrap;
+}
+function setOpen(n, open) {
+  const u = n._ui; if (!u) return;
+  if (open && !u.done) { for (const k of sortedKids(n)) u.kids.appendChild(makeRow(k, u.depth + 1)); u.done = true; refreshTree(); }
+  u.kids.hidden = !open; u.car.textContent = open ? '▾' : '▸';
+}
+function refreshTree() {
+  document.querySelectorAll('#arealist .tn').forEach(row => {
+    const s = nodeState(row._n); row._cb.checked = s === 2; row._cb.indeterminate = s === 1;
+  });
+}
+function renderTree() {
+  const el = $('#arealist'); el.innerHTML = '';
+  for (const A of [...tree.values()].sort((a, b) => b.n - a.n)) el.appendChild(makeRow(A, 0));
+  refreshTree();
 }
 
 function loadData(text) {
@@ -383,9 +450,9 @@ function loadData(text) {
       const sorted = [...d.areas.entries()].sort((a, b) => b[1] - a[1]);
       areaColor = new Map(); let i = 0;
       for (const [a] of sorted) areaColor.set(a, a === 'generico' ? '#8a93a3' : PALETTE[i++ % PALETTE.length]);
-      progOn = new Set(d.programs.keys()); areaOn = new Set(d.areas.keys());
+      progOn = new Set(d.programs.keys()); tree = buildTree(d.records); leafOn = new Set(); for (const r of d.records) leafOn.add(r.leaf);
       mkList($('#proglist'), [...d.programs.entries()].sort((a, b) => b[1] - a[1]), progOn, null);
-      mkList($('#arealist'), sorted, areaOn, a => areaColor.get(a));
+      renderTree();
       const w = $('#warn');
       if (d.warnings.length) {
         w.hidden = false; w.querySelector('summary').textContent = `${d.warnings.length} líneas ignoradas o con avisos`;
@@ -648,6 +715,8 @@ $('#q').addEventListener('input', () => { clearTimeout($('#q')._t); $('#q')._t =
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') updateSearch(true); });
 document.querySelectorAll('input[name=view]').forEach(r => r.addEventListener('change', () => rebuild(0.8)));
 $('#mint').addEventListener('change', scheduleRebuild);
+$('#expall').addEventListener('click', () => { if (!tree) return; for (const A of tree.values()) setOpen(A, true); });
+$('#colall').addEventListener('click', () => { if (!tree) return; for (const A of tree.values()) { for (const S of A.kids.values()) setOpen(S, false); setOpen(A, false); } });
 document.querySelectorAll('[data-all]').forEach(b => b.addEventListener('click', () => data && setAll(b.dataset.all, true)));
 document.querySelectorAll('[data-none]').forEach(b => b.addEventListener('click', () => data && setAll(b.dataset.none, false)));
 $('#fnlabels').addEventListener('change', scheduleDraw);
