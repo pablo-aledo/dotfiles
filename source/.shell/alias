@@ -286,6 +286,7 @@ pandoc --from=markdown_strict --pdf-engine=xelatex $1.txt -o $1.pdf
 }
 
 cargo_build_meld () {
+	#cargo build --all-targets --all-features --config 'patch.$FEED.$CRATE.path="../$PATH/crates/api"'
 	cargo build --all-targets --all-features
     if [ $# = 0 ]
     then
