@@ -417,23 +417,51 @@ MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11]
 MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10]      # natural minor (aproximación razonable para v1)
 
 
-def detect_chord(pcs_weight: Dict[int, float], bass_pc: Optional[int]) -> Tuple[Optional[int], str, float]:
-    present = {pc for pc, w in pcs_weight.items() if w > 0}
-    if not present:
-        return None, "", 0.0
+def _weighted_chord_fit(pcs_weight, bass_pc, templates):
+    """Mejor (raíz, sufijo, puntuación) ajustando plantillas a la MASA de cada
+    clase de altura (duración), no a su mera presencia. Una nota de paso breve
+    pesa poco; una sensible sostenida, mucho.
+
+    puntuación = dentro − 0.6·fuera − 0.25·(notas del acorde casi ausentes)
+                 − pequeña penalización por acordes de 4 notas / aug / sus
+                 + 0.12 si la raíz es el bajo.
+    Un acorde de 4 notas solo es admisible si su 7ª/6ª suena ≥7 % de la masa
+    (evita ver séptimas donde solo hay una nota de paso).
+    Devuelve None si no hay masa. (Criterio de midi_index_v2.)"""
+    total = sum(w for w in pcs_weight.values() if w > 0)
+    if total <= 0:
+        return None
+    mass = [0.0] * 12
+    for pc, w in pcs_weight.items():
+        if w > 0:
+            mass[pc % 12] += w / total
     best = (None, "", -1e9)
     for root in range(12):
-        rel = {(pc - root) % 12 for pc in present}
-        for suffix, templ in CHORD_TEMPLATES.items():
-            inter = len(rel & templ)
-            extra = len(rel - templ)
-            missing = len(templ - rel)
-            score = 2.0 * inter - 1.0 * extra - 0.7 * missing
+        for suffix, templ in templates.items():
+            ivs = sorted(templ)
+            seventh = ivs[-1] if len(ivs) >= 4 else None
+            if seventh is not None and mass[(root + seventh) % 12] < 0.07:
+                continue
+            inside = sum(mass[(root + i) % 12] for i in ivs)
+            miss = sum(1 for i in ivs if mass[(root + i) % 12] < 0.04)
+            pen = (0.05 if seventh is not None else 0.0) \
+                + (0.12 if suffix == "aug" else 0.0) \
+                + (0.05 if suffix.startswith("sus") else 0.0)
+            score = inside - 0.6 * (1.0 - inside) - 0.25 * miss - pen
             if bass_pc is not None and (bass_pc - root) % 12 == 0:
-                score += 0.6
+                score += 0.12
             if score > best[2]:
                 best = (root, suffix, score)
-    return best
+    return best if best[0] is not None else None
+
+
+def detect_chord(pcs_weight: Dict[int, float], bass_pc: Optional[int]) -> Tuple[Optional[int], str, float]:
+    """Devuelve (root_pc, sufijo, puntuación) por mejor ajuste de plantilla,
+    ponderado por duración de cada clase de altura (ver _weighted_chord_fit)."""
+    best = _weighted_chord_fit(pcs_weight, bass_pc, CHORD_TEMPLATES)
+    if best is None:
+        return (None, "", 0.0)
+    return best[0], best[1], best[2]
 
 
 def detect_key(pc_hist: np.ndarray) -> Tuple[int, str]:
