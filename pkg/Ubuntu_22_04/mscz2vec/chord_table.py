@@ -1837,6 +1837,25 @@ def pcs_to_chord_name(pcs: frozenset, bass_midi: int = None) -> tuple:
                 name = f"{PITCH_NAMES[root]}{quality}"
                 best = (root, quality, name, score)
 
+    # Fallback: séptima/novena con la 5ª omitida (G7 sin D, Cmaj7 sin G…), muy
+    # habitual en piano. Solo se usa si ninguna plantilla completa encaja.
+    if best[0] is None:
+        bass_hint = bass_midi % 12 if bass_midi is not None else None
+        for quality, intervals in CHORD_INTERVALS.items():
+            if len(intervals) < 4:
+                continue
+            fifth = intervals[2] % 12
+            core = [iv % 12 for iv in intervals if iv % 12 != fifth]
+            for root in range(12):
+                need = frozenset((root + iv) % 12 for iv in core)
+                if not need <= pcs:
+                    continue
+                cand = frozenset((root + iv) % 12 for iv in intervals)
+                score = (len(pcs & cand) / max(len(pcs), len(cand))
+                         + (0.5 if root == bass_hint else 0.0) - 0.01 * len(intervals))
+                if score > best[3]:
+                    best = (root, quality, f"{PITCH_NAMES[root]}{quality}", score)
+
     root_pc, quality, name = best[0], best[1], best[2]
 
     # ── Detección de inversión ───────────────────────────────────────────────

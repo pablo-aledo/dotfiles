@@ -383,35 +383,61 @@ def load_harmony(midi_path, verbose=False):
     return chords, tempo_bpm, tpb, time_sig, key_obj
 
 
+# ── Clasificador de acordes ───────────────────────────────────────────────────
+# Portado de voice_leader.detect_chord_name (el de mejor resultado en las pruebas
+# de inversiones, séptimas sin 5ª y notas de paso). Puntúa cada (raíz, calidad):
+#   2*cubiertas − faltantes − 2.5*ajenas   (la 5ª de una séptima falta a mitad de
+# precio), +0.75 si la raíz es el bajo, y a igualdad ganan las tríadas.
+_DET_TEMPLATES = (
+    ("M", (0, 4, 7)), ("m", (0, 3, 7)), ("d", (0, 3, 6)), ("aug", (0, 4, 8)),
+    ("7", (0, 4, 7, 10)), ("m7", (0, 3, 7, 10)), ("M7", (0, 4, 7, 11)),
+    ("m7b5", (0, 3, 6, 10)), ("dim7", (0, 3, 6, 9)), ("mM7", (0, 3, 7, 11)),
+    ("sus4", (0, 5, 7)), ("sus2", (0, 2, 7)),
+)
+
+
+def _detect_chord_core(pcs, bass_pc=None):
+    """(raíz_pc, calidad_canónica) o None si ninguna plantilla cubre ≥2 notas.
+    Calidades canónicas: M m d aug 7 m7 M7 m7b5 dim7 mM7 sus4 sus2."""
+    pcs = {int(p) % 12 for p in pcs}
+    best, best_score = None, None
+    for root in range(12):
+        for qi, (q, ivs) in enumerate(_DET_TEMPLATES):
+            tones = {(root + i) % 12 for i in ivs}
+            covered = len(pcs & tones)
+            if covered < 2:
+                continue
+            extra = len(pcs - tones)
+            fifth = (root + ivs[2]) % 12
+            miss_pen = sum(0.5 if (t == fifth and len(tones) > 3) else 1.0
+                           for t in tones - pcs)
+            score = 2.0 * covered - miss_pen - 2.5 * extra
+            if root == bass_pc:
+                score += 0.75
+            score -= 0.01 * qi
+            if best_score is None or score > best_score:
+                best, best_score = (root, q), score
+    return best
+
+_HARM_Q = {"M": "M", "m": "m", "d": "d", "aug": "A", "7": "Mm7", "m7": "m7",
+           "M7": "M7", "m7b5": "hd7", "dim7": "d7", "mM7": "m",
+           "sus4": "sus4", "sus2": "sus2"}
+
+
 def infer_chord(pitches):
     """
-    Intenta inferir la raíz y calidad de un acorde dado un grupo de pitches MIDI.
-    Estrategia: evalúa cada posible raíz (pitch class de las notas) y elige la que
-    mejor encaja con un patrón de acorde conocido.
-    Devuelve (root_pc, quality_str).
+    Infiere la raíz y calidad de un acorde dado un grupo de pitches MIDI.
+    Usa el clasificador portado de voice_leader (tiene en cuenta el bajo, tolera
+    la 5ª omitida y penaliza las notas ajenas al acorde).
+    Devuelve (root_pc, quality_str) con las calidades de CHORD_INTERVALS.
     """
     if not pitches:
         return 0, 'M'
-
-    pcs = sorted(set(p % 12 for p in pitches))
-
-    best_root, best_quality, best_score = pcs[0], 'M', -1
-
-    for candidate_root in pcs:
-        intervals = sorted((p - candidate_root) % 12 for p in pcs)
-        for quality, ints in CHORD_INTERVALS.items():
-            ints_set = set(ints)
-            pc_set = set(intervals)
-            # puntuación: chord tones cubiertos / total intervalos del acorde
-            covered = len(pc_set & ints_set)
-            extra = len(pc_set - ints_set)
-            score = covered / max(len(ints_set), 1) - 0.2 * extra
-            if score > best_score:
-                best_score = score
-                best_root = candidate_root
-                best_quality = quality
-
-    return best_root, best_quality
+    bass_pc = min(pitches) % 12
+    r = _detect_chord_core({p % 12 for p in pitches}, bass_pc)
+    if r is None:                       # una sola nota: tónica mayor sobre el bajo
+        return bass_pc, 'M'
+    return r[0], _HARM_Q[r[1]]
 
 
 def load_melody_midi(midi_path, verbose=False):

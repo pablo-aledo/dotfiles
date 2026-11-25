@@ -352,10 +352,64 @@ CHORD_TEMPLATES = {
 }
 
 
-def identify_chord(pcs: set):
-    # ── copiada de unifier_external.py ──
+# ── Clasificador de acordes ───────────────────────────────────────────────────
+# Portado de voice_leader.detect_chord_name (el de mejor resultado en las pruebas
+# de inversiones, séptimas sin 5ª y notas de paso). Puntúa cada (raíz, calidad):
+#   2*cubiertas − faltantes − 2.5*ajenas   (la 5ª de una séptima falta a mitad de
+# precio), +0.75 si la raíz es el bajo, y a igualdad ganan las tríadas.
+_DET_TEMPLATES = (
+    ("M", (0, 4, 7)), ("m", (0, 3, 7)), ("d", (0, 3, 6)), ("aug", (0, 4, 8)),
+    ("7", (0, 4, 7, 10)), ("m7", (0, 3, 7, 10)), ("M7", (0, 4, 7, 11)),
+    ("m7b5", (0, 3, 6, 10)), ("dim7", (0, 3, 6, 9)), ("mM7", (0, 3, 7, 11)),
+    ("sus4", (0, 5, 7)), ("sus2", (0, 2, 7)),
+)
+
+
+def _detect_chord_core(pcs, bass_pc=None):
+    """(raíz_pc, calidad_canónica) o None si ninguna plantilla cubre ≥2 notas.
+    Calidades canónicas: M m d aug 7 m7 M7 m7b5 dim7 mM7 sus4 sus2."""
+    pcs = {int(p) % 12 for p in pcs}
+    best, best_score = None, None
+    for root in range(12):
+        for qi, (q, ivs) in enumerate(_DET_TEMPLATES):
+            tones = {(root + i) % 12 for i in ivs}
+            covered = len(pcs & tones)
+            if covered < 2:
+                continue
+            extra = len(pcs - tones)
+            fifth = (root + ivs[2]) % 12
+            miss_pen = sum(0.5 if (t == fifth and len(tones) > 3) else 1.0
+                           for t in tones - pcs)
+            score = 2.0 * covered - miss_pen - 2.5 * extra
+            if root == bass_pc:
+                score += 0.75
+            score -= 0.01 * qi
+            if best_score is None or score > best_score:
+                best, best_score = (root, q), score
+    return best
+
+_UNI_Q = {"M": "major", "m": "minor", "d": "dim", "aug": "major", "7": "dom7",
+          "m7": "min7", "M7": "maj7", "m7b5": "dim", "dim7": "dim", "mM7": "minor",
+          "sus4": "sus4"}
+
+
+def identify_chord(pcs: set, bass_pc=None):
+    """(raíz, calidad) con las calidades de CHORD_TEMPLATES. Para ≥3 notas usa el
+    clasificador portado de voice_leader (bajo opcional `bass_pc`); con 1-2 notas
+    (díadas de quinta/cuarta incluidas) o si no hay encaje mantiene la puntuación
+    original, que reconoce 'power'."""
     if not pcs:
         return 0, "none"
+    two = sorted(pcs)
+    dyad_ok = (len(two) == 2 and bass_pc is not None
+               and (two[1] - two[0]) not in (5, 7))      # quinta/cuarta → 'power'
+    if len(pcs) >= 3 or dyad_ok:
+        r = _detect_chord_core(pcs, bass_pc)
+        if r is not None:
+            root, q = r
+            if q == "sus2":             # Csus2 = Gsus4 (mismas notas)
+                return (root + 7) % 12, "sus4"
+            return root, _UNI_Q[q]
     best = None
     for r in range(12):
         rel = {(p - r) % 12 for p in pcs}
@@ -576,6 +630,7 @@ class Fragment:
         (adaptado de unifier_external.chords_per_bar)."""
         bars = [set() for _ in range(self.bars)]
         weights = [{} for _ in range(self.bars)]
+        lows = [None] * self.bars
         for sid, st in self.streams.items():
             if sid[1] == 9:
                 continue
@@ -583,13 +638,15 @@ class Fragment:
                 b = min(n[0] // self.bar_ticks, self.bars - 1)
                 pc = n[1] % 12
                 weights[b][pc] = weights[b].get(pc, 0) + n[3]
+                if lows[b] is None or n[1] < lows[b]:
+                    lows[b] = n[1]
         out = []
         for b in range(self.bars):
             if not weights[b]:
                 out.append((0, "none"))
                 continue
             top = sorted(weights[b], key=weights[b].get, reverse=True)[:4]
-            out.append(identify_chord(set(top)))
+            out.append(identify_chord(set(top), None if lows[b] is None else lows[b] % 12))
         return out
 
     def _estimate_tension(self) -> float:

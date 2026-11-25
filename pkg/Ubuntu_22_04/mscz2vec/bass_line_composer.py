@@ -676,34 +676,64 @@ def extract_chords_from_midi(midi_path: str,
 
         pcs = {p % 12 for _, p, _, _ in bar_notes}
         lowest = min(p for _, p, _, _ in bar_notes)
-        root_pc = lowest % 12
-        quality = _infer_quality(root_pc, pcs)
+        # Un acorde por compás: los generadores de estilo de este programa asumen
+        # que cada ChordEvent ocupa un compás completo.
+        root_pc, quality = _chord_from_pcs(pcs, lowest % 12)
         name = NOTE_NAMES[root_pc] + quality
         chords.append(ChordEvent(root_pc, quality, s, beats_per_bar, name))
 
     return chords
 
 
-def _infer_quality(root_pc: int, pcs: set) -> str:
-    """Infiere la calidad de un acorde desde un conjunto de pitch classes."""
-    rel = {(pc - root_pc) % 12 for pc in pcs}
-    if 4 in rel and 7 in rel and 10 in rel:
-        return "7"
-    if 3 in rel and 7 in rel and 10 in rel:
-        return "m7"
-    if 4 in rel and 7 in rel and 11 in rel:
-        return "M7"
-    if 3 in rel and 6 in rel:
-        return "dim"
-    if 4 in rel and 8 in rel:
-        return "aug"
-    if 5 in rel and 7 in rel:
-        return "sus4"
-    if 3 in rel and 7 in rel:
-        return "m"
-    if 4 in rel and 7 in rel:
-        return ""
-    return ""
+# ── Clasificador de acordes ───────────────────────────────────────────────────
+# Portado de voice_leader.detect_chord_name (el de mejor resultado en las pruebas
+# de inversiones, séptimas sin 5ª y notas de paso). Puntúa cada (raíz, calidad):
+#   2*cubiertas − faltantes − 2.5*ajenas   (la 5ª de una séptima falta a mitad de
+# precio), +0.75 si la raíz es el bajo, y a igualdad ganan las tríadas.
+_DET_TEMPLATES = (
+    ("M", (0, 4, 7)), ("m", (0, 3, 7)), ("d", (0, 3, 6)), ("aug", (0, 4, 8)),
+    ("7", (0, 4, 7, 10)), ("m7", (0, 3, 7, 10)), ("M7", (0, 4, 7, 11)),
+    ("m7b5", (0, 3, 6, 10)), ("dim7", (0, 3, 6, 9)), ("mM7", (0, 3, 7, 11)),
+    ("sus4", (0, 5, 7)), ("sus2", (0, 2, 7)),
+)
+
+
+def _detect_chord_core(pcs, bass_pc=None):
+    """(raíz_pc, calidad_canónica) o None si ninguna plantilla cubre ≥2 notas.
+    Calidades canónicas: M m d aug 7 m7 M7 m7b5 dim7 mM7 sus4 sus2."""
+    pcs = {int(p) % 12 for p in pcs}
+    best, best_score = None, None
+    for root in range(12):
+        for qi, (q, ivs) in enumerate(_DET_TEMPLATES):
+            tones = {(root + i) % 12 for i in ivs}
+            covered = len(pcs & tones)
+            if covered < 2:
+                continue
+            extra = len(pcs - tones)
+            fifth = (root + ivs[2]) % 12
+            miss_pen = sum(0.5 if (t == fifth and len(tones) > 3) else 1.0
+                           for t in tones - pcs)
+            score = 2.0 * covered - miss_pen - 2.5 * extra
+            if root == bass_pc:
+                score += 0.75
+            score -= 0.01 * qi
+            if best_score is None or score > best_score:
+                best, best_score = (root, q), score
+    return best
+
+
+_BASS_Q = {"M": "", "m": "m", "d": "dim", "aug": "aug", "7": "7", "m7": "m7",
+           "M7": "M7", "m7b5": "hdim7", "dim7": "dim7", "mM7": "m",
+           "sus4": "sus4", "sus2": "sus2"}
+
+
+def _chord_from_pcs(pcs: set, bass_pc: int) -> Tuple[int, str]:
+    """(root_pc, quality) del acorde que suena. La raíz ya no se asume igual al
+    bajo: las inversiones se identifican por su raíz real."""
+    r = _detect_chord_core(pcs, bass_pc)
+    if r is None:                       # nota(s) sueltas: bajo como tónica mayor
+        return bass_pc, ""
+    return r[0], _BASS_Q[r[1]]
 
 
 # ══════════════════════════════════════════════════════════════════════════════

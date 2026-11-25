@@ -366,33 +366,109 @@ def extract_chords_from_midi(midi_path, beats_per_bar=4):
                 result.append(result[-1])
             continue
 
-        root_pc = lowest % 12
-        # Inferir calidad desde pitch classes presentes
-        quality = _infer_quality(root_pc, pcs_in_bar)
-        result.append((root_pc, quality, float(beats_per_bar)))
+        # Cambio de acorde a mitad de compás (solo compases de ≥4 negras)
+        halves = None
+        if beats_per_bar >= 4:
+            halves = _split_bar_halves(
+                [(o, p, d) for o, p, d, _v in chord_notes
+                 if o < bar_end and o + d > bar_start], bar_start, bar_end)
+        if halves:
+            for r, q in halves:
+                result.append((r, _ADAPT_Q[q], beats_per_bar / 2.0))
+        else:
+            root_pc, quality = _chord_from_pcs(pcs_in_bar, lowest % 12)
+            result.append((root_pc, quality, float(beats_per_bar)))
 
     return result
 
 
-def _infer_quality(root_pc, pcs_set):
-    """Infiere la calidad de un acorde a partir de su root y los pitch classes."""
-    intervals = sorted((pc - root_pc) % 12 for pc in pcs_set)
-    has = set(intervals)
+# ── Clasificador de acordes ───────────────────────────────────────────────────
+# Portado de voice_leader.detect_chord_name (el de mejor resultado en las pruebas
+# de inversiones, séptimas sin 5ª y notas de paso). Puntúa cada (raíz, calidad):
+#   2*cubiertas − faltantes − 2.5*ajenas   (la 5ª de una séptima falta a mitad de
+# precio), +0.75 si la raíz es el bajo, y a igualdad ganan las tríadas.
+_DET_TEMPLATES = (
+    ("M", (0, 4, 7)), ("m", (0, 3, 7)), ("d", (0, 3, 6)), ("aug", (0, 4, 8)),
+    ("7", (0, 4, 7, 10)), ("m7", (0, 3, 7, 10)), ("M7", (0, 4, 7, 11)),
+    ("m7b5", (0, 3, 6, 10)), ("dim7", (0, 3, 6, 9)), ("mM7", (0, 3, 7, 11)),
+    ("sus4", (0, 5, 7)), ("sus2", (0, 2, 7)),
+)
 
-    if 3 in has and 6 in has and 10 in has: return 'hd7'
-    if 3 in has and 6 in has and 9 in has:  return 'd7'
-    if 3 in has and 6 in has:               return 'd'
-    if 4 in has and 8 in has:               return 'A'
-    if 4 in has and 7 in has and 11 in has: return 'M7'
-    if 4 in has and 7 in has and 10 in has: return 'Mm7'
-    if 3 in has and 7 in has and 10 in has: return 'm7'
-    if 3 in has and 7 in has and 11 in has: return 'm7'  # mM7 → tratar como m7
-    if 4 in has and 7 in has:               return 'M'
-    if 3 in has and 7 in has:               return 'm'
-    if 5 in has and 7 in has:               return 'sus4'
-    if 2 in has and 7 in has:               return 'sus2'
-    if 7 in has:                            return 'M'  # solo 5ª: asumir mayor
-    return 'M'
+
+def _detect_chord_core(pcs, bass_pc=None):
+    """(raíz_pc, calidad_canónica) o None si ninguna plantilla cubre ≥2 notas.
+    Calidades canónicas: M m d aug 7 m7 M7 m7b5 dim7 mM7 sus4 sus2."""
+    pcs = {int(p) % 12 for p in pcs}
+    best, best_score = None, None
+    for root in range(12):
+        for qi, (q, ivs) in enumerate(_DET_TEMPLATES):
+            tones = {(root + i) % 12 for i in ivs}
+            covered = len(pcs & tones)
+            if covered < 2:
+                continue
+            extra = len(pcs - tones)
+            fifth = (root + ivs[2]) % 12
+            miss_pen = sum(0.5 if (t == fifth and len(tones) > 3) else 1.0
+                           for t in tones - pcs)
+            score = 2.0 * covered - miss_pen - 2.5 * extra
+            if root == bass_pc:
+                score += 0.75
+            score -= 0.01 * qi
+            if best_score is None or score > best_score:
+                best, best_score = (root, q), score
+    return best
+
+
+def _clean_fit(pcs, bass_pc=None):
+    """(raíz, calidad) si las notas encajan en una plantilla sin notas ajenas
+    (solo puede faltar la 5ª de una séptima); si no, None."""
+    pcs = {int(p) % 12 for p in pcs}
+    r = _detect_chord_core(pcs, bass_pc)
+    if r is None:
+        return None
+    ivs = dict(_DET_TEMPLATES)[r[1]]
+    tones = {(r[0] + i) % 12 for i in ivs}
+    if pcs - tones:
+        return None
+    if (tones - pcs) - ({(r[0] + ivs[2]) % 12} if len(tones) > 3 else set()):
+        return None
+    return r
+
+
+def _split_bar_halves(notes, bar_start, bar_end, tol=0.1):
+    """Detecta dos acordes distintos dentro de un compás (cambio a mitad de compás).
+    notes = [(onset, pitch, dur)] que suenan en el compás. Devuelve
+    [(raíz, calidad), (raíz, calidad)] solo si cada mitad encaja limpiamente en una
+    plantilla, son distintas y el compás entero NO encaja en una sola; si no, None
+    (se mantiene el acorde único por compás de siempre)."""
+    mid = (bar_start + bar_end) / 2.0
+    halves = []
+    for a, b in ((bar_start, mid), (mid, bar_end)):
+        ns = [p for o, p, d in notes if o < b - tol and o + d > a + tol]
+        if not ns:
+            return None
+        r = _clean_fit({p % 12 for p in ns}, min(ns) % 12)
+        if r is None:
+            return None
+        halves.append(r)
+    if halves[0] == halves[1] or not notes:
+        return None
+    if _clean_fit({p % 12 for _, p, _ in notes}, min(p for _, p, _ in notes) % 12) is not None:
+        return None
+    return halves
+
+_ADAPT_Q = {"M": "M", "m": "m", "d": "d", "aug": "A", "7": "Mm7", "m7": "m7",
+            "M7": "M7", "m7b5": "hd7", "dim7": "d7", "mM7": "m7",
+            "sus4": "sus4", "sus2": "sus2"}
+
+
+def _chord_from_pcs(pcs_set, bass_pc):
+    """(root_pc, quality) del acorde que suena. La raíz YA NO se asume igual al
+    bajo: las inversiones (C/E, G7/F…) se identifican por su raíz real."""
+    r = _detect_chord_core(pcs_set, bass_pc)
+    if r is None:                       # nota(s) sueltas: bajo como tónica mayor
+        return bass_pc, 'M'
+    return r[0], _ADAPT_Q[r[1]]
 
 
 # ═══════════════════════════════════════════════════════════

@@ -467,67 +467,63 @@ def extract_chords_from_midi(midi_path: str, window_beats: float = 1.0) -> List[
 
         # Detectar acorde por pitch classes
         pitch_classes = sorted(set(n % 12 for n in bar_notes))
-        chord_name = detect_chord_from_pcs(pitch_classes)
+        chord_name = detect_chord_from_pcs(pitch_classes, min(bar_notes) % 12)
         chords.append((bar, chord_name, bar_notes))
 
     return chords
 
 
-def detect_chord_from_pcs(pitch_classes: List[int]) -> str:
-    """Detección simple de acorde por pitch classes."""
+# ── Clasificador de acordes ───────────────────────────────────────────────────
+# Portado de voice_leader.detect_chord_name (el de mejor resultado en las pruebas
+# de inversiones, séptimas sin 5ª y notas de paso). Puntúa cada (raíz, calidad):
+#   2*cubiertas − faltantes − 2.5*ajenas   (la 5ª de una séptima falta a mitad de
+# precio), +0.75 si la raíz es el bajo, y a igualdad ganan las tríadas.
+_DET_TEMPLATES = (
+    ("M", (0, 4, 7)), ("m", (0, 3, 7)), ("d", (0, 3, 6)), ("aug", (0, 4, 8)),
+    ("7", (0, 4, 7, 10)), ("m7", (0, 3, 7, 10)), ("M7", (0, 4, 7, 11)),
+    ("m7b5", (0, 3, 6, 10)), ("dim7", (0, 3, 6, 9)), ("mM7", (0, 3, 7, 11)),
+    ("sus4", (0, 5, 7)), ("sus2", (0, 2, 7)),
+)
+
+
+def _detect_chord_core(pcs, bass_pc=None):
+    """(raíz_pc, calidad_canónica) o None si ninguna plantilla cubre ≥2 notas.
+    Calidades canónicas: M m d aug 7 m7 M7 m7b5 dim7 mM7 sus4 sus2."""
+    pcs = {int(p) % 12 for p in pcs}
+    best, best_score = None, None
+    for root in range(12):
+        for qi, (q, ivs) in enumerate(_DET_TEMPLATES):
+            tones = {(root + i) % 12 for i in ivs}
+            covered = len(pcs & tones)
+            if covered < 2:
+                continue
+            extra = len(pcs - tones)
+            fifth = (root + ivs[2]) % 12
+            miss_pen = sum(0.5 if (t == fifth and len(tones) > 3) else 1.0
+                           for t in tones - pcs)
+            score = 2.0 * covered - miss_pen - 2.5 * extra
+            if root == bass_pc:
+                score += 0.75
+            score -= 0.01 * qi
+            if best_score is None or score > best_score:
+                best, best_score = (root, q), score
+    return best
+
+_CAD_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+_CAD_SUFFIX = {"M": "", "m": "m", "d": "dim", "aug": "aug", "7": "7", "m7": "m7",
+               "M7": "maj7", "m7b5": "ø", "dim7": "dim7", "mM7": "mmaj7",
+               "sus4": "sus4", "sus2": "sus2"}
+
+
+def detect_chord_from_pcs(pitch_classes: List[int], bass_pc: Optional[int] = None) -> str:
+    """Nombre de acorde ('C', 'Am', 'G7', 'Bø'…) a partir de pitch classes.
+    `bass_pc` (opcional) = nota más grave: desambigua inversiones y 6ª/7ª."""
     if not pitch_classes:
         return ""
-
-    # Plantillas de acordes (pitch classes relativos a la fundamental)
-    templates = {
-        "major": [0, 4, 7],
-        "minor": [0, 3, 7],
-        "dim": [0, 3, 6],
-        "aug": [0, 4, 8],
-        "maj7": [0, 4, 7, 11],
-        "min7": [0, 3, 7, 10],
-        "dom7": [0, 4, 7, 10],
-        "dim7": [0, 3, 6, 9],
-        "halfdim7": [0, 3, 6, 10],
-        "sus4": [0, 5, 7],
-        "sus2": [0, 2, 7],
-    }
-
-    best_match = ""
-    best_score = -1
-
-    for root in range(12):
-        for name, template in templates.items():
-            shifted = [(t + root) % 12 for t in template]
-            matches = len(set(shifted) & set(pitch_classes))
-            score = matches / len(shifted)
-            if score > best_score and score >= 0.6:
-                best_score = score
-                root_name = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][root]
-                if name == "major":
-                    best_match = root_name
-                elif name == "minor":
-                    best_match = root_name + "m"
-                elif name == "dim":
-                    best_match = root_name + "dim"
-                elif name == "aug":
-                    best_match = root_name + "aug"
-                elif name == "maj7":
-                    best_match = root_name + "maj7"
-                elif name == "min7":
-                    best_match = root_name + "m7"
-                elif name == "dom7":
-                    best_match = root_name + "7"
-                elif name == "dim7":
-                    best_match = root_name + "dim7"
-                elif name == "halfdim7":
-                    best_match = root_name + "ø"
-                elif name == "sus4":
-                    best_match = root_name + "sus4"
-                elif name == "sus2":
-                    best_match = root_name + "sus2"
-
-    return best_match
+    r = _detect_chord_core(pitch_classes, bass_pc)
+    if r is None:
+        return ""
+    return _CAD_ROOTS[r[0]] + _CAD_SUFFIX[r[1]]
 
 
 def estimate_key_from_midi(midi_path: str) -> Tuple[str, str]:
@@ -1165,7 +1161,8 @@ def detect_cadence_pattern(chord1: str, chord2: str, tonic: int = 0, mode: str =
         return q.startswith("m") and not q.startswith("maj")
 
     def dominantish(q):   # mayor o de séptima de dominante (no menor ni disminuido)
-        return not is_minor(q) and not q.startswith("dim") and not q.startswith("hdim") and "maj7" not in q
+        return (not is_minor(q) and not q.startswith("dim") and not q.startswith("hdim")
+                and not q.startswith("ø") and "maj7" not in q)
 
     tonic_ok = (db == 0)
     if da == 7 and dominantish(a[1]) and tonic_ok:
@@ -1180,7 +1177,7 @@ def detect_cadence_pattern(chord1: str, chord2: str, tonic: int = 0, mode: str =
 
 
 def q_is_dim(q: str) -> bool:
-    return q.startswith("dim") or q.startswith("hdim")
+    return q.startswith("dim") or q.startswith("hdim") or q.startswith("ø")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

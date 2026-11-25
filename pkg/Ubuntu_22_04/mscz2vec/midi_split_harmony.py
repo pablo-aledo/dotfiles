@@ -895,7 +895,14 @@ def score_chord_template(chroma: np.ndarray, root_pc: int, quality: str) -> floa
     # Bonus por presencia de la raíz
     root_bonus = chroma[root_pc] * 0.3
 
-    score = chord_weight - penalty + root_bonus
+    # Penalización por notas de la plantilla que NO suenan (la 5ª de una séptima
+    # cuesta poco). Sin esto una plantilla grande ganaba a la tríada en cuanto una
+    # nota de paso coincidía con una extensión (p. ej. C + D → "C9" sin Sib).
+    fifth = (root_pc + intervals[2]) % 12
+    missing_pen = sum(0.04 if (pc == fifth and len(intervals) > 3) else 0.35
+                      for pc in chord_pcs if chroma[pc] < 0.06)
+
+    score = chord_weight - penalty + root_bonus - missing_pen
     return float(np.clip(score, 0.0, 1.0))
 
 
