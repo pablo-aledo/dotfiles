@@ -98,6 +98,7 @@ canvas{position:absolute;inset:0;display:block;touch-action:none}
     <button class="btn" id="reheat">Recolocar</button>
     <button class="btn" id="pause">Pausar</button>
     <button class="btn" id="png">PNG</button>
+    <button class="btn" id="csv">CSV</button>
   </div>
   <div class="mut small" style="margin-top:12px">Rueda: zoom · arrastrar fondo: mover · arrastrar nodo: recolocar · clic: seleccionar · Esc: deseleccionar</div>
 </aside>
@@ -739,6 +740,19 @@ $('#pause').addEventListener('click', () => {
 $('#png').addEventListener('click', () => cv.toBlob(b => {
   const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'grafo.png'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }));
+
+$('#csv').addEventListener('click', () => {
+  if (!cur) return;
+  const esc = v => { v = String(v); return /[",;\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const tipo = { p: 'programa', f: 'funcion', t: 'tema' };
+  const rows = [['nombre', 'tipo', 'x', 'y']];
+  for (const n of cur.nodes) rows.push([n.key, tipo[n.type], n.x.toFixed(2), n.y.toFixed(2)]);
+  const txt = '\ufeff' + rows.map(r => r.map(esc).join(',')).join('\r\n') + '\r\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'grafo_' + cur.view + '.csv'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
 
 /* carga de ficheros */
 $('#file').addEventListener('change', e => { const f = e.target.files[0]; if (f) f.text().then(loadData); e.target.value = ''; });
