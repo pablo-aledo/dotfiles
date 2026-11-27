@@ -68,7 +68,7 @@ canvas{position:absolute;inset:0;display:block;touch-action:none}
     <input id="file" type="file" hidden>
     <button class="btn" id="sample">Ejemplo</button>
   </div>
-  <div class="mut small">También puedes arrastrar el fichero sobre el grafo. Formato: <code>programa.función -&gt; área subcategoría tema</code></div>
+  <div class="mut small">También puedes arrastrar el fichero sobre el grafo. Formato: <code>programa.función -&gt; área [subcategoría …] tema</code> (niveles ilimitados)</div>
 
   <div class="stats" id="stats"></div>
   <details id="warn" hidden><summary></summary><div class="scroll small" id="warnlist"></div></details>
@@ -88,7 +88,7 @@ canvas{position:absolute;inset:0;display:block;touch-action:none}
   <h3>Programas <span class="row" style="display:inline-flex;margin:0 0 0 6px"><button class="btn sm" data-all="prog">todos</button><button class="btn sm" data-none="prog">ninguno</button></span></h3>
   <div class="list" id="proglist"></div>
   <h3>Clasificación <span class="row" style="display:inline-flex;margin:0 0 0 6px"><button class="btn sm" data-all="area">todas</button><button class="btn sm" data-none="area">ninguna</button><button class="btn sm" id="expall">expandir</button><button class="btn sm" id="colall">plegar</button></span></h3>
-  <div class="mut small">Área › subcategoría › tema. Despliega con ▸; marcar un nivel marca todo lo que contiene.</div>
+  <div class="mut small">Área › subcategorías (cualquier nº de niveles) › tema. Despliega con ▸; marcar un nivel marca todo lo que contiene.</div>
   <div class="list" id="arealist"></div>
 
   <h2>Opciones</h2>
@@ -171,18 +171,20 @@ function parse(text) {
     const toks = right.split(/\s+/).filter(Boolean);
     if (!toks.length) { warnings.push(`línea ${i + 1}: clasificación vacía`); continue; }
     const p = left.slice(0, d), f = left.slice(d + 1);
-    let a, s, t;
+    // Primer token = área, último = tema; todo lo intermedio son niveles de
+    // subcategoría, en número ilimitado (área › sub1 › sub2 › … › tema).
+    let path, t;
     if (toks.length === 1) {
-      a = '(sin área)'; s = ''; t = toks[0];
+      path = ['(sin área)']; t = toks[0];
       warnings.push(`línea ${i + 1}: clasificación de una sola palabra: ${cut(line)}`);
     } else {
-      a = toks[0]; t = toks[toks.length - 1]; s = toks.slice(1, -1).join(' ');
+      path = toks.slice(0, -1); t = toks[toks.length - 1];
     }
-    records.push({ p, f, a, s, t, leaf: a + '\u0001' + s + '\u0001' + t });
+    const a = path[0], cat = path.join(' › ');
+    records.push({ p, f, a, path, cat, t, leaf: path.join('\u0001') + '\u0001' + t });
     let m = topicCombos.get(t);
     if (!m) topicCombos.set(t, m = new Map());
-    const key = s ? `${a} › ${s}` : a;
-    m.set(key, (m.get(key) || 0) + 1);
+    m.set(cat, (m.get(cat) || 0) + 1);
   }
   const ambiguous = [];
   for (const [t, m] of topicCombos) if (m.size > 1) ambiguous.push([t, [...m.entries()]]);
@@ -248,7 +250,7 @@ function buildGraph(recs, view) {
     const P = get('p:' + r.p, 'p', r.p), T = get('t:' + r.t, 't', r.t);
     P.fset.add(fk); T.fset.add(fk);
     T.areas.set(r.a, (T.areas.get(r.a) || 0) + 1);
-    const sk = r.s ? `${r.a} › ${r.s}` : r.a;
+    const sk = r.cat;
     T.subs.set(sk, (T.subs.get(sk) || 0) + 1);
     if (view === 'full') {
       const F = get('f:' + fk, 'f', r.f, r.p);
@@ -394,15 +396,19 @@ function setAll(kind, value) {
   scheduleRebuild();
 }
 
-/* ---- árbol jerárquico: área › subcategoría › tema ---- */
+/* ---- árbol jerárquico: área › subcategoría › … › tema (profundidad ilimitada) ---- */
 function buildTree(records) {
-  const root = new Map();
+  const root = new Map(), seen = new Set();
   for (const r of records) {
-    let A = root.get(r.a); if (!A) root.set(r.a, A = { kind: 'a', name: r.a, n: 0, kids: new Map(), leaves: [] });
-    let S = A.kids.get(r.s); if (!S) A.kids.set(r.s, S = { kind: 's', name: r.s, n: 0, kids: new Map(), leaves: [] });
-    let T = S.kids.get(r.t);
-    if (!T) { S.kids.set(r.t, T = { kind: 't', name: r.t, n: 0, kids: null, leaves: [r.leaf] }); S.leaves.push(r.leaf); A.leaves.push(r.leaf); }
-    A.n++; S.n++; T.n++;
+    const isNew = !seen.has(r.leaf); if (isNew) seen.add(r.leaf);
+    let level = root;
+    [...r.path, r.t].forEach((name, depth) => {
+      let N = level.get(name);
+      if (!N) level.set(name, N = { name, depth, n: 0, kids: new Map(), leaves: [] });
+      N.n++;
+      if (isNew) N.leaves.push(r.leaf);
+      level = N.kids;
+    });
   }
   return root;
 }
@@ -411,14 +417,15 @@ const sortedKids = n => [...n.kids.values()].sort((a, b) => b.n - a.n || a.name.
 
 function makeRow(n, depth) {
   const wrap = document.createElement('div'), row = document.createElement('div');
-  row.className = 'tn ' + n.kind; row.style.paddingLeft = (depth * 14) + 'px';
-  const car = document.createElement('span'); car.className = 'car'; car.textContent = n.kids ? '▸' : '';
+  const kind = n.depth === 0 ? 'a' : n.kids.size ? 's' : 't';
+  row.className = 'tn ' + kind; row.style.paddingLeft = (depth * 14) + 'px';
+  const car = document.createElement('span'); car.className = 'car'; car.textContent = n.kids.size ? '▸' : '';
   const lab = document.createElement('label');
   const cb = document.createElement('input'); cb.type = 'checkbox';
   lab.appendChild(cb);
-  if (n.kind === 'a') { const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = areaColor.get(n.name); lab.appendChild(sw); }
+  if (kind === 'a') { const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = areaColor.get(n.name); lab.appendChild(sw); }
   const nm = document.createElement('span'); nm.className = 'nm';
-  nm.textContent = n.name || '(sin subcategoría)'; nm.title = nm.textContent; lab.appendChild(nm);
+  nm.textContent = n.name; nm.title = nm.textContent; lab.appendChild(nm);
   const cnt = document.createElement('span'); cnt.className = 'n'; cnt.textContent = n.n;
   row.append(car, lab, cnt); wrap.appendChild(row);
   row._n = n; row._cb = cb;
@@ -426,7 +433,7 @@ function makeRow(n, depth) {
     for (const id of n.leaves) cb.checked ? leafOn.add(id) : leafOn.delete(id);
     refreshTree(); scheduleRebuild();
   });
-  if (n.kids) {
+  if (n.kids.size) {
     const kids = document.createElement('div'); kids.hidden = true; wrap.appendChild(kids);
     n._ui = { car, kids, done: false, depth };
     car.addEventListener('click', () => setOpen(n, kids.hidden));
@@ -454,7 +461,7 @@ function loadData(text) {
   setTimeout(() => {
     try {
       const d = parse(text);
-      if (!d.records.length) { alert('No se ha encontrado ninguna línea válida.\nFormato esperado: programa.función -> área subcategoría tema'); return; }
+      if (!d.records.length) { alert('No se ha encontrado ninguna línea válida.\nFormato esperado: programa.función -> área [subcategoría …] tema'); return; }
       data = d; cur = null; sel = null; hl = null; matchSet = new Set();
       const sorted = [...d.areas.entries()].sort((a, b) => b[1] - a[1]);
       areaColor = new Map(); let i = 0;
@@ -469,7 +476,7 @@ function loadData(text) {
       } else w.hidden = true;
       const am = $('#ambig');
       if (d.ambiguous.length) {
-        am.hidden = false; am.querySelector('summary').textContent = `${d.ambiguous.length} temas aparecen bajo varias subcategorías (se fusionan)`;
+        am.hidden = false; am.querySelector('summary').textContent = `${d.ambiguous.length} temas aparecen bajo varias rutas de clasificación (se fusionan)`;
         $('#ambiglist').innerHTML = d.ambiguous.slice(0, 300).map(([t, m]) => `<div><b>${esc(t)}</b>: ${m.map(([k, c]) => `${esc(k)} (${c})`).join(' · ')}</div>`).join('');
       } else am.hidden = true;
       rebuild(1);
@@ -526,7 +533,7 @@ function showInfo(n) {
   let h = `<button class="x" data-close="1">×</button><span class="tag">${NAMES[n.type]}</span><h3>${esc(n.key)}</h3>`;
   if (n.type === 'f') {
     h += `<div class="mut">Programa: ${L('p:' + n.prog, n.prog)}</div><div class="mut">Clasificación:</div><ul>` +
-      n.cls.map(c => `<li>${esc(c.a)} › ${c.s ? esc(c.s) + ' › ' : ''}${L('t:' + c.t, c.t)}</li>`).join('') + '</ul>';
+      n.cls.map(c => `<li>${esc(c.cat)} › ${L('t:' + c.t, c.t)}</li>`).join('') + '</ul>';
   } else if (n.type === 't') {
     const rs = cur.recs.filter(r => r.t === n.label);
     const progs = new Map(), fn = new Set();
@@ -703,7 +710,7 @@ cv.addEventListener('mousemove', e => {
   cv.style.cursor = n ? 'pointer' : 'default';
   if (!n || e.buttons) { tip.style.display = 'none'; return; }
   let t;
-  if (n.type === 'f') t = `${n.key}\n` + n.cls.map(c => `${c.a} › ${c.s ? c.s + ' › ' : ''}${c.t}`).join('\n');
+  if (n.type === 'f') t = `${n.key}\n` + n.cls.map(c => `${c.cat} › ${c.t}`).join('\n');
   else if (n.type === 'p') t = `Programa ${n.label}\n${n.count} funciones`;
   else t = `Tema ${n.label}\n${n.count} funciones · ${[...n.subs.keys()].slice(0, 3).join(' | ')}`;
   tip.textContent = t; tip.style.display = 'block';
@@ -726,7 +733,8 @@ document.querySelectorAll('input[name=view]').forEach(r => r.addEventListener('c
 $('#mint').addEventListener('change', scheduleRebuild);
 $('#mine').addEventListener('change', scheduleRebuild);
 $('#expall').addEventListener('click', () => { if (!tree) return; for (const A of tree.values()) setOpen(A, true); });
-$('#colall').addEventListener('click', () => { if (!tree) return; for (const A of tree.values()) { for (const S of A.kids.values()) setOpen(S, false); setOpen(A, false); } });
+const collapse = n => { if (!n._ui) return; for (const k of n.kids.values()) collapse(k); setOpen(n, false); };
+$('#colall').addEventListener('click', () => { if (!tree) return; for (const A of tree.values()) collapse(A); });
 document.querySelectorAll('[data-all]').forEach(b => b.addEventListener('click', () => data && setAll(b.dataset.all, true)));
 document.querySelectorAll('[data-none]').forEach(b => b.addEventListener('click', () => data && setAll(b.dataset.none, false)));
 $('#fnlabels').addEventListener('change', scheduleDraw);
@@ -745,8 +753,10 @@ $('#csv').addEventListener('click', () => {
   if (!cur) return;
   const esc = v => { v = String(v); return /[",;\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   const tipo = { p: 'programa', f: 'funcion', t: 'tema' };
-  const rows = [['nombre', 'tipo', 'x', 'y']];
-  for (const n of cur.nodes) rows.push([n.key, tipo[n.type], n.x.toFixed(2), n.y.toFixed(2)]);
+  const clasif = n => n.type === 'f' ? [...new Set(n.cls.map(c => `${c.cat} › ${c.t}`))].join(' | ')
+    : n.type === 't' ? [...n.subs.keys()].map(k => `${k} › ${n.label}`).join(' | ') : '';
+  const rows = [['nombre', 'tipo', 'x', 'y', 'color', 'clasificacion']];
+  for (const n of cur.nodes) rows.push([n.key, tipo[n.type], n.x.toFixed(2), n.y.toFixed(2), n.col, clasif(n)]);
   const txt = '\ufeff' + rows.map(r => r.map(esc).join(',')).join('\r\n') + '\r\n';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' }));
