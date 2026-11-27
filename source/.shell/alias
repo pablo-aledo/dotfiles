@@ -315,3 +315,7 @@ cargo_build_meld () {
 }
 
 alias Read='read -k1 "Enter to continue" </dev/tty'
+
+convert_jpg(){
+for a in *.png; do convert -quality 50 $a $(basename $a .png).jpg; done
+}
